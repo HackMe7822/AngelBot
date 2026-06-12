@@ -443,7 +443,7 @@ def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
     if market == 'watchdog':
         log_path = Path(__file__).parent.parent / 'logs' / 'watchdog.log'
     elif market == 'portal':
-        log_path = Path(__file__).parent.parent / 'logs' / 'portal.log'
+        log_path = Path(__file__).parent.parent / 'logs' / 'AngelBot-Portal.log'
     else:
         log_path = Path(__file__).parent.parent / 'logs' / f'{market}_{today}.log'
     if not log_path.exists():
@@ -465,7 +465,7 @@ def get_log_live(market: str, lines: int = 200, user: str = Depends(require_auth
     if market == 'watchdog':
         log_path = Path(__file__).parent.parent / 'logs' / 'watchdog.log'
     elif market == 'portal':
-        log_path = Path(__file__).parent.parent / 'logs' / 'portal.log'
+        log_path = Path(__file__).parent.parent / 'logs' / 'AngelBot-Portal.log'
     else:
         log_path = Path(__file__).parent.parent / 'logs' / f'{market}_{today}.log'
     if not log_path.exists():
@@ -583,41 +583,52 @@ def check_update(user: str = Depends(require_auth)):
 
 @app.post("/api/update/apply")
 def apply_update(user: str = Depends(require_auth)):
-    """Pull latest code from GitHub and restart all workers automatically."""
-    import threading, time as _time
+    """Pull latest code from GitHub and restart all workers, then the portal."""
+    _BOT_DIR = str(Path(__file__).parent.parent)
+    steps = []
 
     # 1. git pull
-    result = subprocess.run(
-        ['git', 'pull', 'origin', 'main'],
-        capture_output=True, text=True, timeout=60,
-        cwd=str(Path(__file__).parent.parent)
-    )
-    if result.returncode != 0:
-        raise HTTPException(500, f"git pull failed: {result.stderr}")
+    try:
+        r = subprocess.run(
+            ['git', 'pull', 'origin', 'main'],
+            capture_output=True, text=True, timeout=60, cwd=_BOT_DIR
+        )
+        if r.returncode == 0:
+            steps.append({"step": "git pull", "ok": True,  "detail": r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "up to date"})
+        else:
+            steps.append({"step": "git pull", "ok": False, "detail": r.stderr.strip()})
+            raise HTTPException(500, f"git pull failed: {r.stderr.strip()}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"git pull error: {e}")
 
-    # 2. Restart the 3 workers immediately
-    workers = ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]
-    restart_results = []
-    for svc in workers:
+    # 2. Restart the 3 workers
+    for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
         try:
-            subprocess.run(['net', 'stop', svc], capture_output=True, timeout=15)
-            subprocess.run(['net', 'start', svc], capture_output=True, timeout=15)
-            restart_results.append(f"{svc}: restarted")
+            subprocess.run(['net', 'stop', svc], capture_output=True, timeout=20)
+            sr = subprocess.run(['net', 'start', svc], capture_output=True, text=True, timeout=20)
+            ok = sr.returncode == 0
+            steps.append({"step": f"restart {svc}", "ok": ok, "detail": "restarted" if ok else (sr.stdout.strip() or sr.stderr.strip())})
         except Exception as e:
-            restart_results.append(f"{svc}: {e}")
+            steps.append({"step": f"restart {svc}", "ok": False, "detail": str(e)})
 
-    # 3. Restart the portal itself after a short delay (so this response is sent first)
-    def _restart_portal():
-        _time.sleep(4)
-        subprocess.run(['net', 'stop', 'AngelBot-Portal'], capture_output=True)
-        subprocess.run(['net', 'start', 'AngelBot-Portal'], capture_output=True)
-    threading.Thread(target=_restart_portal, daemon=True).start()
+    # 3. Restart the portal via a fully detached cmd.exe process.
+    # We cannot use threading here: when net stop kills uvicorn, any daemon
+    # thread dies with it. A DETACHED_PROCESS cmd.exe survives independently.
+    try:
+        DETACHED = 0x00000008   # CREATE_NEW_PROCESS_GROUP
+        NEW_CON  = 0x00000010   # DETACHED_PROCESS — keeps running after parent dies
+        subprocess.Popen(
+            'cmd /c "timeout /t 8 /nobreak >nul & net stop AngelBot-Portal & timeout /t 2 /nobreak >nul & net start AngelBot-Portal"',
+            shell=True,
+            creationflags=DETACHED | NEW_CON
+        )
+        steps.append({"step": "restart portal", "ok": True, "detail": "scheduled in 8s via detached process"})
+    except Exception as e:
+        steps.append({"step": "restart portal", "ok": False, "detail": str(e)})
 
-    return {
-        "ok": True,
-        "message": "Update applied. All services restarting now — portal back in ~10 seconds.",
-        "workers": restart_results
-    }
+    return {"ok": True, "steps": steps, "message": "Update applied — portal will restart in ~8 seconds."}
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────

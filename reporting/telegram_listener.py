@@ -456,7 +456,7 @@ def _cmd_pnl_detail(market):
 
     # Today's trades
     c.execute(f"SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
-              f"WHERE status='closed' AND {source_clause} AND date(exit_time)=?", (today,))
+              f"WHERE status='closed' AND {source_clause} AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)=?", (today,))
     today_rows = c.fetchall()
 
     # All-time totals

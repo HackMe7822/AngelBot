@@ -453,6 +453,17 @@
 
 </main>
 
+<!-- Update progress overlay -->
+<div id="update-progress-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:2100; align-items:center; justify-content:center;">
+  <div class="card" style="width:440px; padding:28px; box-shadow:0 8px 40px rgba(0,0,0,.35);">
+    <h3 style="font-size:16px; font-weight:600; margin-bottom:20px;">⬇️ Applying Update</h3>
+    <div id="update-steps" style="display:grid; gap:10px; margin-bottom:20px;"></div>
+    <div id="update-reconnecting" style="display:none; color:var(--muted); font-size:13px; text-align:center; padding:8px;">
+      <span id="update-reconnect-msg">Portal restarting… reconnecting</span>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm dialog (replaces browser confirm()) -->
 <div id="confirm-overlay">
   <div class="card" style="width:380px; padding:28px; box-shadow:0 8px 32px rgba(0,0,0,.25);">
@@ -1029,35 +1040,57 @@ async function applyUpdate() {
 
   const btn = document.querySelector('#update-banner .btn.primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Updating...'; }
-  toast('Pulling from GitHub and restarting services...', 20000);
+
+  // Show progress overlay
+  const overlay = document.getElementById('update-progress-overlay');
+  const stepsEl = document.getElementById('update-steps');
+  const reconEl = document.getElementById('update-reconnecting');
+  stepsEl.innerHTML = '<div style="color:var(--muted); font-size:13px;">Contacting GitHub…</div>';
+  reconEl.style.display = 'none';
+  overlay.style.display = 'flex';
+
+  function addStep(label, ok, detail) {
+    const icon = ok ? '✅' : '❌';
+    stepsEl.innerHTML += `<div style="display:flex; gap:10px; align-items:flex-start; font-size:13px;">
+      <span style="flex-shrink:0;">${icon}</span>
+      <div><strong>${label}</strong>${detail ? `<div style="color:var(--muted); font-size:12px; margin-top:2px;">${detail}</div>` : ''}</div>
+    </div>`;
+  }
 
   try {
+    stepsEl.innerHTML = '';
     const r = await apiFetch('/api/update/apply', { method: 'POST' });
     if (!r) {
-      // Portal is restarting — connection dropped is expected
-      _waitForPortalRestart();
+      addStep('Portal restarting…', true, 'Connection dropped — this is expected');
+      reconEl.style.display = 'block';
+      _waitForPortalRestart(overlay);
       return;
     }
     const d = await r.json();
-    if (d.ok) {
-      toast('Update applied! Portal restarting...', 15000);
-      _waitForPortalRestart();
+    if (d.ok && d.steps) {
+      for (const s of d.steps) addStep(s.step, s.ok, s.detail);
+      addStep('Portal restarting…', true, 'Will reconnect automatically in ~10s');
+      reconEl.style.display = 'block';
+      _waitForPortalRestart(overlay);
     } else {
-      toast('Update failed: ' + (d.detail || 'unknown error'), 8000);
+      addStep('Update failed', false, d.detail || 'unknown error');
       if (btn) { btn.disabled = false; btn.textContent = 'Update & Restart'; }
     }
   } catch(e) {
-    // Network error = portal is already restarting
-    _waitForPortalRestart();
+    addStep('Portal restarting…', true, 'Connection dropped — reconnecting');
+    reconEl.style.display = 'block';
+    _waitForPortalRestart(overlay);
   }
 }
 
-function _waitForPortalRestart() {
+function _waitForPortalRestart(progressOverlay) {
   const banner = document.getElementById('update-banner');
-  banner.querySelector('span').innerHTML = '🔄 <strong>Restarting...</strong> Portal will reload automatically.';
+  if (banner) banner.querySelector('span').innerHTML = '🔄 <strong>Restarting...</strong> Portal will reload automatically.';
   let attempts = 0;
+  const msgEl = document.getElementById('update-reconnect-msg');
   const poll = setInterval(async () => {
     attempts++;
+    if (msgEl) msgEl.textContent = `Reconnecting… (${attempts}/30)`;
     if (attempts > 30) { clearInterval(poll); location.reload(); return; }
     try {
       const r = await fetch('/api/health');

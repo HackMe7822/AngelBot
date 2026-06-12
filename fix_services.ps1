@@ -49,8 +49,49 @@ $filesToPatch = @(
 foreach ($fp in $filesToPatch) {
     if (Test-Path $fp) {
         $txt = Get-Content $fp -Raw -Encoding UTF8
+        $changed = $false
+        # Fix 1: SQLite date() → SQL Server TRY_CAST
         if ($txt -match "date\(exit_time\)") {
             $txt = $txt -replace "date\(exit_time\)", "TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)"
+            $changed = $true
+        }
+        if ($txt -match "date\(time\)") {
+            $txt = $txt -replace "date\(time\)", "TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)"
+            $changed = $true
+        }
+        # Fix 2: cursor.lastrowid → OUTPUT INSERTED.id
+        if ($txt -match "trade_id = c\.lastrowid") {
+            $txt = $txt -replace `
+                "INSERT INTO trades \(([^)]+)\)\s*\n(\s+)VALUES",
+                "INSERT INTO trades (`$1)`n`$2OUTPUT INSERTED.id`n`$2VALUES"
+            $txt = $txt -replace "trade_id = c\.lastrowid", "trade_id = c.fetchone()[0]"
+            $changed = $true
+        }
+        if ($changed) {
+            Set-Content $fp $txt -Encoding UTF8 -NoNewline
+            OK "Patched SQL compat in $(Split-Path $fp -Leaf)"
+        }
+    }
+}
+
+# Also patch reporting files
+$reportingFiles = @(
+    "$BOT_DIR\reporting\excel_report.py",
+    "$BOT_DIR\reporting\telegram_listener.py"
+)
+foreach ($fp in $reportingFiles) {
+    if (Test-Path $fp) {
+        $txt = Get-Content $fp -Raw -Encoding UTF8
+        $changed = $false
+        if ($txt -match "date\(exit_time\)") {
+            $txt = $txt -replace "date\(exit_time\)", "TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)"
+            $changed = $true
+        }
+        if ($txt -match "date\(time\)") {
+            $txt = $txt -replace "date\(time\)", "TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)"
+            $changed = $true
+        }
+        if ($changed) {
             Set-Content $fp $txt -Encoding UTF8 -NoNewline
             OK "Patched date() in $(Split-Path $fp -Leaf)"
         }

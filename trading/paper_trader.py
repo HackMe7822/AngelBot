@@ -110,10 +110,11 @@ class PaperTrader:
         c.execute('''
             INSERT INTO trades (symbol, entry_time, entry_price, quantity, capital_used,
                 stop_loss, target, signals, status)
+            OUTPUT INSERTED.id
             VALUES (?,?,?,?,?,?,?,?,?)
         ''', (symbol, now, price, quantity, capital_used,
               stop_loss, target, json.dumps({'reasons': reason, 'confidence': confidence, 'signals': signals}), 'open'))
-        trade_id = c.lastrowid
+        trade_id = c.fetchone()[0]
         conn.commit()
         conn.close()
 

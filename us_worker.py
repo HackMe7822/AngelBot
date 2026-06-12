@@ -114,14 +114,14 @@ def _next_us_open():
         candidate = candidate + timedelta(days=1)
     while candidate.weekday() >= 5:
         candidate = candidate + timedelta(days=1)
-    candidate_ist = candidate.astimezone(IST)
+    tz_label = "EDT" if _is_dst() else "EST"
     diff = candidate - et
     total_mins = int(diff.total_seconds() / 60)
     h, m = divmod(total_mins, 60)
     if h >= 24:
         days, rh = divmod(h, 24)
-        return candidate_ist.strftime('%a %I:%M %p IST'), f"in {days}d {rh}h"
-    return candidate_ist.strftime('%I:%M %p IST'), f"in {h}h {m}m"
+        return candidate.strftime(f'%a %I:%M %p {tz_label}'), f"in {days}d {rh}h"
+    return candidate.strftime(f'%I:%M %p {tz_label}'), f"in {h}h {m}m"
 
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAILY_TRADES,
@@ -159,7 +159,7 @@ def run_us_scan():
         _eod_done_date = today_et
         if us_trader.open_positions:
             sp()
-            cprint(f"[US EOD] Force-closing all positions @ {ist.strftime('%I:%M %p IST')}", YL)
+            cprint(f"[US EOD] Force-closing all positions @ {et.strftime('%I:%M %p')} {'EDT' if _is_dst() else 'EST'}", YL)
             for pos in list(us_trader.open_positions):
                 price = get_us_live_price(pos['symbol']) or pos['entry_price']
                 with us_trader._lock:
@@ -209,13 +209,14 @@ def run_us_scan():
         open_at, opens_in = _next_us_open()
         sp()
         sep()
-        cprint(f"  [{ist.strftime('%I:%M %p IST')}]  US: OFF-HOURS  ({et.strftime('%I:%M %p')} {tz}) — opens {open_at} ({opens_in})", GY)
+        cprint(f"  [{et.strftime('%I:%M %p')} {tz}]  US: OFF-HOURS — opens {open_at} ({opens_in})", GY)
         sep()
         return
     if not (US_ENTRY_START <= et.time() < US_ENTRY_END):
         sp()
         sep()
-        cprint(f"  [{ist.strftime('%I:%M %p IST')}]  US: MARKET OPEN — outside entry window", YL)
+        tz2 = "EDT" if _is_dst() else "EST"
+        cprint(f"  [{et.strftime('%I:%M %p')} {tz2}]  US: MARKET OPEN — outside entry window", YL)
         sep()
         return
 
@@ -263,7 +264,7 @@ def run_us_scan():
     sp()
     cprint(f"{'─'*21} US MARKET {'─'*29}", BL)
     sp()
-    cprint(f"  [US {ist.strftime('%I:%M %p IST')}]  Scanning {len(watch_list)} US stocks...", BL)
+    cprint(f"  [US {et.strftime('%I:%M %p')} {'EDT' if _is_dst() else 'EST'}]  Scanning {len(watch_list)} US stocks...", BL)
     sp()
 
     def _scan_one(sym):
@@ -347,7 +348,7 @@ def main():
     cprint("╔══════════════════════════════════════════════════════════╗", BL)
     cprint("║         [US MARKET]  ANGELBOT -- US WORKER              ║", BL)
     cprint(f"║         Mode: {'PAPER' if ALPACA_PAPER else 'LIVE '}   "
-           f"  {now_ist().strftime('%d %b %Y  %I:%M %p IST')}          ║", BL)
+           f"  {now_et().strftime('%d %b %Y  %I:%M %p')} {'EDT' if _is_dst() else 'EST'}    ║", BL)
     cprint("╚══════════════════════════════════════════════════════════╝", BL)
     sp()
 

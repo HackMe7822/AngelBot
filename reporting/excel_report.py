@@ -27,7 +27,7 @@ def generate_daily_report(date_str=None):
     c.execute("""
         SELECT symbol, entry_time, exit_time, entry_price, exit_price,
                quantity, capital_used, pnl, pnl_pct, stop_loss, target, exit_reason
-        FROM trades WHERE status='closed' AND (source='paper' OR source IS NULL) AND date(exit_time)=?
+        FROM trades WHERE status='closed' AND (source='paper' OR source IS NULL) AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)=?
         ORDER BY exit_time
     """, (date_str,))
     trades = c.fetchall()
@@ -35,7 +35,7 @@ def generate_daily_report(date_str=None):
     total_pnl = c.fetchone()[0] or 0
     c.execute("SELECT COUNT(*), COALESCE(SUM(amount),0) FROM top_ups")
     reload_count, total_reloaded = c.fetchone()
-    c.execute("SELECT amount, balance_before, time FROM top_ups WHERE date(time)=? ORDER BY time", (date_str,))
+    c.execute("SELECT amount, balance_before, time FROM top_ups WHERE TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)=? ORDER BY time", (date_str,))
     todays_reloads = c.fetchall()
     conn.close()
 
