@@ -3,13 +3,11 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"
 
 $BOT_DIR   = "C:\AngelBot"
-$SETUP_DIR = "$BOT_DIR\prerequisite\setup"
-$LOG_FILE  = "$BOT_DIR\logs\install.log"
-$tmp       = "$env:TEMP\angelbot_setup"
+$LOG_FILE  = "C:\angelbot_install.log"
+$tmp       = "C:\angelbot_tmp"
 
 function Log($msg) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs" | Out-Null
     Add-Content -Path $LOG_FILE -Value "$ts  $msg" -ErrorAction SilentlyContinue
 }
 function Info($msg) { Write-Host "     $msg" -ForegroundColor Cyan   ; Log $msg }
@@ -25,7 +23,11 @@ function Step($n, $t) {
 function Download($url, $dest) {
     if (Test-Path $dest) { return }
     Info "Downloading $(Split-Path $dest -Leaf) ..."
-    Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+    } catch {
+        Warn "Download failed for $(Split-Path $dest -Leaf): $_"
+    }
 }
 
 function Update-EnvPath {
@@ -92,9 +94,15 @@ if (-not $gitFound) {
 # ---------------------------------------------------------------------------
 Step 3 "AngelBot code"
 if (Test-Path "$BOT_DIR\.git") {
-    Info "Pulling latest code ..."
-    git -C $BOT_DIR pull
+    Info "Updating to latest code ..."
+    git -C $BOT_DIR fetch --all 2>&1 | Out-Null
+    git -C $BOT_DIR reset --hard origin/main 2>&1 | Out-Null
     OK "Code updated"
+} elseif (Test-Path $BOT_DIR) {
+    Info "Folder exists but not a git repo -- cleaning and cloning ..."
+    Remove-Item $BOT_DIR -Recurse -Force
+    git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR
+    OK "Downloaded to $BOT_DIR"
 } else {
     Info "Cloning from GitHub ..."
     git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR
@@ -111,75 +119,101 @@ $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
 if ($sqlSvc) {
     OK "SQL Server instance ANGELBOT already installed"
 } else {
-    $sqlExe = "$SETUP_DIR\sql\SQLEXPR_x64_ENU.exe"
+    $sqlExe = "$tmp\SQLEXPR_x64_ENU.exe"
     if (-not (Test-Path $sqlExe)) {
         Info "Downloading SQL Server 2019 Express (280 MB) ..."
-        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\sql" | Out-Null
         Download "https://go.microsoft.com/fwlink/p/?linkid=866658" $sqlExe
     }
+
     Write-Host ""
     Write-Host "  Set a password for SQL Server SA account." -ForegroundColor White
-    Write-Host "  Min 8 chars, must include uppercase + number (e.g. AngelBot@SQL1)" -ForegroundColor DarkGray
+    Write-Host "  Min 8 chars, must include uppercase + number" -ForegroundColor DarkGray
     $saSecure = Read-Host "  SA Password" -AsSecureString
     $saPass   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($saSecure))
-    Info "Installing SQL Server (3-5 min) ..."
-    $sqlBat = "$SETUP_DIR\sql\sql_install.bat"
-    Start-Process "cmd.exe" -ArgumentList "/c `"$sqlBat`" `"$saPass`"" -Wait -NoNewWindow
+
+    Info "Installing SQL Server 2019 Express (3-5 min) ..."
+    $sqlArgs = "/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /FEATURES=SQLEngine" +
+               " /INSTANCENAME=ANGELBOT" +
+               " /SQLSYSADMINACCOUNTS=`"$env:USERDOMAIN\$env:USERNAME`"" +
+               " /SECURITYMODE=SQL /SAPWD=`"$saPass`"" +
+               " /TCPENABLED=1 /BROWSERSVCSTARTUPTYPE=Automatic"
+    Start-Process $sqlExe -ArgumentList $sqlArgs -Wait -NoNewWindow
     Log "SQL Server install attempted"
+
     $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
     if ($sqlSvc) { OK "SQL Server ANGELBOT installed" }
-    else { Warn "SQL Server may need a reboot to finish -- continuing" }
+    else { Warn "SQL Server may need a reboot to complete -- continuing" }
 }
 
 # ---------------------------------------------------------------------------
 # STEP 5 -- IIS + URL Rewrite + ARR
 # ---------------------------------------------------------------------------
 Step 5 "IIS + URL Rewrite + ARR"
+
 $iisSvc = Get-Service -Name "W3SVC" -ErrorAction SilentlyContinue
 if (-not $iisSvc) {
     Info "Enabling IIS via DISM ..."
-    $iisBat = "$SETUP_DIR\iis\iis_install.bat"
-    Start-Process "cmd.exe" -ArgumentList "/c `"$iisBat`"" -Wait -NoNewWindow
-    Log "IIS DISM done"
+    $features = @(
+        "IIS-WebServerRole", "IIS-WebServer", "IIS-CommonHttpFeatures",
+        "IIS-HttpErrors", "IIS-HttpRedirect", "IIS-ApplicationDevelopment",
+        "IIS-CGI", "IIS-ISAPIExtensions", "IIS-ISAPIFilter",
+        "IIS-WebServerManagementTools", "IIS-ManagementConsole"
+    )
+    foreach ($f in $features) {
+        dism /online /enable-feature /featurename:$f /All /NoRestart /quiet 2>&1 | Out-Null
+    }
+    Start-Service W3SVC -ErrorAction SilentlyContinue
+    OK "IIS installed"
 } else {
     OK "IIS already installed"
 }
 
+# URL Rewrite
 $urKey = "HKLM:\SOFTWARE\Microsoft\IIS Extensions\URL Rewrite"
 if (-not (Test-Path $urKey)) {
-    $urMsi = "$SETUP_DIR\urlrewrite\rewrite_amd64_en-US.msi"
-    if (-not (Test-Path $urMsi)) {
-        Info "Downloading URL Rewrite ..."
-        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\urlrewrite" | Out-Null
-        Download "https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi" $urMsi
+    $urMsi = "$tmp\rewrite_amd64_en-US.msi"
+    Download "https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi" $urMsi
+    if (Test-Path $urMsi) {
+        Info "Installing URL Rewrite ..."
+        Start-Process "msiexec.exe" -ArgumentList "/i `"$urMsi`" /quiet /norestart" -Wait
+        OK "URL Rewrite installed"
     }
-    Info "Installing URL Rewrite ..."
-    Start-Process "msiexec.exe" -ArgumentList "/i `"$urMsi`" /quiet /norestart" -Wait
-    OK "URL Rewrite installed"
 } else {
     OK "URL Rewrite already installed"
 }
 
+# ARR 3.0
 $arrKey = "HKLM:\SOFTWARE\Microsoft\IIS Extensions\Application Request Routing"
 if (-not (Test-Path $arrKey)) {
-    $arrExe = "$SETUP_DIR\arr\ARRv3_setup_amd64_en-us.exe"
-    if (-not (Test-Path $arrExe)) {
-        Info "Downloading ARR ..."
-        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\arr" | Out-Null
-        Download "https://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/ARRv3_setup_amd64_en-us.exe" $arrExe
+    $arrExe = "$tmp\ARRv3_setup_amd64_en-us.exe"
+    # Try multiple known mirrors
+    $arrUrls = @(
+        "https://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/ARRv3_setup_amd64_en-us.exe",
+        "https://www.iis.net/downloads/microsoft/application-request-routing"
+    )
+    foreach ($url in $arrUrls) {
+        if (-not (Test-Path $arrExe)) {
+            try { Invoke-WebRequest -Uri $url -OutFile $arrExe -UseBasicParsing -ErrorAction Stop } catch {}
+        }
     }
-    Info "Installing ARR ..."
-    Start-Process $arrExe -ArgumentList "/quiet /norestart" -Wait
-    OK "ARR installed"
+    if ((Test-Path $arrExe) -and (Get-Item $arrExe).Length -gt 100000) {
+        Info "Installing ARR ..."
+        Start-Process $arrExe -ArgumentList "/quiet /norestart" -Wait
+        OK "ARR installed"
+    } else {
+        Warn "ARR download unavailable -- portal still works at http://localhost:8080"
+        Remove-Item $arrExe -ErrorAction SilentlyContinue
+    }
 } else {
     OK "ARR already installed"
 }
 
-$webConfig = "C:\inetpub\wwwroot\web.config"
-$webConfigContent = '<?xml version="1.0" encoding="utf-8"?><configuration><system.webServer><rewrite><rules><rule name="AngelBot" stopProcessing="true"><match url="(.*)" /><action type="Rewrite" url="http://localhost:8080/{R:1}" /></rule></rules></rewrite></system.webServer></configuration>'
-$webConfigContent | Out-File $webConfig -Encoding ASCII -Force
-OK "IIS reverse proxy configured (port 80 -> 8080)"
+# IIS reverse proxy web.config
+New-Item -ItemType Directory -Force -Path "C:\inetpub\wwwroot" | Out-Null
+$wc = '<?xml version="1.0" encoding="utf-8"?><configuration><system.webServer><rewrite><rules><rule name="AngelBot" stopProcessing="true"><match url="(.*)" /><action type="Rewrite" url="http://localhost:8080/{R:1}" /></rule></rules></rewrite></system.webServer></configuration>'
+$wc | Out-File "C:\inetpub\wwwroot\web.config" -Encoding ASCII -Force
+OK "IIS reverse proxy configured (port 80 -> port 8080)"
 Start-Service W3SVC -ErrorAction SilentlyContinue
 
 # ---------------------------------------------------------------------------
@@ -193,16 +227,16 @@ if (Test-Path "$BOT_DIR\.env") {
     Write-Host "  Enter your API keys. Bot runs in PAPER mode." -ForegroundColor White
     Write-Host ""
     Write-Host "  Angel One (India)" -ForegroundColor Yellow
-    $aKey    = Read-Host "     API Key"
-    $aSecret = Read-Host "     Client Secret"
-    $aClient = Read-Host "     Client ID"
-    $aPin    = Read-Host "     MPIN 4-digit"
-    $aTotp   = Read-Host "     TOTP Secret"
+    $aKey     = Read-Host "     API Key"
+    $aSecret  = Read-Host "     Client Secret"
+    $aClient  = Read-Host "     Client ID"
+    $aPin     = Read-Host "     MPIN 4-digit"
+    $aTotp    = Read-Host "     TOTP Secret"
     Write-Host "  Alpaca (US paper)" -ForegroundColor Yellow
     $alKey    = Read-Host "     API Key"
     $alSecret = Read-Host "     Secret Key"
     Write-Host "  Binance (Crypto)" -ForegroundColor Yellow
-    $bKey    = Read-Host "     API Key"
+    $bKey     = Read-Host "     API Key"
     $bSecret  = Read-Host "     Secret Key"
     Write-Host "  Telegram" -ForegroundColor Yellow
     $tgToken  = Read-Host "     Bot Token"
@@ -233,21 +267,20 @@ OK "All packages installed"
 Step 8 "NSSM + Windows Services"
 $nssmDest = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssmDest)) {
-    $nssmSrc = "$SETUP_DIR\nssm\nssm.exe"
-    if (-not (Test-Path $nssmSrc)) {
-        Info "Downloading NSSM ..."
-        $zip = "$tmp\nssm.zip"
-        Download "https://nssm.cc/ci/nssm-2.24-103-gdee49fc.zip" $zip
+    $zip = "$tmp\nssm.zip"
+    Download "https://nssm.cc/ci/nssm-2.24-103-gdee49fc.zip" $zip
+    if (Test-Path $zip) {
         Expand-Archive $zip "$tmp\nssm_ext" -Force
-        $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse | Where-Object { $_.FullName -match "win64" } | Select-Object -First 1
+        $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse |
+                 Where-Object { $_.FullName -match "win64" } | Select-Object -First 1
         if (-not $found) {
             $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse | Select-Object -First 1
         }
-        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\nssm" | Out-Null
-        Copy-Item $found.FullName $nssmSrc -Force
+        Copy-Item $found.FullName $nssmDest -Force
+        OK "NSSM installed"
+    } else {
+        Err "NSSM download failed -- services cannot be registered"; Read-Host; exit 1
     }
-    Copy-Item $nssmSrc $nssmDest -Force
-    OK "NSSM installed"
 } else {
     OK "NSSM already present"
 }
@@ -285,7 +318,7 @@ foreach ($svc in $services) {
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
     $svcObj = Get-Service -Name $name -ErrorAction SilentlyContinue
-    if ($svcObj -and $svcObj.Status -eq "Running") {
+    if ($svcObj -and ($svcObj.Status -eq "Running")) {
         OK "$name -- running"
     } else {
         Warn "$name -- installed (starting shortly)"
@@ -298,21 +331,21 @@ foreach ($svc in $services) {
 Step 9 "Cloudflare Tunnel"
 $cfDest = "C:\Windows\cloudflared.exe"
 if (-not (Test-Path $cfDest)) {
-    $cfSrc = "$SETUP_DIR\cloudflared\cloudflared.exe"
-    if (-not (Test-Path $cfSrc)) {
-        Info "Downloading cloudflared ..."
-        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\cloudflared" | Out-Null
-        Download "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" $cfSrc
+    $cfExe = "$tmp\cloudflared.exe"
+    Download "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" $cfExe
+    if (Test-Path $cfExe) {
+        Copy-Item $cfExe $cfDest -Force
+        OK "Cloudflared installed"
+    } else {
+        Warn "Cloudflared download failed -- skipping (optional)"
     }
-    Copy-Item $cfSrc $cfDest -Force
-    OK "Cloudflared installed"
 } else {
     OK "Cloudflared already present"
 }
 
-# Firewall rules
-New-NetFirewallRule -DisplayName "AngelBot Portal 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-New-NetFirewallRule -DisplayName "AngelBot IIS 80"      -Direction Inbound -Protocol TCP -LocalPort 80   -Action Allow -ErrorAction SilentlyContinue | Out-Null
+# Firewall
+New-NetFirewallRule -DisplayName "AngelBot 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+New-NetFirewallRule -DisplayName "AngelBot IIS"  -Direction Inbound -Protocol TCP -LocalPort 80   -Action Allow -ErrorAction SilentlyContinue | Out-Null
 
 # Done
 Write-Host ""
