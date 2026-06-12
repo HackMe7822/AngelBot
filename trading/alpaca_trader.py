@@ -29,8 +29,7 @@ def _is_dst():
 _ET = lambda: timezone(timedelta(hours=-4 if _is_dst() else -5))
 
 def _now_ist_str():
-    # Store timestamps in ET so that date() queries align with the US trading day
-    return datetime.now(_ET()).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class AlpacaTrader:
@@ -145,6 +144,12 @@ class AlpacaTrader:
 
         conn = get_conn()
         c    = conn.cursor()
+        c.execute("SELECT status FROM trades WHERE id=?", (position['id'],))
+        row = c.fetchone()
+        if row and row[0] == 'closed':
+            conn.close()
+            self.open_positions = [p for p in self.open_positions if p['id'] != position['id']]
+            return 0.0, 0.0
         c.execute(
             "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=?",
             (now, current_price, pnl, pnl_pct, reason, 'closed', position['id'])

@@ -85,18 +85,22 @@ async def root():
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 def _build_date_clause(date_filter: Optional[str]) -> tuple:
-    """Return (sql_fragment, params_list) filtering on entry_time (so open trades appear too)."""
+    """Filter on entry_time using rolling windows — avoids IST/ET midnight-crossing issues."""
     now_ist = datetime.now(_IST)
+    fmt = "%Y-%m-%d %H:%M:%S"
     if date_filter == 'today':
-        d = now_ist.strftime("%Y-%m-%d")
-        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) = ?", [d]
+        cutoff = (now_ist - timedelta(hours=24)).strftime(fmt)
+        return "AND entry_time >= ?", [cutoff]
     elif date_filter == 'yesterday':
-        d = (now_ist - timedelta(days=1)).strftime("%Y-%m-%d")
-        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) = ?", [d]
+        t_from = (now_ist - timedelta(hours=48)).strftime(fmt)
+        t_to   = (now_ist - timedelta(hours=24)).strftime(fmt)
+        return "AND entry_time >= ? AND entry_time < ?", [t_from, t_to]
     elif date_filter == 'week':
-        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-7,GETDATE()) AS DATE)", []
+        cutoff = (now_ist - timedelta(days=7)).strftime(fmt)
+        return "AND entry_time >= ?", [cutoff]
     elif date_filter == 'month':
-        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-30,GETDATE()) AS DATE)", []
+        cutoff = (now_ist - timedelta(days=30)).strftime(fmt)
+        return "AND entry_time >= ?", [cutoff]
     return "", []
 
 
@@ -244,6 +248,113 @@ def get_positions(market: Optional[str] = None, user: str = Depends(require_auth
     rows = [dict(zip(cols, r)) for r in c.fetchall()]
     conn.close()
     return {"positions": rows}
+
+
+# ── Force Sell ────────────────────────────────────────────────────────────────
+
+def _get_live_price_for_source(symbol: str, source: str) -> Optional[float]:
+    """Fetch the best current price for a symbol given its market source."""
+    import math
+    if source == 'us_paper':
+        from data.alpaca_client import get_us_live_price
+        price = get_us_live_price(symbol)
+    elif source == 'crypto_paper':
+        try:
+            import yfinance as yf
+            df = yf.Ticker(symbol + '-USD').history(period='1d', interval='1m')
+            if df.empty:
+                df = yf.Ticker(symbol).history(period='1d', interval='1m')
+            price = float(df['Close'].iloc[-1]) if not df.empty else None
+        except Exception:
+            price = None
+    else:  # india paper
+        try:
+            import yfinance as yf
+            sym = symbol if symbol.endswith('.NS') else symbol + '.NS'
+            df  = yf.Ticker(sym).history(period='1d', interval='1m')
+            price = float(df['Close'].iloc[-1]) if not df.empty else None
+        except Exception:
+            price = None
+    if price is None or (isinstance(price, float) and math.isnan(price)) or price <= 0:
+        return None
+    return round(price, 6)
+
+
+@app.post("/api/positions/{trade_id}/force_sell")
+def force_sell(trade_id: int, user: str = Depends(require_auth)):
+    """Force-close an open position at current market price."""
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute(
+        "SELECT id, symbol, source, entry_price, quantity, status FROM trades WHERE id=?",
+        (trade_id,)
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, f"Trade {trade_id} not found.")
+    tid, symbol, source, entry_price, quantity, status = row
+    if status == 'closed':
+        conn.close()
+        raise HTTPException(400, "Position already closed.")
+
+    price = _get_live_price_for_source(symbol, source or 'paper')
+    if price is None:
+        conn.close()
+        raise HTTPException(502, f"Could not fetch live price for {symbol}. Try again.")
+
+    pnl     = round((price - entry_price) * quantity, 4)
+    pnl_pct = round(((price - entry_price) / entry_price) * 100, 2)
+    now     = datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute(
+        "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=?",
+        (now, price, pnl, pnl_pct, 'force_sell', 'closed', tid)
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "id": tid, "symbol": symbol, "exit_price": price, "pnl": pnl, "pnl_pct": pnl_pct}
+
+
+@app.post("/api/positions/force_sell_all")
+def force_sell_all(market: Optional[str] = None, user: str = Depends(require_auth)):
+    """Force-close all open positions (optionally filtered by market)."""
+    conn = get_conn()
+    c    = conn.cursor()
+    if market == 'india':
+        where = "(source='paper' OR source IS NULL)"
+    elif market == 'us':
+        where = "source='us_paper'"
+    elif market == 'crypto':
+        where = "source='crypto_paper'"
+    else:
+        where = "1=1"
+    c.execute(f"SELECT id, symbol, source, entry_price, quantity FROM trades WHERE status='open' AND {where}")
+    rows = c.fetchall()
+    conn.close()
+
+    results = []
+    for tid, symbol, source, entry_price, quantity in rows:
+        price = _get_live_price_for_source(symbol, source or 'paper')
+        if price is None:
+            results.append({"id": tid, "symbol": symbol, "ok": False, "error": "price unavailable"})
+            continue
+        pnl     = round((price - entry_price) * quantity, 4)
+        pnl_pct = round(((price - entry_price) / entry_price) * 100, 2)
+        now     = datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
+        conn2 = get_conn()
+        c2    = conn2.cursor()
+        c2.execute(
+            "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=? AND status='open'",
+            (now, price, pnl, pnl_pct, 'force_sell', 'closed', tid)
+        )
+        conn2.commit()
+        conn2.close()
+        results.append({"id": tid, "symbol": symbol, "ok": True, "exit_price": price, "pnl": pnl})
+
+    sold = sum(1 for r in results if r.get('ok'))
+    failed = len(results) - sold
+    return {"sold": sold, "failed": failed, "results": results}
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
