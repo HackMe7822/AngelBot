@@ -77,27 +77,93 @@ if ($odbcOk) {
     }
 }
 
-# ── 4. Ensure SQL_SA_PASS is in .env ─────────────────────────────────────────
+# ── 4. SQL Server SA account + database setup ────────────────────────────────
 $envFile    = "$BOT_DIR\.env"
 $envContent = if (Test-Path $envFile) { Get-Content $envFile -Raw } else { "" }
 
-if ($envContent -notmatch "SQL_SA_PASS=\S") {
+# Extract existing SA pass if present
+$saPass = ""
+if ($envContent -match "SQL_SA_PASS=(.+)") { $saPass = $Matches[1].Trim() }
+
+# Helper: test SA connection using sqlcmd
+function Test-SALogin($pass) {
+    $result = & sqlcmd -S ".\ANGELBOT" -U sa -P $pass -Q "SELECT 1" 2>&1
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Helper: fix SA via Windows auth (uses current admin account)
+function Fix-SAViaWindowsAuth($newPass) {
+    Info "Using Windows auth to enable SA and set password..."
+    $sql = "ALTER LOGIN sa ENABLE; ALTER LOGIN sa WITH PASSWORD='$newPass';"
+    $r = & sqlcmd -S ".\ANGELBOT" -E -Q $sql 2>&1
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Helper: create angelbot database and tables via sqlcmd
+function Init-Database($pass) {
+    Info "Creating 'angelbot' database in SQL Server..."
+    $sql = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name='angelbot') CREATE DATABASE angelbot;"
+    & sqlcmd -S ".\ANGELBOT" -U sa -P $pass -Q $sql 2>&1 | Out-Null
+}
+
+# Check sqlcmd is available
+$sqlcmdPath = Get-Command sqlcmd -ErrorAction SilentlyContinue
+if (-not $sqlcmdPath) {
+    # Try common SQL Server tool paths
+    foreach ($p in @(
+        "C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\110\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\120\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\130\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\140\Tools\Binn\sqlcmd.exe",
+        "C:\Program Files\Microsoft SQL Server\150\Tools\Binn\sqlcmd.exe"
+    )) { if (Test-Path $p) { $env:PATH += ";$(Split-Path $p)"; break } }
+}
+
+# Test current SA password
+$saOk = $false
+if ($saPass) {
+    Info "Testing SQL Server SA login..."
+    $saOk = Test-SALogin $saPass
+    if ($saOk) { OK "SA login works" }
+    else        { Warn "SA login failed with saved password -- will reset" }
+}
+
+if (-not $saOk) {
     Write-Host ""
-    Warn "SQL_SA_PASS not found in .env"
-    Write-Host "  Enter the SA password you set during SQL Server installation:" -ForegroundColor White
-    $saSecure = Read-Host "  SA Password" -AsSecureString
+    Write-Host "  SQL Server SA login is not working." -ForegroundColor Yellow
+    Write-Host "  Attempting to fix via Windows authentication..." -ForegroundColor White
+
+    # Ask for new SA password
+    Write-Host "  Set a new SA password (min 8 chars, must include uppercase + number):" -ForegroundColor White
+    $saSecure = Read-Host "  New SA Password" -AsSecureString
     $saPass   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($saSecure))
+
+    $fixed = Fix-SAViaWindowsAuth $saPass
+    if ($fixed) {
+        OK "SA account enabled and password set"
+    } else {
+        Warn "Could not fix SA via Windows auth -- trying to continue anyway"
+    }
+    Start-Sleep -Seconds 2
+
+    $saOk = Test-SALogin $saPass
+    if ($saOk) { OK "SA login now works" }
+    else        { Warn "SA login still failing -- workers may not connect to DB" }
+
+    # Save new password to .env
     if ($envContent -match "SQL_SA_PASS=") {
-        $envContent = $envContent -replace "SQL_SA_PASS=.*", "SQL_SA_PASS=$saPass"
-        Set-Content $envFile $envContent -Encoding ASCII
+        $envContent = $envContent -replace "SQL_SA_PASS=.*(\r?\n|$)", "SQL_SA_PASS=$saPass`n"
+        Set-Content $envFile $envContent.TrimEnd() -Encoding ASCII
     } else {
         Add-Content $envFile "`nSQL_SA_PASS=$saPass" -Encoding ASCII
     }
-    OK "SQL_SA_PASS saved to .env"
-} else {
-    OK "SQL_SA_PASS found in .env"
+    OK "SQL_SA_PASS updated in .env"
 }
+
+# Create angelbot database if it doesn't exist
+if ($saOk) { Init-Database $saPass }
 
 # ── 5. Install / upgrade Python packages ─────────────────────────────────────
 Info "Installing Python packages (pyodbc + requirements)..."
