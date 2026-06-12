@@ -11,15 +11,17 @@ _R  = _A("0");  _G = _A("1;92");  _RD = _A("1;91");  _CY = _A("1;96")
 def _now_ist_str():
     return datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from config import CAPITAL, MAX_POSITIONS, MAX_POSITION_PCT, RELOAD_THRESHOLD, RELOAD_AMOUNT
+from config import (CAPITAL, MAX_POSITIONS, MAX_POSITION_PCT,
+                    RELOAD_THRESHOLD, RELOAD_AMOUNT, SLIPPAGE_PCT, PAPER_MODE)
 from data.database import get_conn
 from data.nifty_stocks import is_mutual_fund
 
 class PaperTrader:
     def __init__(self):
-        self._lock          = threading.Lock()   # prevents monitor + scan double-exit
-        self.balance        = self._get_balance()
-        self.open_positions = self._load_open_positions()
+        self._lock            = threading.Lock()   # prevents monitor + scan double-exit
+        self.balance          = self._get_balance()
+        self.open_positions   = self._load_open_positions()
+        self._session_high    = self.balance       # track peak balance for drawdown check
 
     def _get_total_reloaded(self):
         conn = get_conn()
@@ -92,6 +94,10 @@ class PaperTrader:
             else:
                 return None, f"Out of range: {min_lot} share(s) of {symbol} @ ₹{price:.0f} = ₹{one_lot_cost:.0f} > balance ₹{self.balance:.0f}"
 
+        # Apply slippage in paper mode — simulates realistic fill cost
+        if PAPER_MODE:
+            price = round(price * (1 + SLIPPAGE_PCT), 4)
+
         capital_used = round(quantity * price, 2)
 
         if capital_used > self.balance or capital_used < 1:
@@ -118,6 +124,8 @@ class PaperTrader:
         }
         self.open_positions.append(position)
         self.balance = self._get_balance()
+        if self.balance > self._session_high:
+            self._session_high = self.balance
         print(f"{_CY}[BUY]  {symbol} @ ₹{price:.2f} × {quantity} share(s)  SL:₹{stop_loss:.2f}  TGT:₹{target:.2f}  Capital:₹{capital_used:.0f}  Balance:₹{self.balance:.2f}{_R}")
         return position, None
 
@@ -143,6 +151,8 @@ class PaperTrader:
 
         self.open_positions = [p for p in self.open_positions if p['id'] != position['id']]
         self.balance = self._get_balance()
+        if self.balance > self._session_high:
+            self._session_high = self.balance
 
         result = 'PROFIT' if pnl >= 0 else 'LOSS'
         _c = _G if pnl >= 0 else _RD
@@ -215,6 +225,18 @@ class PaperTrader:
               f"  P&L: ₹{pnl:+.2f} ({pnl_pct:+.1f}%)  {result}"
               f"  Remaining: {remaining} share(s){extra}")
         return pnl, pnl_pct
+
+    def get_drawdown_pct(self):
+        """Returns how far current balance has dropped from today's session high (0.0–1.0)."""
+        if self._session_high <= 0:
+            return 0.0
+        return max(0.0, (self._session_high - self.balance) / self._session_high)
+
+    def get_deployed_pct(self):
+        """Returns fraction of balance currently deployed in open positions (0.0–1.0)."""
+        deployed = sum(p['capital_used'] for p in self.open_positions)
+        total = self.balance + deployed
+        return (deployed / total) if total > 0 else 0.0
 
     def auto_reload(self):
         """

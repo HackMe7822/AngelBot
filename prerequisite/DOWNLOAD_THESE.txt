@@ -1,0 +1,41 @@
+AngelBot — Prerequisite Downloads
+===================================
+
+Place each downloaded file into the folder listed below.
+The installer (install.ps1) will find them automatically.
+
+─── SQL Server 2019 Express ──────────────────────────────────
+  Download: https://go.microsoft.com/fwlink/p/?linkid=866658
+  Save as:  prerequisite\setup\sql\SQLEXPR_x64_ENU.exe
+  (~330 MB — only needed if SQL Server is not already installed)
+  NOTE: AngelBot uses SQLite, not SQL Server.
+        SQL Server is optional — only install if you already use it.
+
+─── IIS URL Rewrite Module 2.1 ───────────────────────────────
+  Download: https://www.iis.net/downloads/microsoft/url-rewrite
+  Save as:  prerequisite\setup\urlrewrite\rewrite_amd64_en-US.msi
+  (~1 MB)
+
+─── Application Request Routing (ARR) 3.0 ────────────────────
+  Download: https://www.iis.net/downloads/microsoft/application-request-routing
+  Save as:  prerequisite\setup\arr\ARRv3_setup_amd64_en-us.exe
+  (~11 MB)
+
+─── NSSM (Non-Sucking Service Manager) ───────────────────────
+  Download: https://nssm.cc/download  → nssm 2.24 (2014-08-31)
+  Extract:  win64\nssm.exe
+  Save as:  prerequisite\setup\nssm\nssm.exe
+  (~300 KB)
+
+─── Cloudflared (Cloudflare Tunnel) ──────────────────────────
+  Download: https://github.com/cloudflare/cloudflared/releases/latest
+  File:     cloudflared-windows-amd64.exe
+  Save as:  prerequisite\setup\cloudflared\cloudflared.exe
+  (~35 MB — only needed for remote access through corporate firewall)
+
+─── Python 3.11+ ─────────────────────────────────────────────
+  Download: https://www.python.org/downloads/
+  IMPORTANT: During install, check "Add Python to PATH"
+  (Python must be installed BEFORE running install.ps1)
+
+After downloading, right-click install.ps1 → Run with PowerShell

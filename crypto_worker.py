@@ -88,7 +88,8 @@ def now_ist(): return datetime.now(IST)
 
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (BINANCE_KEY, BINANCE_PAPER,
-                    CRYPTO_MAX_DAILY_LOSS_PCT,
+                    CRYPTO_MAX_DAILY_LOSS_PCT, CRYPTO_MAX_DAILY_TRADES,
+                    MAX_DEPLOYED_PCT, PEAK_DRAWDOWN_PCT,
                     CRYPTO_SCAN_SKIP_START, CRYPTO_SCAN_SKIP_END,
                     CRYPTO_TARGET_PCT, CRYPTO_SL_PCT,
                     CRYPTO_HIGH_LIQ_START, CRYPTO_HIGH_LIQ_END,
@@ -98,6 +99,7 @@ from data.crypto_feed import CryptoFeed
 from data.binance_client import test_connection, get_crypto_live_price
 from trading.position_monitor import start_monitor
 from reporting.telegram_alerts import send_crypto_daily_summary
+from reporting.telegram_listener import is_symbol_paused
 
 # ── Global state ──────────────────────────────────────────────────────────────
 crypto_trader      = None
@@ -172,6 +174,20 @@ def run_crypto_scan():
     loss_limit = crypto_trader.balance * CRYPTO_MAX_DAILY_LOSS_PCT
     if stats['day_pnl'] < -loss_limit:
         cprint(f"[Crypto] Daily loss limit hit (${stats['day_pnl']:.4f}) — no new crypto buys", RD)
+        return
+
+    if stats['trades'] >= CRYPTO_MAX_DAILY_TRADES:
+        cprint(f"[Crypto] Daily trade cap reached ({stats['trades']}/{CRYPTO_MAX_DAILY_TRADES}) — no new buys", YL)
+        return
+
+    dd = crypto_trader.get_drawdown_pct()
+    if dd >= PEAK_DRAWDOWN_PCT:
+        cprint(f"[Crypto] Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
+        return
+
+    dep = crypto_trader.get_deployed_pct()
+    if dep >= MAX_DEPLOYED_PCT:
+        cprint(f"[Crypto] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
         return
 
     if not crypto_trader.can_buy():
@@ -258,6 +274,10 @@ def run_crypto_scan():
             break
         if c['symbol'] in open_syms:
             continue  # already holding this coin — no duplicate positions
+        if is_symbol_paused(c['symbol']):
+            cprint(f"  [CRYPTO PAUSED]  {c['symbol']} — manually paused via Telegram for today", YL)
+            continue
+        # No sector cap for crypto — BTC trend filter already gates the session
         if crypto_monitor and crypto_monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [CRYPTO COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)
             continue
@@ -305,6 +325,7 @@ def main():
         currency='$', name='CryptoMonitor',
         sl_pct=CRYPTO_SL_PCT,
         target_pct=CRYPTO_TARGET_PCT,
+        market='crypto'
     )
 
     cprint(f"  Balance  : ${crypto_trader.balance:.2f}", MG)

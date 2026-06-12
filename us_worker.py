@@ -124,11 +124,14 @@ def _next_us_open():
     return candidate_ist.strftime('%I:%M %p IST'), f"in {h}h {m}m"
 
 # ── Imports ───────────────────────────────────────────────────────────────────
-from config import ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE
+from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAILY_TRADES,
+                    MAX_DEPLOYED_PCT, PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE)
 from trading.alpaca_trader import AlpacaTrader
 from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
 from reporting.telegram_alerts import send_us_daily_summary, send_combined_summary
+from reporting.telegram_listener import is_symbol_paused
+from analysis.market_filters import us_market_mood_ok, symbol_event_clear, sector_cap_ok
 
 # ── Global state ──────────────────────────────────────────────────────────────
 us_trader      = None
@@ -222,6 +225,24 @@ def run_us_scan():
         cprint(f"[US] Daily loss limit hit (${stats['day_pnl']:.2f}) — no new US buys today", RD)
         return
 
+    if stats['trades'] >= US_MAX_DAILY_TRADES:
+        cprint(f"[US] Daily trade cap reached ({stats['trades']}/{US_MAX_DAILY_TRADES}) — no new buys", YL)
+        return
+
+    dd = us_trader.get_drawdown_pct()
+    if dd >= PEAK_DRAWDOWN_PCT:
+        cprint(f"[US] Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
+        return
+
+    dep = us_trader.get_deployed_pct()
+    if dep >= MAX_DEPLOYED_PCT:
+        cprint(f"[US] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
+        return
+
+    if not us_market_mood_ok():
+        cprint("[US] S&P 500 mood bearish — skipping US buy scan", YL)
+        return
+
     if not us_trader.can_buy():
         return
 
@@ -296,6 +317,14 @@ def run_us_scan():
         if c['price'] < US_MIN_STOCK_PRICE:
             cprint(f"  [SKIP]         {c['symbol']} ${c['price']:.2f} — below ${US_MIN_STOCK_PRICE:.0f} min price", GY)
             continue
+        if is_symbol_paused(c['symbol']):
+            cprint(f"  [US PAUSED]    {c['symbol']} — manually paused via Telegram for today", YL)
+            continue
+        if not symbol_event_clear(c['symbol']):
+            cprint(f"  [US EVENT]     {c['symbol']} — earnings/macro event today, skip", YL)
+            continue
+        if not sector_cap_ok(c['symbol'], us_trader.open_positions, market='us'):
+            continue
         if us_monitor and us_monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [US COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)
             continue
@@ -331,9 +360,9 @@ def main():
         us_trader, _on_exit,
         live_feed=None, price_fn=get_us_live_price,
         always_active=False,
-        market_open_fn=is_us_market,   # monitor checks NYSE hours, not NSE hours
-        eod_close=False,               # us_worker.py handles its own EOD close
-        currency='$', name='USMonitor'
+        market_open_fn=is_us_market,
+        eod_close=False,
+        currency='$', name='USMonitor', market='us'
     )
 
     cprint(f"  Balance : ${us_trader.balance:.2f}", BL)

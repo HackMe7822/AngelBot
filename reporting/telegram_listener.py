@@ -11,9 +11,31 @@ _processed_ids     = set()   # every processed update_id — prevents any duplic
 _trader_ref        = None
 _us_trader_ref     = None    # AlpacaTrader — set by main.py after US init
 _crypto_trader_ref = None    # CryptoTrader — set by main.py after crypto init
+_monitor_refs      = {}      # market → PositionMonitor — set by main.py for /exit support
 
 # File-based pause flag — shared across all worker processes
-_PAUSE_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'paused.flag')
+_BOT_DIR    = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+_PAUSE_FLAG = os.path.join(_BOT_DIR, 'paused.flag')
+
+def _symbol_pause_flag(symbol):
+    """Per-symbol day-skip file. Created by /pause SYMBOL, checked in workers."""
+    return os.path.join(_BOT_DIR, f'pause_{symbol.upper()}.flag')
+
+def is_symbol_paused(symbol):
+    return os.path.exists(_symbol_pause_flag(symbol))
+
+def _clear_stale_symbol_pauses():
+    """Remove symbol pause flags from previous days (called on startup)."""
+    import glob
+    today = datetime.now().strftime('%Y%m%d')
+    for f in glob.glob(os.path.join(_BOT_DIR, 'pause_*.flag')):
+        try:
+            mtime = os.path.getmtime(f)
+            mdate = datetime.fromtimestamp(mtime).strftime('%Y%m%d')
+            if mdate != today:
+                os.remove(f)
+        except Exception:
+            pass
 
 def is_paused():
     return os.path.exists(_PAUSE_FLAG)
@@ -49,6 +71,10 @@ def set_us_trader(trader):
 def set_crypto_trader(trader):
     global _crypto_trader_ref
     _crypto_trader_ref = trader
+
+def set_monitor(market, monitor):
+    """Register monitor for /exit command. market = 'india'|'us'|'crypto'."""
+    _monitor_refs[market] = monitor
 
 
 def _get_updates():
@@ -110,13 +136,24 @@ def _handle_update(msg_text):
             except Exception:
                 pass
 
-    cmd = msg_text.strip().lower().lstrip('/')
+    raw  = msg_text.strip()
+    parts = raw.lstrip('/').split(None, 1)
+    cmd   = parts[0].lower()
+    arg   = parts[1].strip() if len(parts) > 1 else ''
 
     if cmd in ('update', 'status'):
         _cmd_status()
     elif cmd in ('positions', 'pos'):
         _cmd_positions()
-    elif cmd in ('pnl', 'profit'):
+    elif cmd == 'pnl' and not arg:
+        _cmd_pnl()
+    elif cmd == 'pnl' and arg.lower() in ('india', 'nse', 'in'):
+        _cmd_pnl_detail('india')
+    elif cmd == 'pnl' and arg.lower() in ('us', 'usa', 'alpaca'):
+        _cmd_pnl_detail('us')
+    elif cmd == 'pnl' and arg.lower() in ('crypto', 'btc', 'binance'):
+        _cmd_pnl_detail('crypto')
+    elif cmd in ('profit',):
         _cmd_pnl()
     elif cmd in ('balance', 'bal'):
         _cmd_balance()
@@ -130,12 +167,20 @@ def _handle_update(msg_text):
         _cmd_compare()
     elif cmd in ('help', 'commands'):
         _cmd_help()
-    elif cmd in ('stop', 'pause'):
+    elif cmd == 'stop' and not arg:
+        _cmd_stop()
+    elif cmd == 'pause' and arg:
+        _cmd_pause_symbol(arg.upper())
+    elif cmd in ('stop',):
         _cmd_stop()
     elif cmd in ('start', 'resume'):
         _cmd_start()
+    elif cmd == 'exit' and arg:
+        _cmd_exit_symbol(arg.upper())
+    elif cmd == 'unpause' and arg:
+        _cmd_unpause_symbol(arg.upper())
     else:
-        _reply(f"Unknown command: <b>{msg_text}</b>\nSend /help for available commands.")
+        _reply(f"Unknown command: <b>{raw}</b>\nSend /help for available commands.")
 
 
 def _cmd_status():
@@ -389,6 +434,176 @@ def _cmd_compare():
     _reply("\n".join(lines))
 
 
+def _cmd_pnl_detail(market):
+    """Detailed P&L for one market: today + all-time + best 5 + worst 5."""
+    from data.database import get_conn
+    from datetime import timezone, timedelta
+    _IST  = timezone(timedelta(hours=5, minutes=30))
+    today = datetime.now(_IST).strftime("%Y-%m-%d")
+
+    if market == 'india':
+        source_clause = "(source='paper' OR source IS NULL)"
+        label, cur, dec = "🇮🇳 India (NSE)", "₹", 2
+    elif market == 'us':
+        source_clause = "source='us_paper'"
+        label, cur, dec = "🇺🇸 US Market", "$", 2
+    else:
+        source_clause = "source='crypto_paper'"
+        label, cur, dec = "🪙 Crypto", "$", 4
+
+    conn = get_conn()
+    c    = conn.cursor()
+
+    # Today's trades
+    c.execute(f"SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
+              f"WHERE status='closed' AND {source_clause} AND date(exit_time)=?", (today,))
+    today_rows = c.fetchall()
+
+    # All-time totals
+    c.execute(f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades WHERE status='closed' AND {source_clause}")
+    total_trades, total_pnl = c.fetchone()
+    c.execute(f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} AND pnl > 0")
+    total_wins = c.fetchone()[0]
+
+    # Best 5 all-time
+    c.execute(f"SELECT symbol, pnl, pnl_pct FROM trades WHERE status='closed' AND {source_clause} "
+              f"ORDER BY pnl DESC LIMIT 5")
+    best5 = c.fetchall()
+
+    # Worst 5 all-time
+    c.execute(f"SELECT symbol, pnl, pnl_pct FROM trades WHERE status='closed' AND {source_clause} "
+              f"ORDER BY pnl ASC LIMIT 5")
+    worst5 = c.fetchall()
+
+    conn.close()
+
+    day_pnl = sum(r[0] for r in today_rows)
+    day_wins = sum(1 for r in today_rows if r[0] > 0)
+    day_losses = len(today_rows) - day_wins
+    total_losses = total_trades - total_wins
+    all_win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0
+    sign = "+" if day_pnl >= 0 else ""
+    t_sign = "+" if total_pnl >= 0 else ""
+
+    lines = [
+        f"📊 <b>{label} — P&amp;L Report</b>",
+        "─"*30,
+        f"<b>Today ({today})</b>",
+        f"  Trades: {len(today_rows)}  (✅{day_wins}  ❌{day_losses})",
+        f"  P&amp;L: <b>{sign}{cur}{day_pnl:.{dec}f}</b>",
+        "─"*30,
+        f"<b>All-Time</b>",
+        f"  Trades: {total_trades}  (✅{total_wins}  ❌{total_losses})",
+        f"  Total P&amp;L: <b>{t_sign}{cur}{total_pnl:.{dec}f}</b>",
+        f"  Win rate: {all_win_rate:.1f}%",
+        "─"*30,
+        "<b>Best 5 Trades (All-Time)</b>",
+    ]
+    for sym, pnl, pct in best5:
+        lines.append(f"  ✅ {sym}  <b>+{cur}{pnl:.{dec}f}</b>  (+{pct:.2f}%)")
+    lines.append("─"*30)
+    lines.append("<b>Worst 5 Trades (All-Time)</b>")
+    for sym, pnl, pct in worst5:
+        sign_w = "+" if pnl >= 0 else ""
+        lines.append(f"  ❌ {sym}  <b>{sign_w}{cur}{pnl:.{dec}f}</b>  ({sign_w}{pct:.2f}%)")
+
+    _reply("\n".join(lines))
+
+
+def _cmd_exit_symbol(symbol):
+    """Manually close a specific open position at current market price."""
+    from data.database import get_conn
+
+    # Find the position across all traders
+    found_trader = None
+    found_pos    = None
+    market_label = None
+    price_fn     = None
+
+    for trader, label, pfn in [
+        (_trader_ref,        "India",  None),
+        (_us_trader_ref,     "US",     None),
+        (_crypto_trader_ref, "Crypto", None),
+    ]:
+        if not trader:
+            continue
+        pos = trader.get_position(symbol)
+        if pos:
+            found_trader = trader
+            found_pos    = pos
+            market_label = label
+            price_fn     = pfn
+            break
+
+    if not found_pos:
+        _reply(f"❌ No open position found for <b>{symbol}</b>")
+        return
+
+    # Get current price
+    try:
+        if market_label == 'India':
+            from data.fetcher import get_live_price
+            price = get_live_price(symbol)
+        elif market_label == 'US':
+            from data.alpaca_client import get_us_live_price
+            price = get_us_live_price(symbol)
+        else:
+            from data.binance_client import get_crypto_live_price
+            price = get_crypto_live_price(symbol)
+    except Exception:
+        price = None
+
+    if not price:
+        price = found_pos['entry_price']
+        _reply(f"⚠️ Could not fetch live price for {symbol} — using entry price ₹{price:.4f}")
+
+    with found_trader._lock:
+        still_open = found_trader.get_position(symbol)
+        if not still_open:
+            _reply(f"⚠️ {symbol} was already closed.")
+            return
+        pnl, pct = found_trader.sell(still_open, price, 'Manual exit via Telegram')
+
+    cur = "₹" if market_label == "India" else "$"
+    sign = "+" if pnl >= 0 else ""
+    emoji = "✅" if pnl >= 0 else "🔴"
+    _reply(
+        f"{emoji} <b>Manual Exit — {market_label}</b>\n"
+        f"{'─'*28}\n"
+        f"Stock:  <b>{symbol}</b>\n"
+        f"Price:  {cur}{price:.4f}\n"
+        f"P&amp;L: <b>{sign}{cur}{pnl:.4f}</b>  ({sign}{pct:.2f}%)\n"
+        f"Reason: Manual exit via Telegram"
+    )
+
+
+def _cmd_pause_symbol(symbol):
+    """Pause buying a specific symbol for the rest of today."""
+    flag = _symbol_pause_flag(symbol)
+    try:
+        open(flag, 'w').close()
+        _reply(
+            f"⏸ <b>{symbol} paused for today</b>\n"
+            f"Bot will skip {symbol} on all new buy scans.\n"
+            f"Send /unpause {symbol} to re-enable."
+        )
+    except Exception as e:
+        _reply(f"❌ Could not pause {symbol}: {e}")
+
+
+def _cmd_unpause_symbol(symbol):
+    """Re-enable buying a specific symbol."""
+    flag = _symbol_pause_flag(symbol)
+    if os.path.exists(flag):
+        try:
+            os.remove(flag)
+            _reply(f"▶️ <b>{symbol} unpaused</b> — bot will consider it again on next scan.")
+        except Exception as e:
+            _reply(f"❌ Could not unpause {symbol}: {e}")
+    else:
+        _reply(f"ℹ️ {symbol} is not paused.")
+
+
 def _cmd_stop():
     if is_paused():
         _reply("⏸ Bot is already paused. Send /start to resume.")
@@ -433,25 +648,33 @@ def _cmd_help():
     msg = (
         "🤖 <b>AngelBot Commands</b>\n"
         "────────────────────────────\n"
-        "/update    — Live snapshot (all 3 markets)\n"
-        "/positions — All open trades (all markets)\n"
-        "/pnl       — Today's P&amp;L (all markets)\n"
-        "/balance   — Cash + deployed + equity\n"
-        "/compare   — Side-by-side comparison + equity\n"
+        "/update        — Live snapshot (all 3 markets)\n"
+        "/positions     — All open trades (all markets)\n"
+        "/pnl           — Today's P&amp;L (all markets)\n"
+        "/pnl india     — 🇮🇳 India: today + all-time + best/worst 5\n"
+        "/pnl us        — 🇺🇸 US: today + all-time + best/worst 5\n"
+        "/pnl crypto    — 🪙 Crypto: today + all-time + best/worst 5\n"
+        "/balance       — Cash + deployed + equity\n"
+        "/compare       — Side-by-side comparison + equity\n"
         "────────────────────────────\n"
-        "/india     — 🇮🇳 India full report &amp; trade list\n"
-        "/us        — 🇺🇸 US full report &amp; trade list\n"
-        "/crypto    — 🪙 Crypto full report &amp; trade list\n"
+        "/india         — 🇮🇳 India full report &amp; trade list\n"
+        "/us            — 🇺🇸 US full report &amp; trade list\n"
+        "/crypto        — 🪙 Crypto full report &amp; trade list\n"
         "────────────────────────────\n"
-        "/stop      — Pause scanning &amp; monitoring\n"
-        "/start     — Resume after pause\n"
-        "/help      — This list"
+        "/exit SYM      — Manually close an open position\n"
+        "/pause SYM     — Skip a stock for rest of today\n"
+        "/unpause SYM   — Re-enable a paused stock\n"
+        "────────────────────────────\n"
+        "/stop          — Pause all scanning &amp; monitoring\n"
+        "/start         — Resume after pause\n"
+        "/help          — This list"
     )
     _reply(msg)
 
 
 def start_listener():
     """Start the Telegram listener in a background thread."""
+    _clear_stale_symbol_pauses()
     _skip_old_messages()
     t = threading.Thread(target=_poll_loop, daemon=True)
     t.start()

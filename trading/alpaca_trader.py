@@ -8,7 +8,7 @@ import sqlite3, json, threading
 from datetime import datetime, timezone, timedelta
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from config import US_CAPITAL, US_MAX_POSITIONS, US_MAX_POSITION_PCT
+from config import US_CAPITAL, US_MAX_POSITIONS, US_MAX_POSITION_PCT, SLIPPAGE_PCT, ALPACA_PAPER
 from data.database import get_conn
 
 _A  = lambda n: f"\033[{n}m"
@@ -42,6 +42,7 @@ class AlpacaTrader:
         self._lock          = threading.Lock()
         self.balance        = self._get_balance()
         self.open_positions = self._load_open_positions()
+        self._session_high  = self.balance
 
     # ── Balance ───────────────────────────────────────────────────────────────
 
@@ -85,6 +86,10 @@ class AlpacaTrader:
         if price <= 0:
             return None, "Invalid price"
 
+        # Apply slippage in paper mode
+        if ALPACA_PAPER:
+            price = round(price * (1 + SLIPPAGE_PCT), 4)
+
         min_lot   = max(1, int(lot_size or 1))
         alloc     = self.balance * US_MAX_POSITION_PCT
         quantity  = (int(alloc / price) // min_lot) * min_lot
@@ -122,6 +127,8 @@ class AlpacaTrader:
         }
         self.open_positions.append(position)
         self.balance = self._get_balance()
+        if self.balance > self._session_high:
+            self._session_high = self.balance
         print(f"{_BL}[US BUY]  {symbol} @ ${price:.2f} × {quantity}  SL:${stop_loss:.2f}  TGT:${target:.2f}  ${capital_used:.0f}  Bal:${self.balance:.2f}{_R}")
         return position, None
 
@@ -146,11 +153,23 @@ class AlpacaTrader:
 
         self.open_positions = [p for p in self.open_positions if p['id'] != position['id']]
         self.balance        = self._get_balance()
+        if self.balance > self._session_high:
+            self._session_high = self.balance
 
         result = 'PROFIT' if pnl >= 0 else 'LOSS'
         _c = _G if pnl >= 0 else _RD
         print(f"{_c}[US SELL] {position['symbol']} @ ${current_price:.2f}  P&L: ${pnl:+.2f} ({pnl_pct:+.1f}%)  {result}  {reason}{_R}")
         return pnl, pnl_pct
+
+    def get_drawdown_pct(self):
+        if self._session_high <= 0:
+            return 0.0
+        return max(0.0, (self._session_high - self.balance) / self._session_high)
+
+    def get_deployed_pct(self):
+        deployed = sum(p['capital_used'] for p in self.open_positions)
+        total = self.balance + deployed
+        return (deployed / total) if total > 0 else 0.0
 
     # ── Stats ─────────────────────────────────────────────────────────────────
 

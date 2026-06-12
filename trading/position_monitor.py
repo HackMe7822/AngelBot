@@ -12,7 +12,8 @@ This module handles sell decisions in real time.
 
 import threading
 import time
-from datetime import datetime, time as dtime, timezone, timedelta
+import json
+from datetime import datetime, date as ddate, time as dtime, timezone, timedelta
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from reporting.telegram_listener import is_paused
@@ -41,7 +42,7 @@ class PositionMonitor:
     def __init__(self, trader, on_exit_fn, live_feed=None, price_fn=None,
                  always_active=False, currency='₹', name=None,
                  market_open_fn=None, eod_close=True,
-                 sl_pct=None, target_pct=None):
+                 sl_pct=None, target_pct=None, market='india'):
         """
         trader          — PaperTrader / AlpacaTrader / CryptoTrader (shared with main thread)
         on_exit_fn      — callable(pos, price, pnl, pnl_pct, reason, exit_type, qty_sold)
@@ -55,6 +56,7 @@ class PositionMonitor:
                           (use when the worker handles its own EOD close logic)
         sl_pct          — override stop-loss % for trailing logic (default: SCALP_SL_PCT)
         target_pct      — override target % for trailing logic    (default: SCALP_TARGET_PCT)
+        market          — 'india'|'us'|'crypto' — used for DB state persistence
         """
         self.trader           = trader
         self.on_exit          = on_exit_fn
@@ -67,6 +69,7 @@ class PositionMonitor:
         self._eod_close       = eod_close
         self._sl_pct          = sl_pct      # None = read from config each tick
         self._target_pct      = target_pct  # None = read from config each tick
+        self._market          = market
         self._running         = False
         self._thread          = None
         self._last_price      = {}     # sym → last seen price
@@ -80,7 +83,85 @@ class PositionMonitor:
         self._sl_breach_count = {}     # pos_id → int   (consecutive polls below SL)
         self._daily_sl_hits   = {}     # symbol → (date, count) — banned after 2 SL hits same day
 
+    # ── State persistence — survives restarts ────────────────────────────────
+    def save_state(self):
+        """Persist trail_sl, cooldowns, and daily SL hits to the DB monitor_state table."""
+        try:
+            from data.database import get_conn
+            now = datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
+            market = self._market
+            conn = get_conn()
+            c    = conn.cursor()
+
+            def _upsert(key, value):
+                c.execute(
+                    "INSERT INTO monitor_state (market, key, value, updated_at) VALUES (?,?,?,?) "
+                    "ON CONFLICT(market, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    (market, key, json.dumps(value), now)
+                )
+
+            # trail_sl: {str(pos_id): float}
+            _upsert('trail_sl', {str(k): v for k, v in self._trail_sl.items()})
+            # trail_active: {str(pos_id): bool}
+            _upsert('trail_active', {str(k): v for k, v in self._trail_active.items()})
+            # sl_cooldown: {symbol: [iso_str, price]}
+            cd = {}
+            for sym, val in self._sl_cooldown.items():
+                t, price = val if isinstance(val, tuple) else (val, None)
+                cd[sym] = [t.isoformat(), price]
+            _upsert('sl_cooldown', cd)
+            # daily_sl_hits: {symbol: [date_str, count]}
+            hits = {sym: [str(d), cnt] for sym, (d, cnt) in self._daily_sl_hits.items()}
+            _upsert('daily_sl_hits', hits)
+
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[Monitor] State save error: {e}")
+
+    def load_state(self):
+        """Restore trail_sl, cooldowns, and daily SL hits from DB on startup."""
+        try:
+            from data.database import get_conn
+            market = self._market
+            conn = get_conn()
+            c    = conn.cursor()
+            c.execute("SELECT key, value FROM monitor_state WHERE market=?", (market,))
+            rows = {row[0]: json.loads(row[1]) for row in c.fetchall()}
+            conn.close()
+
+            if 'trail_sl' in rows:
+                self._trail_sl = {int(k): float(v) for k, v in rows['trail_sl'].items()}
+            if 'trail_active' in rows:
+                self._trail_active = {int(k): bool(v) for k, v in rows['trail_active'].items()}
+            if 'sl_cooldown' in rows:
+                today = datetime.now(_IST).date()
+                for sym, (iso, price) in rows['sl_cooldown'].items():
+                    try:
+                        t = datetime.fromisoformat(iso).replace(tzinfo=_IST)
+                        # Only restore if cooldown hasn't expired yet
+                        if (datetime.now(_IST) - t).total_seconds() < 1800:
+                            self._sl_cooldown[sym] = (t, float(price) if price else None)
+                    except Exception:
+                        pass
+            if 'daily_sl_hits' in rows:
+                today = datetime.now(_IST).date()
+                for sym, (date_str, cnt) in rows['daily_sl_hits'].items():
+                    try:
+                        hit_date = ddate.fromisoformat(date_str)
+                        if hit_date == today:   # only restore today's bans
+                            self._daily_sl_hits[sym] = (hit_date, int(cnt))
+                    except Exception:
+                        pass
+
+            if self._trail_sl or self._sl_cooldown or self._daily_sl_hits:
+                print(f"[Monitor] State restored: {len(self._trail_sl)} trailing stops, "
+                      f"{len(self._sl_cooldown)} cooldowns, {len(self._daily_sl_hits)} day bans")
+        except Exception as e:
+            print(f"[Monitor] State load error (starting fresh): {e}")
+
     def start(self):
+        self.load_state()
         self._running = True
         self._thread  = threading.Thread(
             target=self._loop, daemon=True, name="PositionMonitor"
@@ -311,6 +392,8 @@ class PositionMonitor:
                 # Trail cooldown: time gate only (stock reversed from target, don't chase)
                 # No day-ban counter — trail exits are not necessarily bad signals
                 self._sl_cooldown[sym] = (datetime.now(_IST), price)
+            # Persist updated state so a restart picks up current cooldowns and day bans
+            threading.Thread(target=self.save_state, daemon=True).start()
 
     # ── LTP poll fallback — used when WebSocket is not connected ─────────────
     def _poll_positions(self):
@@ -391,10 +474,10 @@ class PositionMonitor:
 def start_monitor(trader, on_exit_fn, live_feed=None, price_fn=None,
                   always_active=False, currency='₹', name=None,
                   market_open_fn=None, eod_close=True,
-                  sl_pct=None, target_pct=None):
+                  sl_pct=None, target_pct=None, market='india'):
     monitor = PositionMonitor(trader, on_exit_fn, live_feed, price_fn=price_fn,
                               always_active=always_active, currency=currency, name=name,
                               market_open_fn=market_open_fn, eod_close=eod_close,
-                              sl_pct=sl_pct, target_pct=target_pct)
+                              sl_pct=sl_pct, target_pct=target_pct, market=market)
     monitor.start()
     return monitor

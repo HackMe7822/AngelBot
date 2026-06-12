@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AngelBot Portal</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
+    --blue: #58a6ff; --yellow: #d29922; --purple: #bc8cff;
+    --accent: #1f6feb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+  a { color: var(--blue); text-decoration: none; }
+
+  /* Layout */
+  .sidebar { position: fixed; top: 0; left: 0; width: 200px; height: 100vh; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; z-index: 100; }
+  .sidebar h1 { font-size: 16px; font-weight: 700; padding: 0 16px 16px; border-bottom: 1px solid var(--border); color: var(--blue); }
+  .sidebar nav a { display: flex; align-items: center; gap: 8px; padding: 10px 16px; color: var(--muted); transition: all .15s; border-left: 3px solid transparent; }
+  .sidebar nav a:hover, .sidebar nav a.active { color: var(--text); background: rgba(88,166,255,.08); border-left-color: var(--blue); }
+  .main { margin-left: 200px; padding: 24px; min-height: 100vh; }
+  .page { display: none; }
+  .page.active { display: block; }
+  h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+
+  /* Cards */
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
+  .stat { font-size: 26px; font-weight: 700; }
+  .stat.green { color: var(--green); }
+  .stat.red { color: var(--red); }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge.green { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.red { background: rgba(248,81,73,.15); color: var(--red); }
+  .badge.blue { background: rgba(88,166,255,.15); color: var(--blue); }
+  .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge.paused { background: rgba(210,153,34,.2); color: var(--yellow); }
+  .badge.active { background: rgba(63,185,80,.15); color: var(--green); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); background: var(--card); position: sticky; top: 0; }
+  td { padding: 8px 12px; border-bottom: 1px solid rgba(48,54,61,.5); }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .pnl-pos { color: var(--green); font-weight: 600; }
+  .pnl-neg { color: var(--red); font-weight: 600; }
+
+  /* Controls */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); transition: all .15s; }
+  .btn:hover { background: rgba(255,255,255,.05); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #388bfd; }
+  .btn.danger { background: rgba(248,81,73,.15); border-color: var(--red); color: var(--red); }
+  .btn.danger:hover { background: rgba(248,81,73,.25); }
+  .btn.success { background: rgba(63,185,80,.15); border-color: var(--green); color: var(--green); }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  select, input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 13px; outline: none; }
+  select:focus, input:focus { border-color: var(--blue); }
+
+  /* Config */
+  .config-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .config-key { font-family: monospace; font-size: 13px; color: var(--purple); }
+  .config-val { font-family: monospace; }
+
+  /* Log viewer */
+  .log-box { background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; height: 500px; overflow-y: auto; white-space: pre-wrap; color: #c9d1d9; }
+  .log-box .err { color: var(--red); }
+  .log-box .warn { color: var(--yellow); }
+  .log-box .ok { color: var(--green); }
+
+  /* Update banner */
+  .update-banner { background: rgba(88,166,255,.1); border: 1px solid var(--blue); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .hidden { display: none !important; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tab { padding: 8px 16px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  /* Leaderboard */
+  .win-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+  .win-fill { height: 100%; background: var(--green); border-radius: 3px; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1f6feb; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <h1>🤖 AngelBot</h1>
+  <nav>
+    <a href="#" onclick="showPage('dashboard')" id="nav-dashboard" class="active">📊 Dashboard</a>
+    <a href="#" onclick="showPage('positions')" id="nav-positions">📋 Positions</a>
+    <a href="#" onclick="showPage('trades')" id="nav-trades">📈 Trade History</a>
+    <a href="#" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
+    <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Config</a>
+    <a href="#" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
+  </nav>
+</aside>
+
+<main class="main">
+
+  <!-- Update banner (hidden by default) -->
+  <div id="update-banner" class="update-banner hidden">
+    <span>🔔 <strong>Update available!</strong> New commits on GitHub main branch.</span>
+    <button class="btn primary" onclick="applyUpdate()">⬇️ Update & Restart</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2>Dashboard</h2>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span id="bot-status-badge" class="badge active">● Active</span>
+        <button class="btn danger" id="pause-btn" onclick="toggleBot()">⏸ Pause Bot</button>
+        <button class="btn" onclick="refreshDashboard()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="grid grid-3" id="market-cards">
+      <div class="card">
+        <h3>🇮🇳 India (NSE)</h3>
+        <div class="stat" id="india-pnl">—</div>
+        <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="india-trades">—</div>
+        <div style="margin-top:12px;" id="india-details"></div>
+      </div>
+      <div class="card">
+        <h3>🇺🇸 US Market</h3>
+        <div class="stat" id="us-pnl">—</div>
+        <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="us-trades">—</div>
+        <div style="margin-top:12px;" id="us-details"></div>
+      </div>
+      <div class="card">
+        <h3>🪙 Crypto (24/7)</h3>
+        <div class="stat" id="crypto-pnl">—</div>
+        <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="crypto-trades">—</div>
+        <div style="margin-top:12px;" id="crypto-details"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;" class="card">
+      <h3>Recent Closed Trades (All Markets)</h3>
+      <div class="table-wrap" id="recent-trades-table">Loading...</div>
+    </div>
+  </div>
+
+  <!-- POSITIONS -->
+  <div id="page-positions" class="page">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2>Open Positions</h2>
+      <div class="toolbar" style="margin-bottom:0">
+        <select id="pos-market-filter" onchange="loadPositions()">
+          <option value="">All Markets</option>
+          <option value="india">🇮🇳 India</option>
+          <option value="us">🇺🇸 US</option>
+          <option value="crypto">🪙 Crypto</option>
+        </select>
+        <button class="btn" onclick="loadPositions()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="table-wrap" id="positions-table">Loading...</div>
+  </div>
+
+  <!-- TRADES -->
+  <div id="page-trades" class="page">
+    <h2>Trade History</h2>
+    <div class="toolbar">
+      <select id="trade-market" onchange="loadTrades()">
+        <option value="">All Markets</option>
+        <option value="india">🇮🇳 India</option>
+        <option value="us">🇺🇸 US</option>
+        <option value="crypto">🪙 Crypto</option>
+      </select>
+      <select id="trade-status" onchange="loadTrades()">
+        <option value="">All Status</option>
+        <option value="closed">Closed</option>
+        <option value="open">Open</option>
+      </select>
+      <button class="btn" onclick="loadTrades()">↻ Refresh</button>
+      <span id="trade-count" style="color:var(--muted); font-size:12px;"></span>
+    </div>
+    <div class="table-wrap" id="trades-table">Loading...</div>
+    <div id="trade-pagination" class="toolbar" style="margin-top:12px; justify-content:center;"></div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div id="page-leaderboard" class="page">
+    <h2>Symbol Leaderboard</h2>
+    <div class="tabs">
+      <div class="tab active" onclick="loadLeaderboard('')">All</div>
+      <div class="tab" onclick="loadLeaderboard('india')">🇮🇳 India</div>
+      <div class="tab" onclick="loadLeaderboard('us')">🇺🇸 US</div>
+      <div class="tab" onclick="loadLeaderboard('crypto')">🪙 Crypto</div>
+    </div>
+    <div class="table-wrap" id="leaderboard-table">Loading...</div>
+  </div>
+
+  <!-- CONFIG -->
+  <div id="page-config" class="page">
+    <h2>Configuration</h2>
+    <p style="color:var(--muted); margin-bottom:16px; font-size:13px;">Changes are written to .env. Restart bot workers to apply.</p>
+    <div id="config-list">Loading...</div>
+  </div>
+
+  <!-- LOGS -->
+  <div id="page-logs" class="page">
+    <h2>Live Logs</h2>
+    <div class="toolbar">
+      <select id="log-market" onchange="loadLog()">
+        <option value="india">🇮🇳 India</option>
+        <option value="us">🇺🇸 US</option>
+        <option value="crypto">🪙 Crypto</option>
+        <option value="watchdog">🐕 Watchdog</option>
+      </select>
+      <select id="log-lines" onchange="loadLog()">
+        <option value="100">Last 100 lines</option>
+        <option value="200" selected>Last 200 lines</option>
+        <option value="500">Last 500 lines</option>
+      </select>
+      <button class="btn" onclick="loadLog()">↻ Refresh</button>
+      <label style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="log-auto" onchange="toggleAutoRefresh()"> Auto-refresh (5s)
+      </label>
+    </div>
+    <div class="log-box" id="log-box">Select a market log above.</div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';  // same origin
+let _autoRefreshInterval = null;
+let _tradeOffset = 0;
+const _tradeLimit = 50;
+
+// ── Auth (Basic) ───────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const creds = localStorage.getItem('ab_creds');
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (creds) headers['Authorization'] = 'Basic ' + creds;
+  const r = await fetch(API + path, { ...opts, headers });
+  if (r.status === 401) {
+    const u = prompt('Username:');
+    const p = prompt('Password:');
+    if (!u || !p) return null;
+    localStorage.setItem('ab_creds', btoa(u + ':' + p));
+    return apiFetch(path, opts);
+  }
+  return r;
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, dur = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'dashboard')   refreshDashboard();
+  if (name === 'positions')   loadPositions();
+  if (name === 'trades')      { _tradeOffset = 0; loadTrades(); }
+  if (name === 'leaderboard') loadLeaderboard('');
+  if (name === 'config')      loadConfig();
+  if (name === 'logs')        loadLog();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+function fmtPnl(pnl, cur) {
+  const sign = pnl >= 0 ? '+' : '';
+  return sign + cur + Math.abs(pnl).toFixed(cur === '₹' ? 2 : (cur === '$' ? 2 : 4));
+}
+
+async function refreshDashboard() {
+  const r = await apiFetch('/api/dashboard');
+  if (!r) return;
+  const d = await r.json();
+
+  // Bot status
+  const paused = d.bot_paused;
+  const badge  = document.getElementById('bot-status-badge');
+  const pbtn   = document.getElementById('pause-btn');
+  badge.textContent = paused ? '⏸ Paused' : '● Active';
+  badge.className   = 'badge ' + (paused ? 'paused' : 'active');
+  pbtn.textContent  = paused ? '▶️ Resume Bot' : '⏸ Pause Bot';
+  pbtn.className    = paused ? 'btn success' : 'btn danger';
+
+  // Market cards
+  function renderCard(id, data, cur) {
+    const pnl   = data.today_pnl;
+    const cls   = pnl >= 0 ? 'green' : 'red';
+    document.getElementById(id + '-pnl').className  = 'stat ' + cls;
+    document.getElementById(id + '-pnl').textContent = fmtPnl(pnl, cur);
+    document.getElementById(id + '-trades').textContent =
+      `Today: ${data.today_trades} trades  ✅${data.today_wins}  ❌${data.today_losses}`;
+    document.getElementById(id + '-details').innerHTML =
+      `<div class="stat-row"><span style="color:var(--muted)">Open</span><span>${data.open_positions}</span></div>` +
+      `<div class="stat-row"><span style="color:var(--muted)">All-time P&L</span><span class="${data.total_pnl>=0?'pnl-pos':'pnl-neg'}">${fmtPnl(data.total_pnl, cur)}</span></div>`;
+  }
+  renderCard('india',  d.india,  '₹');
+  renderCard('us',     d.us,     '$');
+  renderCard('crypto', d.crypto, '$');
+
+  // Recent trades
+  loadRecentTrades();
+
+  // Check for updates
+  checkUpdate();
+}
+
+async function loadRecentTrades() {
+  const r = await apiFetch('/api/trades?status_filter=closed&limit=10&offset=0');
+  if (!r) return;
+  const d = await r.json();
+  document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades);
+}
+
+async function toggleBot() {
+  const paused = document.getElementById('bot-status-badge').textContent.includes('Paused');
+  const ep = paused ? '/api/bot/resume' : '/api/bot/pause';
+  const r  = await apiFetch(ep, { method: 'POST' });
+  if (r) { toast(paused ? 'Bot resumed ▶️' : 'Bot paused ⏸'); refreshDashboard(); }
+}
+
+// ── Positions ─────────────────────────────────────────────────────────────
+async function loadPositions() {
+  const market = document.getElementById('pos-market-filter').value;
+  const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
+  if (!r) return;
+  const d = await r.json();
+  const el = document.getElementById('positions-table');
+  if (!d.positions.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th><th>Qty</th><th>Capital</th><th>SL</th><th>Target</th></tr></thead>
+    <tbody>${d.positions.map(p => {
+      const cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '₹');
+      const mkt = p.source === 'us_paper' ? '🇺🇸' : (p.source === 'crypto_paper' ? '🪙' : '🇮🇳');
+      return `<tr>
+        <td><strong>${p.symbol}</strong></td>
+        <td>${mkt}</td>
+        <td>${p.entry_time}</td>
+        <td>${cur}${(p.entry_price||0).toFixed(4)}</td>
+        <td>${p.quantity}</td>
+        <td>${cur}${(p.capital_used||0).toFixed(2)}</td>
+        <td class="pnl-neg">${cur}${(p.stop_loss||0).toFixed(4)}</td>
+        <td class="pnl-pos">${cur}${(p.target||0).toFixed(4)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+// ── Trade history ─────────────────────────────────────────────────────────
+function buildTradeTable(trades) {
+  if (!trades.length) return '<p style="color:var(--muted);padding:16px">No trades found.</p>';
+  return `<table>
+    <thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Entry</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th><th>Status</th></tr></thead>
+    <tbody>${trades.map(t => {
+      const cur   = t.source === 'us_paper' ? '$' : (t.source === 'crypto_paper' ? '$' : '₹');
+      const mkt   = t.source === 'us_paper' ? '🇺🇸' : (t.source === 'crypto_paper' ? '🪙' : '🇮🇳');
+      const pnl   = t.pnl || 0;
+      const cls   = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      const sign  = pnl >= 0 ? '+' : '';
+      return `<tr>
+        <td style="color:var(--muted)">${t.id}</td>
+        <td><strong>${t.symbol}</strong></td>
+        <td>${mkt}</td>
+        <td>${cur}${(t.entry_price||0).toFixed(2)}</td>
+        <td>${t.exit_price ? cur + (t.exit_price).toFixed(2) : '—'}</td>
+        <td class="${cls}">${t.status==='closed' ? sign+cur+Math.abs(pnl).toFixed(2) : '—'}</td>
+        <td class="${cls}">${t.status==='closed' && t.pnl_pct != null ? sign+(t.pnl_pct).toFixed(1)+'%' : '—'}</td>
+        <td style="color:var(--muted); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.exit_reason||'—'}</td>
+        <td><span class="badge ${t.status==='open'?'blue':'green'}">${t.status}</span></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+async function loadTrades() {
+  const market = document.getElementById('trade-market').value;
+  const status = document.getElementById('trade-status').value;
+  let url = `/api/trades?limit=${_tradeLimit}&offset=${_tradeOffset}`;
+  if (market) url += '&market=' + market;
+  if (status) url += '&status_filter=' + status;
+  const r = await apiFetch(url);
+  if (!r) return;
+  const d = await r.json();
+  document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades);
+  document.getElementById('trade-count').textContent = `${d.total} total trades`;
+
+  // Pagination
+  const pages = Math.ceil(d.total / _tradeLimit);
+  const cur   = Math.floor(_tradeOffset / _tradeLimit);
+  let pg = '';
+  if (_tradeOffset > 0) pg += `<button class="btn" onclick="_tradeOffset-=${_tradeLimit};loadTrades()">← Prev</button>`;
+  pg += `<span style="color:var(--muted);font-size:12px">Page ${cur+1} / ${pages||1}</span>`;
+  if (_tradeOffset + _tradeLimit < d.total) pg += `<button class="btn" onclick="_tradeOffset+=${_tradeLimit};loadTrades()">Next →</button>`;
+  document.getElementById('trade-pagination').innerHTML = pg;
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────
+async function loadLeaderboard(market) {
+  document.querySelectorAll('#page-leaderboard .tab').forEach((t,i) => {
+    t.classList.toggle('active', ['','india','us','crypto'][i] === market);
+  });
+  const url = '/api/stats/leaderboard' + (market ? '?market=' + market : '');
+  const r = await apiFetch(url);
+  if (!r) return;
+  const d = await r.json();
+  const el = document.getElementById('leaderboard-table');
+  if (!d.leaderboard.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No trade data yet.</p>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead>
+    <tbody>${d.leaderboard.map(s => {
+      const wr = s.win_rate;
+      return `<tr>
+        <td><strong>${s.symbol}</strong></td>
+        <td>${s.trades} <span style="color:var(--muted);font-size:11px">(✅${s.wins} ❌${s.losses})</span></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span>${wr.toFixed(1)}%</span>
+            <div class="win-bar" style="width:60px"><div class="win-fill" style="width:${wr}%"></div></div>
+          </div>
+        </td>
+        <td class="${s.total_pnl>=0?'pnl-pos':'pnl-neg'}">${s.total_pnl>=0?'+':''}${s.total_pnl.toFixed(2)}</td>
+        <td class="${s.avg_pnl>=0?'pnl-pos':'pnl-neg'}">${s.avg_pnl>=0?'+':''}${s.avg_pnl.toFixed(2)}</td>
+        <td class="pnl-pos">+${s.best.toFixed(2)}</td>
+        <td class="pnl-neg">${s.worst.toFixed(2)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+// ── Config ────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  const r = await apiFetch('/api/config');
+  if (!r) return;
+  const d = await r.json();
+  const el = document.getElementById('config-list');
+  el.innerHTML = Object.entries(d).map(([k, v]) => `
+    <div class="config-row">
+      <span class="config-key">${k}</span>
+      <input type="text" id="cfg-${k}" value="${v}" class="config-val" />
+      <button class="btn primary" onclick="saveConfig('${k}')">Save</button>
+    </div>`).join('');
+}
+
+async function saveConfig(key) {
+  const val = document.getElementById('cfg-' + key).value;
+  const r   = await apiFetch('/api/config', {
+    method: 'POST',
+    body: JSON.stringify({ key, value: val }),
+  });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) toast('✅ ' + d.message);
+  else toast('❌ ' + (d.detail || 'Error'), 5000);
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────
+async function loadLog() {
+  const market = document.getElementById('log-market').value;
+  const lines  = document.getElementById('log-lines').value;
+  const r = await apiFetch(`/api/logs/${market}?lines=${lines}`);
+  if (!r) return;
+  const d = await r.json();
+  const box = document.getElementById('log-box');
+  box.innerHTML = d.lines.map(l => {
+    const lc = l.toLowerCase();
+    if (lc.includes('error') || lc.includes('exception') || lc.includes('fatal') || lc.includes('traceback'))
+      return `<span class="err">${escHtml(l)}</span>`;
+    if (lc.includes('warn') || lc.includes('cooldown') || lc.includes('paused'))
+      return `<span class="warn">${escHtml(l)}</span>`;
+    if (lc.includes('buy') || lc.includes('profit') || lc.includes('ok'))
+      return `<span class="ok">${escHtml(l)}</span>`;
+    return escHtml(l);
+  }).join('\n') || 'No log data.';
+  box.scrollTop = box.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toggleAutoRefresh() {
+  const on = document.getElementById('log-auto').checked;
+  if (on) {
+    _autoRefreshInterval = setInterval(loadLog, 5000);
+  } else {
+    clearInterval(_autoRefreshInterval);
+    _autoRefreshInterval = null;
+  }
+}
+
+// ── Update banner ─────────────────────────────────────────────────────────
+async function checkUpdate() {
+  try {
+    const r = await apiFetch('/api/update/check');
+    if (!r) return;
+    const d = await r.json();
+    const banner = document.getElementById('update-banner');
+    if (d.update_available) {
+      banner.querySelector('span').innerHTML =
+        `🔔 <strong>Update available!</strong> ${d.commits_behind} new commit(s) on GitHub.`;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+  } catch(e) {}
+}
+
+async function applyUpdate() {
+  if (!confirm('Pull latest code from GitHub? Bot workers must be restarted after.')) return;
+  toast('Pulling update...', 10000);
+  const r = await apiFetch('/api/update/apply', { method: 'POST' });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) toast('✅ ' + d.message, 5000);
+  else toast('❌ Update failed', 5000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+refreshDashboard();
+setInterval(refreshDashboard, 60000);  // auto-refresh every 60s
+</script>
+</body>
+</html>

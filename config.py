@@ -27,10 +27,14 @@ SCALP_SL_PCT     = 0.006   # exit on 0.6% loss
 SL_CONFIRM_POLLS = 4       # consecutive 15s polls below SL before exit (4 × 15s = 60s ≈ 1 candle)
 
 # Risk controls
-MAX_DAILY_LOSS_PCT = 0.02  # stop all buys if day loss exceeds 2% of capital
-ENTRY_START_MIN    = (9, 45)   # no buys before 9:45 AM — first 15 min has ~74% SL rate
-ENTRY_END_MIN      = (15, 0)   # no buys after 3:00 PM (approaching force-close)
-MIN_STOCK_PRICE    = 150.0     # skip stocks under ₹150 — SL gap too small vs bid-ask spread
+MAX_DAILY_LOSS_PCT  = 0.02   # stop all buys if day loss exceeds 2% of capital
+MAX_DAILY_TRADES    = 30     # circuit breaker — stop new buys after N closed trades per day
+MAX_DEPLOYED_PCT    = 0.70   # never deploy more than 70% of balance at once
+PEAK_DRAWDOWN_PCT   = 0.03   # pause new buys if account drops 3% from today's session high
+SLIPPAGE_PCT        = 0.0005 # 0.05% simulated slippage on paper entries (realistic fill cost)
+ENTRY_START_MIN     = (9, 45)  # no buys before 9:45 AM — first 15 min has ~74% SL rate
+ENTRY_END_MIN       = (15, 0)  # no buys after 3:00 PM (approaching force-close)
+MIN_STOCK_PRICE     = 150.0    # skip stocks under ₹150 — SL gap too small vs bid-ask spread
 
 # ── Alpaca / US market config ─────────────────────────────────────────────────
 ALPACA_KEY    = os.getenv("ALPACA_KEY",    "")
@@ -41,6 +45,7 @@ US_CAPITAL          = float(os.getenv("US_CAPITAL", "10000"))   # set in .env wh
 US_MAX_POSITIONS    = 500       # effectively unlimited — capital is the natural cap
 US_MAX_POSITION_PCT = 0.10      # 10% per stock — same as India
 US_MAX_DAILY_LOSS_PCT = 0.02    # 2% daily loss limit in USD
+US_MAX_DAILY_TRADES   = 30     # circuit breaker for US session
 US_MIN_STOCK_PRICE  = 10.0      # skip stocks under $10 — penny stocks are erratic
 
 # US market entry window (ET → IST: 9:30 AM ET = 7:00 PM IST, 3:30 PM ET = 1:00 AM IST)
@@ -57,6 +62,7 @@ CRYPTO_CAPITAL          = float(os.getenv("CRYPTO_CAPITAL", "1000"))   # set in 
 CRYPTO_MAX_POSITIONS    = 500      # capital is the natural cap
 CRYPTO_MAX_POSITION_PCT = 0.05     # 5% per trade (adaptive — see crypto_trader.py)
 CRYPTO_MAX_DAILY_LOSS_PCT = 0.03   # 3% daily loss limit (crypto is more volatile)
+CRYPTO_MAX_DAILY_TRADES   = 20     # circuit breaker for crypto session
 CRYPTO_MIN_TRADE_USD    = float(os.getenv("CRYPTO_MIN_TRADE", "5.0"))  # Binance min notional
 
 # Crypto needs wider SL/target — crypto wicks are 3× larger than stock wicks

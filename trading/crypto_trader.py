@@ -8,7 +8,8 @@ import sqlite3, json, threading
 from datetime import datetime, timezone, timedelta
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from config import CRYPTO_CAPITAL, CRYPTO_MAX_POSITIONS, CRYPTO_MAX_POSITION_PCT, CRYPTO_MIN_TRADE_USD
+from config import (CRYPTO_CAPITAL, CRYPTO_MAX_POSITIONS, CRYPTO_MAX_POSITION_PCT,
+                    CRYPTO_MIN_TRADE_USD, SLIPPAGE_PCT, BINANCE_PAPER)
 from data.database import get_conn
 
 _A  = lambda n: f"\033[{n}m"
@@ -34,6 +35,7 @@ class CryptoTrader:
         self._lock          = threading.Lock()
         self.balance        = self._get_balance()
         self.open_positions = self._load_open_positions()
+        self._session_high  = self.balance
 
     # ── Balance ───────────────────────────────────────────────────────────────
 
@@ -93,6 +95,10 @@ class CryptoTrader:
         if capital_used < CRYPTO_MIN_TRADE_USD:
             return None, f"Balance too low for minimum trade (need ${CRYPTO_MIN_TRADE_USD:.2f}, have ${self.balance:.2f})"
 
+        # Apply slippage in paper mode
+        if BINANCE_PAPER:
+            price = round(price * (1 + SLIPPAGE_PCT), 8)
+
         # Fractional quantity — crypto allows any precision
         quantity = round(capital_used / price, 8)
         if quantity <= 0:
@@ -120,6 +126,8 @@ class CryptoTrader:
         }
         self.open_positions.append(position)
         self.balance = self._get_balance()
+        if self.balance > self._session_high:
+            self._session_high = self.balance
         print(f"{_MG}[CRYPTO BUY]  {symbol} @ ${price:.4f} × {quantity:.6f}  "
               f"SL:${stop_loss:.4f}  TGT:${target:.4f}  ${capital_used:.2f}  Bal:${self.balance:.2f}{_R}")
         return position, None
@@ -145,12 +153,24 @@ class CryptoTrader:
 
         self.open_positions = [p for p in self.open_positions if p['id'] != position['id']]
         self.balance        = self._get_balance()
+        if self.balance > self._session_high:
+            self._session_high = self.balance
 
         result = 'PROFIT' if pnl >= 0 else 'LOSS'
         _c = _G if pnl >= 0 else _RD
         print(f"{_c}[CRYPTO SELL] {position['symbol']} @ ${current_price:.4f}  "
               f"P&L: ${pnl:+.4f} ({pnl_pct:+.2f}%)  {result}  {reason}{_R}")
         return pnl, pnl_pct
+
+    def get_drawdown_pct(self):
+        if self._session_high <= 0:
+            return 0.0
+        return max(0.0, (self._session_high - self.balance) / self._session_high)
+
+    def get_deployed_pct(self):
+        deployed = sum(p['capital_used'] for p in self.open_positions)
+        total = self.balance + deployed
+        return (deployed / total) if total > 0 else 0.0
 
     # ── Stats ─────────────────────────────────────────────────────────────────
 

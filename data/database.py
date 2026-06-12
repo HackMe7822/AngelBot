@@ -63,6 +63,20 @@ def init_db():
         )
     """)
     c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_name ON signal_performance (signal_name)")
+
+    # Monitor state — persists trailing stops, cooldowns, SL counts across restarts
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS monitor_state (
+            market      TEXT NOT NULL,
+            pos_id      INTEGER,
+            symbol      TEXT,
+            key         TEXT NOT NULL,
+            value       TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            PRIMARY KEY (market, key)
+        )
+    ''')
+
     conn.commit()
     conn.close()
     print("Database ready.")

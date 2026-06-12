@@ -107,7 +107,8 @@ def _acquire_lock():
         sys.exit(0)
 
 # ── Imports ───────────────────────────────────────────────────────────────────
-from config import PAPER_MODE, MAX_DAILY_LOSS_PCT, ENTRY_START_MIN, ENTRY_END_MIN, MIN_STOCK_PRICE
+from config import (PAPER_MODE, MAX_DAILY_LOSS_PCT, MAX_DAILY_TRADES, MAX_DEPLOYED_PCT,
+                    PEAK_DRAWDOWN_PCT, ENTRY_START_MIN, ENTRY_END_MIN, MIN_STOCK_PRICE)
 from data.nifty_stocks import get_all_stocks
 from data.live_feed import LiveFeed
 from trading.scanner import scan_stocks
@@ -115,6 +116,8 @@ from trading.paper_trader import PaperTrader
 from trading.position_monitor import start_monitor
 from reporting.excel_report import generate_daily_report
 from reporting.telegram_alerts import send, send_daily_summary, send_reload_alert
+from reporting.telegram_listener import is_symbol_paused
+from analysis.market_filters import india_market_mood_ok, symbol_event_clear, sector_cap_ok
 from learning.self_learner import should_retrain, train
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -168,6 +171,28 @@ def run_scan():
         sep()
         return
 
+    if stats['trades'] >= MAX_DAILY_TRADES:
+        cprint(f"  [{ist_str}]  Daily trade cap reached ({stats['trades']}/{MAX_DAILY_TRADES}) — no new buys", YL)
+        sep()
+        return
+
+    dd = trader.get_drawdown_pct()
+    if dd >= PEAK_DRAWDOWN_PCT:
+        cprint(f"  [{ist_str}]  Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
+        sep()
+        return
+
+    dep = trader.get_deployed_pct()
+    if dep >= MAX_DEPLOYED_PCT:
+        cprint(f"  [{ist_str}]  {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
+        sep()
+        return
+
+    if not india_market_mood_ok():
+        cprint(f"  [{ist_str}]  NIFTY mood bearish — skipping India buy scan", YL)
+        sep()
+        return
+
     # ── Print section header ──────────────────────────────────────────────────
     cprint(f"{'─'*20} INDIA NSE {'─'*30}", CY)
     sp()
@@ -207,6 +232,14 @@ def run_scan():
             continue  # already holding this stock — no duplicate positions
         if c['price'] < MIN_STOCK_PRICE:
             cprint(f"  [SKIP]      {c['symbol']} ₹{c['price']:.2f} — below ₹{MIN_STOCK_PRICE:.0f} min price (SL gap too small)", GY)
+            continue
+        if is_symbol_paused(c['symbol']):
+            cprint(f"  [PAUSED]    {c['symbol']} — manually paused via Telegram for today", YL)
+            continue
+        if not symbol_event_clear(c['symbol']):
+            cprint(f"  [EVENT]     {c['symbol']} — earnings/macro event today, skip", YL)
+            continue
+        if not sector_cap_ok(c['symbol'], trader.open_positions, market='india'):
             continue
         if monitor and monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)
@@ -260,6 +293,83 @@ def end_of_day():
     cprint("[EOD] Done.", CY)
 
 
+def pre_market_check():
+    """Runs at 9:00 AM IST — verify API, DB, balance, and open positions before market opens."""
+    global _pre_market_done_date
+    ist = now_ist()
+    if ist.weekday() >= 5:   # skip weekends
+        return
+    if not (ist.hour == 9 and ist.minute < 10):
+        return
+    today = ist.date()
+    if _pre_market_done_date == today:
+        return
+    _pre_market_done_date = today
+
+    checks = []
+    all_ok = True
+
+    # 1. DB check
+    try:
+        from data.database import get_conn
+        c = get_conn()
+        c.execute("SELECT 1")
+        c.close()
+        checks.append("✅ DB: Connected")
+    except Exception as e:
+        checks.append(f"❌ DB: {e}")
+        all_ok = False
+
+    # 2. Angel One API
+    try:
+        from data.angel_login import get_smartapi
+        obj = get_smartapi()
+        if obj:
+            checks.append("✅ Angel One: Connected")
+        else:
+            checks.append("⚠️ Angel One: Login failed")
+            all_ok = False
+    except Exception as e:
+        checks.append(f"⚠️ Angel One: {e}")
+
+    # 3. Balance and open positions
+    try:
+        bal  = trader.balance
+        open_pos = len(trader.open_positions)
+        checks.append(f"✅ Balance: ₹{bal:.2f}  |  Open positions: {open_pos}")
+    except Exception as e:
+        checks.append(f"❌ Balance check: {e}")
+        all_ok = False
+
+    # 4. Disk space (quick sanity)
+    try:
+        import shutil
+        free_gb = shutil.disk_usage('/').free / (1024**3)
+        if free_gb < 0.5:
+            checks.append(f"⚠️ Disk: Only {free_gb:.1f} GB free")
+            all_ok = False
+        else:
+            checks.append(f"✅ Disk: {free_gb:.1f} GB free")
+    except Exception:
+        pass
+
+    status_emoji = "✅" if all_ok else "⚠️"
+    status_label = "All systems ready" if all_ok else "Issues detected"
+    msg = (
+        f"{status_emoji} <b>Pre-Market Health Check — India NSE</b>\n"
+        f"{ist.strftime('%d %b %Y  %I:%M %p IST')}\n"
+        f"{'─'*30}\n"
+        + "\n".join(checks) +
+        f"\n{'─'*30}\n"
+        f"<b>{status_label}</b> — Market opens at 9:15 AM IST"
+    )
+    send(msg)
+    cprint(f"[Pre-Market] Health check sent. Status: {status_label}", CY)
+
+
+_pre_market_done_date = None
+
+
 def hourly_heartbeat():
     global _last_heartbeat
     ist = now_ist()
@@ -301,7 +411,7 @@ def main():
     trader    = PaperTrader()
     live_feed = LiveFeed()
     live_feed.start()
-    monitor   = start_monitor(trader, _on_exit, live_feed)
+    monitor   = start_monitor(trader, _on_exit, live_feed, market='india')
 
     from data.nifty_stocks import get_all_stocks
     stock_list = get_all_stocks()
@@ -316,6 +426,7 @@ def main():
     schedule.every(1).minutes.do(run_scan)
     schedule.every(1).minutes.do(end_of_day)
     schedule.every(1).minutes.do(hourly_heartbeat)
+    schedule.every(1).minutes.do(pre_market_check)
 
     cprint("India worker ready — scanning every minute.  Ctrl+C to stop.", GY)
     run_scan()   # fire immediately on startup
