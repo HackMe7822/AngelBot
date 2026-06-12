@@ -162,8 +162,21 @@ if (-not $saOk) {
     OK "SQL_SA_PASS updated in .env"
 }
 
-# Create angelbot database if it doesn't exist
-if ($saOk) { Init-Database $saPass }
+# Create angelbot database using Windows auth (works regardless of SA password)
+Info "Ensuring 'angelbot' database exists..."
+$createDb = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name='angelbot') CREATE DATABASE angelbot;"
+& sqlcmd -S ".\ANGELBOT" -E -Q $createDb 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    OK "Database 'angelbot' ready"
+} else {
+    # Fallback: try with SA credentials
+    if ($saOk) {
+        & sqlcmd -S ".\ANGELBOT" -U sa -P $saPass -Q $createDb 2>&1 | Out-Null
+        OK "Database 'angelbot' created via SA"
+    } else {
+        Warn "Could not create 'angelbot' database -- workers may fail on first start"
+    }
+}
 
 # ── 5. Install / upgrade Python packages ─────────────────────────────────────
 Info "Installing Python packages (pyodbc + requirements)..."
