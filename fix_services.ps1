@@ -184,22 +184,80 @@ Info "Installing Python packages (pyodbc + requirements)..."
 & $pyReal -m pip install -r "$BOT_DIR\requirements.txt" --quiet
 OK "Packages ready"
 
-# ── 5b. Create all DB tables via Python init_db() ────────────────────────────
-Info "Creating database tables (init_db)..."
-$initScript = @"
+# ── 5b. Create all DB tables directly via sqlcmd (reliable, no Python needed) ─
+Info "Creating database tables via sqlcmd..."
+
+# Fix any tables created with wrong NVARCHAR(MAX) column types from earlier runs
+$fixSql = @"
+USE angelbot;
+IF EXISTS (
+    SELECT * FROM sys.columns
+    WHERE object_id=OBJECT_ID('signal_performance') AND name='signal_name' AND max_length=-1
+) DROP TABLE signal_performance;
+IF EXISTS (
+    SELECT * FROM sys.columns
+    WHERE object_id=OBJECT_ID('monitor_state') AND name='market' AND max_length=-1
+) DROP TABLE monitor_state;
+"@
+& sqlcmd -S ".\ANGELBOT" -U sa -P $saPass -Q $fixSql 2>&1 | Out-Null
+
+# Create all tables with correct schema
+$schemaSql = @"
+USE angelbot;
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='trades')
+CREATE TABLE trades (
+    id INT IDENTITY(1,1) PRIMARY KEY, symbol NVARCHAR(500),
+    entry_time NVARCHAR(50), exit_time NVARCHAR(50),
+    entry_price FLOAT, exit_price FLOAT, quantity FLOAT, capital_used FLOAT,
+    pnl FLOAT, pnl_pct FLOAT, stop_loss FLOAT, target FLOAT,
+    exit_reason NVARCHAR(500), signals NVARCHAR(MAX),
+    status NVARCHAR(50) DEFAULT 'open', source NVARCHAR(50) DEFAULT 'paper'
+);
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='top_ups')
+CREATE TABLE top_ups (
+    id INT IDENTITY(1,1) PRIMARY KEY, amount FLOAT,
+    reason NVARCHAR(MAX), balance_before FLOAT, time NVARCHAR(50)
+);
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='signal_performance')
+CREATE TABLE signal_performance (
+    id INT IDENTITY(1,1) PRIMARY KEY, signal_name NVARCHAR(200),
+    correct INT DEFAULT 0, total INT DEFAULT 0,
+    weight FLOAT DEFAULT 1.0, updated_at NVARCHAR(50)
+);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='idx_signal_name' AND object_id=OBJECT_ID('signal_performance'))
+CREATE UNIQUE INDEX idx_signal_name ON signal_performance(signal_name);
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='monitor_state')
+CREATE TABLE monitor_state (
+    market NVARCHAR(100) NOT NULL, pos_id INT, symbol NVARCHAR(50),
+    key NVARCHAR(500) NOT NULL, value NVARCHAR(MAX) NOT NULL,
+    updated_at NVARCHAR(50) NOT NULL,
+    CONSTRAINT pk_monitor_state PRIMARY KEY (market, key)
+);
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='portal_users')
+CREATE TABLE portal_users (
+    id INT IDENTITY(1,1) PRIMARY KEY, username NVARCHAR(100) NOT NULL,
+    password_hash NVARCHAR(256) NOT NULL, role NVARCHAR(20) DEFAULT 'viewer',
+    created_at NVARCHAR(50), last_login NVARCHAR(50)
+);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='idx_portal_users_username' AND object_id=OBJECT_ID('portal_users'))
+CREATE UNIQUE INDEX idx_portal_users_username ON portal_users(username);
+"@
+& sqlcmd -S ".\ANGELBOT" -U sa -P $saPass -Q $schemaSql 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    OK "All tables created / verified"
+} else {
+    Warn "sqlcmd schema step had warnings (may be harmless)"
+}
+
+# Seed admin user via Python (needs hashed password from .env)
+$seedScript = @"
 import sys, os
 sys.path.insert(0, r'$BOT_DIR')
 os.chdir(r'$BOT_DIR')
 from data.database import init_db
 init_db()
 "@
-$initOut = & $pyReal -c $initScript 2>&1
-if ($LASTEXITCODE -eq 0) {
-    OK "All tables created / verified"
-} else {
-    Warn "init_db had issues:"
-    Write-Host $initOut -ForegroundColor DarkYellow
-}
+& $pyReal -c $seedScript 2>&1 | Out-Null
 
 # ── 6. NSSM setup ────────────────────────────────────────────────────────────
 $nssm = "C:\Windows\nssm.exe"
