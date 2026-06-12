@@ -7,270 +7,250 @@ $SETUP_DIR = "$BOT_DIR\prerequisite\setup"
 $LOG_FILE  = "$BOT_DIR\logs\install.log"
 $tmp       = "$env:TEMP\angelbot_setup"
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
 function Log($msg) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs" | Out-Null
     Add-Content -Path $LOG_FILE -Value "$ts  $msg" -ErrorAction SilentlyContinue
 }
-function Info($msg)  { Write-Host "     $msg" -ForegroundColor Cyan    ; Log $msg }
-function OK($msg)    { Write-Host "  ✅  $msg" -ForegroundColor Green  ; Log "OK: $msg" }
-function Warn($msg)  { Write-Host "  ⚠️   $msg" -ForegroundColor Yellow ; Log "WARN: $msg" }
-function Err($msg)   { Write-Host "  ❌  $msg" -ForegroundColor Red    ; Log "ERR: $msg" }
-function Step($n,$t) {
+function Info($msg) { Write-Host "     $msg" -ForegroundColor Cyan   ; Log $msg }
+function OK($msg)   { Write-Host "  OK  $msg" -ForegroundColor Green ; Log "OK: $msg" }
+function Warn($msg) { Write-Host "  !!  $msg" -ForegroundColor Yellow; Log "WARN: $msg" }
+function Err($msg)  { Write-Host "  XX  $msg" -ForegroundColor Red   ; Log "ERR: $msg" }
+
+function Step($n, $t) {
     Write-Host ""
-    Write-Host "  ┌─ Step $n/9  ─  $t" -ForegroundColor White
+    Write-Host "  --- Step $n/9 : $t ---" -ForegroundColor White
 }
+
 function Download($url, $dest) {
     if (Test-Path $dest) { return }
     Info "Downloading $(Split-Path $dest -Leaf) ..."
     Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
 }
+
 function Update-EnvPath {
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("PATH","User")
+    $machine = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+    $user    = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    $env:PATH = $machine + ";" + $user
 }
 
-# ── Banner ───────────────────────────────────────────────────────────────────
+# Banner
 Clear-Host
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║         AngelBot  —  Full Windows Installer             ║" -ForegroundColor Cyan
-Write-Host "  ║  Python · Git · SQL Server · IIS · NSSM · Cloudflare   ║" -ForegroundColor Cyan
-Write-Host "  ╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "  ============================================================" -ForegroundColor Cyan
+Write-Host "        AngelBot  --  One-Click Windows Installer             " -ForegroundColor Cyan
+Write-Host "   Python / Git / SQL Server / IIS / NSSM / Cloudflare        " -ForegroundColor Cyan
+Write-Host "  ============================================================" -ForegroundColor Cyan
 Write-Host ""
 
-New-Item -ItemType Directory -Force -Path $tmp             | Out-Null
-New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs"  | Out-Null
+New-Item -ItemType Directory -Force -Path $tmp            | Out-Null
+New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs" | Out-Null
 Log "=== Installer started ==="
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 1 — Python 3.11
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 1 -- Python 3.11
+# ---------------------------------------------------------------------------
 Step 1 "Python 3.11"
 $pyOK = $false
 try { $pyOK = ((python --version 2>&1) -match "Python 3\.(9|10|11|12)") } catch {}
+
 if (-not $pyOK) {
     $exe = "$tmp\python-3.11.9-amd64.exe"
     Download "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" $exe
-    Info "Installing Python 3.11 silently ..."
+    Info "Installing Python 3.11 silently (1-2 min) ..."
     Start-Process $exe -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0" -Wait -NoNewWindow
     Update-EnvPath
     try { $pyOK = ((python --version 2>&1) -match "Python 3") } catch {}
-    if (-not $pyOK) { Err "Python install failed — check $LOG_FILE"; Read-Host; exit 1 }
+    if (-not $pyOK) { Err "Python install failed. Check $LOG_FILE"; Read-Host; exit 1 }
     OK "Python 3.11 installed"
-} else { OK "Python already installed — $((python --version 2>&1))" }
+} else {
+    OK "Python already installed -- $((python --version 2>&1))"
+}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 2 — Git
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 2 -- Git
+# ---------------------------------------------------------------------------
 Step 2 "Git"
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+$gitFound = $null
+try { $gitFound = Get-Command git -ErrorAction SilentlyContinue } catch {}
+
+if (-not $gitFound) {
     $exe = "$tmp\git-installer.exe"
     Download "https://github.com/git-for-windows/git/releases/download/v2.45.2.windows.1/Git-2.45.2-64-bit.exe" $exe
     Info "Installing Git silently ..."
     Start-Process $exe -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
     Update-EnvPath
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Err "Git install failed."; Read-Host; exit 1 }
+    try { $gitFound = Get-Command git -ErrorAction SilentlyContinue } catch {}
+    if (-not $gitFound) { Err "Git install failed."; Read-Host; exit 1 }
     OK "Git installed"
-} else { OK "Git already installed" }
+} else {
+    OK "Git already installed"
+}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 3 — Clone / update AngelBot code
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 3 -- Clone / update AngelBot
+# ---------------------------------------------------------------------------
 Step 3 "AngelBot code"
 if (Test-Path "$BOT_DIR\.git") {
     Info "Pulling latest code ..."
     git -C $BOT_DIR pull
     OK "Code updated"
 } else {
-    Info "Cloning from GitHub (includes DB and ML model) ..."
+    Info "Cloning from GitHub ..."
     git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR
-    OK "Code downloaded to $BOT_DIR"
+    OK "Downloaded to $BOT_DIR"
 }
 New-Item -ItemType Directory -Force -Path "$BOT_DIR\learning" | Out-Null
 New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs"     | Out-Null
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 4 — SQL Server 2019 Express (instance: ANGELBOT)
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 4 -- SQL Server 2019 Express (instance: ANGELBOT)
+# ---------------------------------------------------------------------------
 Step 4 "SQL Server 2019 Express"
 $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
 if ($sqlSvc) {
     OK "SQL Server instance ANGELBOT already installed"
 } else {
-    # Download SQL Server installer if not already in prerequisite folder
     $sqlExe = "$SETUP_DIR\sql\SQLEXPR_x64_ENU.exe"
     if (-not (Test-Path $sqlExe)) {
-        Info "Downloading SQL Server 2019 Express (~280 MB) ..."
+        Info "Downloading SQL Server 2019 Express (280 MB) ..."
+        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\sql" | Out-Null
         Download "https://go.microsoft.com/fwlink/p/?linkid=866658" $sqlExe
     }
-
-    # Ask for SA password
     Write-Host ""
-    Write-Host "  Set a password for the SQL Server SA account." -ForegroundColor White
-    Write-Host "  Requirements: min 8 chars, uppercase + lowercase + number" -ForegroundColor DarkGray
+    Write-Host "  Set a password for SQL Server SA account." -ForegroundColor White
+    Write-Host "  Min 8 chars, must include uppercase + number (e.g. AngelBot@SQL1)" -ForegroundColor DarkGray
     $saSecure = Read-Host "  SA Password" -AsSecureString
     $saPass   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($saSecure))
-
-    Info "Installing SQL Server 2019 Express (takes 3-5 min) ..."
+    Info "Installing SQL Server (3-5 min) ..."
     $sqlBat = "$SETUP_DIR\sql\sql_install.bat"
     Start-Process "cmd.exe" -ArgumentList "/c `"$sqlBat`" `"$saPass`"" -Wait -NoNewWindow
     Log "SQL Server install attempted"
-
     $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
-    if ($sqlSvc) { OK "SQL Server instance ANGELBOT installed" }
-    else { Warn "SQL Server install may need a reboot — continuing" }
+    if ($sqlSvc) { OK "SQL Server ANGELBOT installed" }
+    else { Warn "SQL Server may need a reboot to finish -- continuing" }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 5 — IIS + URL Rewrite + ARR
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 5 -- IIS + URL Rewrite + ARR
+# ---------------------------------------------------------------------------
 Step 5 "IIS + URL Rewrite + ARR"
 $iisSvc = Get-Service -Name "W3SVC" -ErrorAction SilentlyContinue
 if (-not $iisSvc) {
     Info "Enabling IIS via DISM ..."
     $iisBat = "$SETUP_DIR\iis\iis_install.bat"
     Start-Process "cmd.exe" -ArgumentList "/c `"$iisBat`"" -Wait -NoNewWindow
-    Log "IIS DISM install done"
-} else { OK "IIS already installed" }
+    Log "IIS DISM done"
+} else {
+    OK "IIS already installed"
+}
 
-# URL Rewrite
 $urKey = "HKLM:\SOFTWARE\Microsoft\IIS Extensions\URL Rewrite"
 if (-not (Test-Path $urKey)) {
     $urMsi = "$SETUP_DIR\urlrewrite\rewrite_amd64_en-US.msi"
     if (-not (Test-Path $urMsi)) {
-        Info "Downloading IIS URL Rewrite ..."
+        Info "Downloading URL Rewrite ..."
+        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\urlrewrite" | Out-Null
         Download "https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi" $urMsi
     }
     Info "Installing URL Rewrite ..."
     Start-Process "msiexec.exe" -ArgumentList "/i `"$urMsi`" /quiet /norestart" -Wait
     OK "URL Rewrite installed"
-} else { OK "URL Rewrite already installed" }
+} else {
+    OK "URL Rewrite already installed"
+}
 
-# ARR 3.0
 $arrKey = "HKLM:\SOFTWARE\Microsoft\IIS Extensions\Application Request Routing"
 if (-not (Test-Path $arrKey)) {
     $arrExe = "$SETUP_DIR\arr\ARRv3_setup_amd64_en-us.exe"
     if (-not (Test-Path $arrExe)) {
-        Info "Downloading Application Request Routing (ARR) ..."
+        Info "Downloading ARR ..."
+        New-Item -ItemType Directory -Force -Path "$SETUP_DIR\arr" | Out-Null
         Download "https://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/ARRv3_setup_amd64_en-us.exe" $arrExe
     }
     Info "Installing ARR ..."
     Start-Process $arrExe -ArgumentList "/quiet /norestart" -Wait
     OK "ARR installed"
-} else { OK "ARR already installed" }
+} else {
+    OK "ARR already installed"
+}
 
-# IIS proxy config — route http://localhost/ → http://localhost:8080/
 $webConfig = "C:\inetpub\wwwroot\web.config"
-@'
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <system.webServer>
-    <rewrite>
-      <rules>
-        <rule name="AngelBot Portal Proxy" stopProcessing="true">
-          <match url="(.*)" />
-          <action type="Rewrite" url="http://localhost:8080/{R:1}" />
-        </rule>
-      </rules>
-    </rewrite>
-  </system.webServer>
-</configuration>
-'@ | Out-File $webConfig -Encoding UTF8 -Force
-OK "IIS reverse proxy configured (port 80 → 8080)"
-
-# Ensure IIS is started
+$webConfigContent = '<?xml version="1.0" encoding="utf-8"?><configuration><system.webServer><rewrite><rules><rule name="AngelBot" stopProcessing="true"><match url="(.*)" /><action type="Rewrite" url="http://localhost:8080/{R:1}" /></rule></rules></rewrite></system.webServer></configuration>'
+$webConfigContent | Out-File $webConfig -Encoding ASCII -Force
+OK "IIS reverse proxy configured (port 80 -> 8080)"
 Start-Service W3SVC -ErrorAction SilentlyContinue
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 6 — API Keys (.env)
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 6 -- API Keys (.env)
+# ---------------------------------------------------------------------------
 Step 6 "API Keys"
 if (Test-Path "$BOT_DIR\.env") {
-    OK ".env already exists — skipping key entry"
+    OK ".env already exists -- skipping"
 } else {
     Write-Host ""
     Write-Host "  Enter your API keys. Bot runs in PAPER mode." -ForegroundColor White
     Write-Host ""
-    Write-Host "  🇮🇳  Angel One" -ForegroundColor Yellow
+    Write-Host "  Angel One (India)" -ForegroundColor Yellow
     $aKey    = Read-Host "     API Key"
     $aSecret = Read-Host "     Client Secret"
     $aClient = Read-Host "     Client ID"
-    $aPin    = Read-Host "     MPIN (4-digit)"
+    $aPin    = Read-Host "     MPIN 4-digit"
     $aTotp   = Read-Host "     TOTP Secret"
-    Write-Host "  🇺🇸  Alpaca (US paper)" -ForegroundColor Yellow
+    Write-Host "  Alpaca (US paper)" -ForegroundColor Yellow
     $alKey    = Read-Host "     API Key"
     $alSecret = Read-Host "     Secret Key"
-    Write-Host "  🪙  Binance (Crypto)" -ForegroundColor Yellow
+    Write-Host "  Binance (Crypto)" -ForegroundColor Yellow
     $bKey    = Read-Host "     API Key"
-    $bSecret = Read-Host "     Secret Key"
-    Write-Host "  📱  Telegram" -ForegroundColor Yellow
+    $bSecret  = Read-Host "     Secret Key"
+    Write-Host "  Telegram" -ForegroundColor Yellow
     $tgToken  = Read-Host "     Bot Token"
     $tgChatId = Read-Host "     Chat ID"
-    Write-Host "  🌐  Portal login" -ForegroundColor Yellow
+    Write-Host "  Portal login" -ForegroundColor Yellow
     $pUser = Read-Host "     Username  (Enter = admin)"
     $pPass = Read-Host "     Password  (Enter = AngelBot@1234)"
     if (-not $pUser) { $pUser = "admin" }
     if (-not $pPass) { $pPass = "AngelBot@1234" }
 
-    @"
-ANGEL_API_KEY=$aKey
-ANGEL_SECRET=$aSecret
-ANGEL_CLIENT_ID=$aClient
-ANGEL_PIN=$aPin
-ANGEL_TOTP_SECRET=$aTotp
-ALPACA_KEY=$alKey
-ALPACA_SECRET=$alSecret
-ALPACA_PAPER=true
-BINANCE_KEY=$bKey
-BINANCE_SECRET=$bSecret
-BINANCE_PAPER=true
-TELEGRAM_BOT_TOKEN=$tgToken
-TELEGRAM_CHAT_ID=$tgChatId
-INDIA_CAPITAL=10000
-US_CAPITAL=10000
-CRYPTO_CAPITAL=1000
-PAPER_MODE=true
-PORTAL_USER=$pUser
-PORTAL_PASS=$pPass
-"@ | Out-File "$BOT_DIR\.env" -Encoding UTF8 -Force
+    $envContent = "ANGEL_API_KEY=$aKey`r`nANGEL_SECRET=$aSecret`r`nANGEL_CLIENT_ID=$aClient`r`nANGEL_PIN=$aPin`r`nANGEL_TOTP_SECRET=$aTotp`r`nALPACA_KEY=$alKey`r`nALPACA_SECRET=$alSecret`r`nALPACA_PAPER=true`r`nBINANCE_KEY=$bKey`r`nBINANCE_SECRET=$bSecret`r`nBINANCE_PAPER=true`r`nTELEGRAM_BOT_TOKEN=$tgToken`r`nTELEGRAM_CHAT_ID=$tgChatId`r`nINDIA_CAPITAL=10000`r`nUS_CAPITAL=10000`r`nCRYPTO_CAPITAL=1000`r`nPAPER_MODE=true`r`nPORTAL_USER=$pUser`r`nPORTAL_PASS=$pPass"
+    $envContent | Out-File "$BOT_DIR\.env" -Encoding ASCII -Force
     OK ".env saved"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 7 — Python packages
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 7 -- Python packages
+# ---------------------------------------------------------------------------
 Step 7 "Python packages"
 Info "Running pip install (2-4 min) ..."
 python -m pip install --upgrade pip --quiet
 python -m pip install -r "$BOT_DIR\requirements.txt" --quiet
-OK "All Python packages installed"
+OK "All packages installed"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 8 — NSSM + Windows Services (×4 workers)
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 8 -- NSSM + Windows Services
+# ---------------------------------------------------------------------------
 Step 8 "NSSM + Windows Services"
 $nssmDest = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssmDest)) {
-    $nssmExePath = "$SETUP_DIR\nssm\nssm.exe"
-    if (-not (Test-Path $nssmExePath)) {
+    $nssmSrc = "$SETUP_DIR\nssm\nssm.exe"
+    if (-not (Test-Path $nssmSrc)) {
         Info "Downloading NSSM ..."
         $zip = "$tmp\nssm.zip"
         Download "https://nssm.cc/ci/nssm-2.24-103-gdee49fc.zip" $zip
         Expand-Archive $zip "$tmp\nssm_ext" -Force
-        $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse |
-                 Where-Object { $_.FullName -match "win64" } | Select-Object -First 1
+        $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse | Where-Object { $_.FullName -match "win64" } | Select-Object -First 1
         if (-not $found) {
             $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse | Select-Object -First 1
         }
         New-Item -ItemType Directory -Force -Path "$SETUP_DIR\nssm" | Out-Null
-        Copy-Item $found.FullName $nssmExePath -Force
+        Copy-Item $found.FullName $nssmSrc -Force
     }
-    Copy-Item $nssmExePath $nssmDest -Force
+    Copy-Item $nssmSrc $nssmDest -Force
     OK "NSSM installed"
-} else { OK "NSSM already present" }
+} else {
+    OK "NSSM already present"
+}
 
 Update-EnvPath
 $pyExe = (Get-Command python).Source
@@ -304,14 +284,17 @@ foreach ($svc in $services) {
     & $nssmDest set $name AppThrottle    5000
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
-    $st = (Get-Service -Name $name -ErrorAction SilentlyContinue)?.Status
-    if ($st -eq "Running") { OK "$name — running" }
-    else                   { Warn "$name — installed (will start shortly)" }
+    $svcObj = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($svcObj -and $svcObj.Status -eq "Running") {
+        OK "$name -- running"
+    } else {
+        Warn "$name -- installed (starting shortly)"
+    }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 9 — Cloudflare Tunnel (cloudflared)
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# STEP 9 -- Cloudflare Tunnel
+# ---------------------------------------------------------------------------
 Step 9 "Cloudflare Tunnel"
 $cfDest = "C:\Windows\cloudflared.exe"
 if (-not (Test-Path $cfDest)) {
@@ -323,34 +306,25 @@ if (-not (Test-Path $cfDest)) {
     }
     Copy-Item $cfSrc $cfDest -Force
     OK "Cloudflared installed"
-} else { OK "Cloudflared already present" }
+} else {
+    OK "Cloudflared already present"
+}
 
+# Firewall rules
+New-NetFirewallRule -DisplayName "AngelBot Portal 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+New-NetFirewallRule -DisplayName "AngelBot IIS 80"      -Direction Inbound -Protocol TCP -LocalPort 80   -Action Allow -ErrorAction SilentlyContinue | Out-Null
+
+# Done
 Write-Host ""
-Write-Host "  To expose portal via Cloudflare Tunnel (optional):" -ForegroundColor DarkGray
-Write-Host "    cloudflared tunnel login" -ForegroundColor DarkGray
-Write-Host "    cloudflared tunnel create angelbot" -ForegroundColor DarkGray
-Write-Host "    cloudflared tunnel route dns angelbot your-domain.com" -ForegroundColor DarkGray
-Write-Host "    cloudflared service install" -ForegroundColor DarkGray
-
-# ── Firewall ─────────────────────────────────────────────────────────────────
-New-NetFirewallRule -DisplayName "AngelBot Portal 8080" -Direction Inbound `
-    -Protocol TCP -LocalPort 8080 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-New-NetFirewallRule -DisplayName "AngelBot IIS 80" -Direction Inbound `
-    -Protocol TCP -LocalPort 80 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-
-# ── Done ─────────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║   ✅  AngelBot fully installed and running!             ║" -ForegroundColor Green
-Write-Host "  ╠══════════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "  ║  Portal (direct)  →  http://localhost:8080              ║" -ForegroundColor Green
-Write-Host "  ║  Portal (via IIS) →  http://localhost                   ║" -ForegroundColor Green
-Write-Host "  ║  SQL Server       →  .\ANGELBOT  (port 1433)            ║" -ForegroundColor Green
-Write-Host "  ║  Logs             →  C:\AngelBot\logs\                  ║" -ForegroundColor Green
-Write-Host "  ║                                                          ║" -ForegroundColor Green
-Write-Host "  ║  All 4 workers auto-start on every reboot               ║" -ForegroundColor Green
-Write-Host "  ║  Manage: services.msc  or  portal UI                    ║" -ForegroundColor Green
-Write-Host "  ╚══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "  ============================================================" -ForegroundColor Green
+Write-Host "    AngelBot installed and running!" -ForegroundColor Green
+Write-Host "  ============================================================" -ForegroundColor Green
+Write-Host "    Portal (direct)  : http://localhost:8080" -ForegroundColor Green
+Write-Host "    Portal (via IIS) : http://localhost" -ForegroundColor Green
+Write-Host "    SQL Server       : .\ANGELBOT (port 1433)" -ForegroundColor Green
+Write-Host "    Logs             : C:\AngelBot\logs\" -ForegroundColor Green
+Write-Host "    All 4 workers auto-start on every reboot." -ForegroundColor Green
+Write-Host "  ============================================================" -ForegroundColor Green
 Write-Host ""
 Log "=== Installation complete ==="
 
