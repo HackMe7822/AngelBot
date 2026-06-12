@@ -184,6 +184,23 @@ Info "Installing Python packages (pyodbc + requirements)..."
 & $pyReal -m pip install -r "$BOT_DIR\requirements.txt" --quiet
 OK "Packages ready"
 
+# ── 5b. Create all DB tables via Python init_db() ────────────────────────────
+Info "Creating database tables (init_db)..."
+$initScript = @"
+import sys, os
+sys.path.insert(0, r'$BOT_DIR')
+os.chdir(r'$BOT_DIR')
+from data.database import init_db
+init_db()
+"@
+$initOut = & $pyReal -c $initScript 2>&1
+if ($LASTEXITCODE -eq 0) {
+    OK "All tables created / verified"
+} else {
+    Warn "init_db had issues:"
+    Write-Host $initOut -ForegroundColor DarkYellow
+}
+
 # ── 6. NSSM setup ────────────────────────────────────────────────────────────
 $nssm = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssm)) {
@@ -201,6 +218,8 @@ $workers = @(
     @{ Name="AngelBot-US";     Script="us_worker.py"     },
     @{ Name="AngelBot-Crypto"; Script="crypto_worker.py" }
 )
+
+$failCount = 0
 
 foreach ($w in $workers) {
     $name   = $w.Name
@@ -222,13 +241,15 @@ foreach ($w in $workers) {
     & $nssm set $name AppEnvironmentExtra   "PYTHONUTF8=1" | Out-Null
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 4
 
     $st = (Get-Service -Name $name -ErrorAction SilentlyContinue).Status
-    if ($st -eq "Running") { OK "$name -- Running" }
-    else {
-        Fail "$name -- failed. Last log:"
-        if (Test-Path $log) { Get-Content $log -Tail 15 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
+    if ($st -eq "Running") {
+        OK "$name -- Running"
+    } else {
+        $failCount++
+        Fail "$name -- FAILED. Last 10 log lines:"
+        if (Test-Path $log) { Get-Content $log -Tail 10 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
     }
 }
 
@@ -236,10 +257,16 @@ foreach ($w in $workers) {
 & $nssm set AngelBot-Portal AppEnvironmentExtra "PYTHONUTF8=1" | Out-Null
 Restart-Service AngelBot-Portal -Force -ErrorAction SilentlyContinue
 Start-Sleep 3
-$st = (Get-Service AngelBot-Portal -ErrorAction SilentlyContinue).Status
-if ($st -eq "Running") { OK "AngelBot-Portal -- Running" }
+$portalSt = (Get-Service AngelBot-Portal -ErrorAction SilentlyContinue).Status
+if ($portalSt -eq "Running") { OK "AngelBot-Portal -- Running" }
+else { $failCount++; Fail "AngelBot-Portal -- FAILED" }
 
 Write-Host ""
-OK "All done. Open http://localhost:8080 to verify."
+if ($failCount -eq 0) {
+    OK "All 4 services running. Open http://localhost:8080"
+} else {
+    Fail "$failCount service(s) failed. Check log lines above for the error."
+    Write-Host "  Logs folder: $BOT_DIR\logs\" -ForegroundColor Yellow
+}
 Write-Host ""
 pause
