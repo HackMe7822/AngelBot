@@ -11,7 +11,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from data.database import init_db
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f"[Portal] DB init warning: {e} — portal will still start; retry on next restart")
 
 import uvicorn
 uvicorn.run("portal.app:app", host="0.0.0.0", port=8080, reload=False,

@@ -39,64 +39,64 @@ else {
     Write-Host "    git output: $resetOut" -ForegroundColor DarkGray
 }
 
-# ── Direct file patches — fix SQLite-only SQL that breaks SQL Server ─────────
-# These are idempotent: if git already applied the fix they change nothing.
-$filesToPatch = @(
-    "$BOT_DIR\trading\alpaca_trader.py",
-    "$BOT_DIR\trading\crypto_trader.py",
-    "$BOT_DIR\trading\paper_trader.py"
-)
-foreach ($fp in $filesToPatch) {
-    if (Test-Path $fp) {
-        $txt = Get-Content $fp -Raw -Encoding UTF8
-        $changed = $false
-        # Fix 1: SQLite date() → SQL Server TRY_CAST
-        if ($txt -match "date\(exit_time\)") {
-            $txt = $txt -replace "date\(exit_time\)", "TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)"
-            $changed = $true
-        }
-        if ($txt -match "date\(time\)") {
-            $txt = $txt -replace "date\(time\)", "TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)"
-            $changed = $true
-        }
-        # Fix 2: cursor.lastrowid → OUTPUT INSERTED.id
-        if ($txt -match "trade_id = c\.lastrowid") {
-            $txt = $txt -replace `
-                "INSERT INTO trades \(([^)]+)\)\s*\n(\s+)VALUES",
-                "INSERT INTO trades (`$1)`n`$2OUTPUT INSERTED.id`n`$2VALUES"
-            $txt = $txt -replace "trade_id = c\.lastrowid", "trade_id = c.fetchone()[0]"
-            $changed = $true
-        }
-        if ($changed) {
-            Set-Content $fp $txt -Encoding UTF8 -NoNewline
-            OK "Patched SQL compat in $(Split-Path $fp -Leaf)"
-        }
-    }
-}
+# ── Direct file patches (Python-based — reliable multiline regex) ─────────────
+# Applied AFTER git pull. Idempotent — safe to run multiple times.
+$patchPy = @'
+import os, re, sys
+ROOT = r'C:\AngelBot'
+TRADER_FILES = [
+    r'trading\paper_trader.py',
+    r'trading\alpaca_trader.py',
+    r'trading\crypto_trader.py',
+]
+REPORTING_FILES = [
+    r'reporting\excel_report.py',
+    r'reporting\telegram_listener.py',
+]
 
-# Also patch reporting files
-$reportingFiles = @(
-    "$BOT_DIR\reporting\excel_report.py",
-    "$BOT_DIR\reporting\telegram_listener.py"
-)
-foreach ($fp in $reportingFiles) {
-    if (Test-Path $fp) {
-        $txt = Get-Content $fp -Raw -Encoding UTF8
-        $changed = $false
-        if ($txt -match "date\(exit_time\)") {
-            $txt = $txt -replace "date\(exit_time\)", "TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)"
-            $changed = $true
-        }
-        if ($txt -match "date\(time\)") {
-            $txt = $txt -replace "date\(time\)", "TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)"
-            $changed = $true
-        }
-        if ($changed) {
-            Set-Content $fp $txt -Encoding UTF8 -NoNewline
-            OK "Patched date() in $(Split-Path $fp -Leaf)"
-        }
+def patch(path):
+    full = os.path.join(ROOT, path)
+    if not os.path.exists(full):
+        return
+    with open(full, encoding='utf-8') as f:
+        txt = f.read()
+    orig = txt
+    # Fix: SQLite date() -> SQL Server TRY_CAST
+    txt = txt.replace('date(exit_time)', 'TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)')
+    txt = txt.replace('date(time)',      'TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)')
+    # Fix: cursor.lastrowid -> OUTPUT INSERTED.id + fetchone
+    if 'c.lastrowid' in txt:
+        txt = re.sub(
+            r'(INSERT INTO trades \([^)]+\))\s*\n(\s+)VALUES',
+            r'\1\n\2    OUTPUT INSERTED.id\n\2VALUES',
+            txt
+        )
+        txt = txt.replace('trade_id = c.lastrowid', 'trade_id = c.fetchone()[0]')
+    if txt != orig:
+        with open(full, 'w', encoding='utf-8') as f:
+            f.write(txt)
+        print(f'Patched {path}')
+
+for p in TRADER_FILES + REPORTING_FILES:
+    try:
+        patch(p)
+    except Exception as e:
+        print(f'Patch error {p}: {e}')
+'@
+
+# Write the patch script to a temp file and run it
+$patchFile = "$env:TEMP\angelbot_patch.py"
+$patchPy | Set-Content $patchFile -Encoding UTF8
+$patchOut = & $pyReal $patchFile 2>&1
+if ($patchOut) {
+    foreach ($line in $patchOut) {
+        if ($line -match "^Patched") { OK $line }
+        elseif ($line -match "error") { Warn $line }
     }
+} else {
+    OK "All Python files already up to date"
 }
+Remove-Item $patchFile -ErrorAction SilentlyContinue
 
 # ── 2. Find real Python ───────────────────────────────────────────────────────
 Info "Locating Python executable..."

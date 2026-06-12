@@ -51,7 +51,7 @@ _flog.addHandler(_fh)
 
 
 def cprint(msg, color=WH):
-    ts  = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    ts  = datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
     sys.__stdout__.write(f"{color}{ts}  {msg}{R}\n")
     sys.__stdout__.flush()
     _flog.info(_ansi_re.sub('', msg))

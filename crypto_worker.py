@@ -52,7 +52,7 @@ _flog.addHandler(_fh)
 
 
 def cprint(msg, color=WH):
-    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    ts = datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
     sys.__stdout__.write(f"{color}{ts}  {msg}{R}\n")
     sys.__stdout__.flush()
     _flog.info(_ansi_re.sub('', msg))
@@ -210,7 +210,7 @@ def run_crypto_scan():
     sp()
     cprint(f"{'─'*23} CRYPTO {'─'*30}", MG)
     sp()
-    cprint(f"  [Crypto {ist.strftime('%H:%M IST')}]  Scanning {len(watch_list)} crypto pairs...", MG)
+    cprint(f"  [Crypto {ist.strftime('%I:%M %p')} IST]  Scanning {len(watch_list)} crypto pairs...", MG)
     sp()
 
     def _scan_one(sym):
