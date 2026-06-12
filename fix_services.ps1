@@ -8,13 +8,6 @@ function Info { param($m) Write-Host "  [..] $m"  -ForegroundColor Cyan }
 function Warn { param($m) Write-Host "  [!!] $m"  -ForegroundColor Yellow }
 function Fail { param($m) Write-Host "  [XX] $m"  -ForegroundColor Red }
 
-function Download {
-    param($url, $dest)
-    try {
-        Invoke-WebRequest $url -OutFile $dest -UseBasicParsing -ErrorAction Stop
-        return $true
-    } catch { return $false }
-}
 
 Write-Host ""
 Write-Host "======================================" -ForegroundColor Cyan
@@ -107,20 +100,12 @@ if ($patchOut) {
 } else { OK "Python files already up to date" }
 Remove-Item $patchFile -ErrorAction SilentlyContinue
 
-# ── 4. Install ODBC Driver 17 ─────────────────────────────────────────────────
-$odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" }
-if (-not $odbcOk) { $odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" } }
-if ($odbcOk) {
-    OK "ODBC Driver already installed"
+# ── 4. ODBC Driver 17 check ───────────────────────────────────────────────────
+$odbcRegKey = "HKLM:\SOFTWARE\ODBC\ODBCINST.INI\ODBC Driver 17 for SQL Server"
+if (Test-Path $odbcRegKey) {
+    OK "ODBC Driver 17 installed"
 } else {
-    Info "Downloading ODBC Driver 17 (~6 MB)..."
-    $odbcMsi = "$env:TEMP\msodbcsql17.msi"
-    if (Download "https://go.microsoft.com/fwlink/?linkid=2168524" $odbcMsi) {
-        Start-Process msiexec -ArgumentList "/i `"$odbcMsi`" /qn IACCEPTMSODBCSQLLICENSETERMS=YES" -Wait -NoNewWindow
-        OK "ODBC Driver 17 installed"
-    } else {
-        Warn "ODBC Driver download failed — SQL Server connection may not work"
-    }
+    Warn "ODBC Driver 17 not found. Install from https://aka.ms/odbc17 if workers fail to connect."
 }
 
 # ── 5. SQL Server SA + database ───────────────────────────────────────────────
