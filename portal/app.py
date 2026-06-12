@@ -545,20 +545,41 @@ def check_update(user: str = Depends(require_auth)):
 
 @app.post("/api/update/apply")
 def apply_update(user: str = Depends(require_auth)):
-    """Pull latest code from GitHub. Workers must be restarted after."""
-    try:
-        result = subprocess.run(
-            ['git', 'pull', 'origin', 'main'],
-            capture_output=True, text=True, timeout=60,
-            cwd=str(Path(__file__).parent.parent)
-        )
-        if result.returncode != 0:
-            raise HTTPException(500, f"git pull failed: {result.stderr}")
-        return {"ok": True, "output": result.stdout, "message": "Update applied. Restart bot workers to activate."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
+    """Pull latest code from GitHub and restart all workers automatically."""
+    import threading, time as _time
+
+    # 1. git pull
+    result = subprocess.run(
+        ['git', 'pull', 'origin', 'main'],
+        capture_output=True, text=True, timeout=60,
+        cwd=str(Path(__file__).parent.parent)
+    )
+    if result.returncode != 0:
+        raise HTTPException(500, f"git pull failed: {result.stderr}")
+
+    # 2. Restart the 3 workers immediately
+    workers = ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]
+    restart_results = []
+    for svc in workers:
+        try:
+            subprocess.run(['net', 'stop', svc], capture_output=True, timeout=15)
+            subprocess.run(['net', 'start', svc], capture_output=True, timeout=15)
+            restart_results.append(f"{svc}: restarted")
+        except Exception as e:
+            restart_results.append(f"{svc}: {e}")
+
+    # 3. Restart the portal itself after a short delay (so this response is sent first)
+    def _restart_portal():
+        _time.sleep(4)
+        subprocess.run(['net', 'stop', 'AngelBot-Portal'], capture_output=True)
+        subprocess.run(['net', 'start', 'AngelBot-Portal'], capture_output=True)
+    threading.Thread(target=_restart_portal, daemon=True).start()
+
+    return {
+        "ok": True,
+        "message": "Update applied. All services restarting now — portal back in ~10 seconds.",
+        "workers": restart_results
+    }
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────

@@ -1009,13 +1009,45 @@ async function checkUpdate() {
 }
 
 async function applyUpdate() {
-  if (!confirm('Pull latest code from GitHub? Bot workers must be restarted after.')) return;
-  toast('Pulling update...', 10000);
-  const r = await apiFetch('/api/update/apply', { method: 'POST' });
-  if (!r) return;
-  const d = await r.json();
-  if (d.ok) toast('✅ ' + d.message, 5000);
-  else toast('❌ Update failed', 5000);
+  if (!confirm('Apply update and restart all services? Portal will be back in ~10 seconds.')) return;
+
+  const btn = document.querySelector('#update-banner .btn.primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating...'; }
+  toast('Pulling from GitHub and restarting services...', 20000);
+
+  try {
+    const r = await apiFetch('/api/update/apply', { method: 'POST' });
+    if (!r) {
+      // Portal is restarting — connection dropped is expected
+      _waitForPortalRestart();
+      return;
+    }
+    const d = await r.json();
+    if (d.ok) {
+      toast('Update applied! Portal restarting...', 15000);
+      _waitForPortalRestart();
+    } else {
+      toast('Update failed: ' + (d.detail || 'unknown error'), 8000);
+      if (btn) { btn.disabled = false; btn.textContent = 'Update & Restart'; }
+    }
+  } catch(e) {
+    // Network error = portal is already restarting
+    _waitForPortalRestart();
+  }
+}
+
+function _waitForPortalRestart() {
+  const banner = document.getElementById('update-banner');
+  banner.querySelector('span').innerHTML = '🔄 <strong>Restarting...</strong> Portal will reload automatically.';
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 30) { clearInterval(poll); location.reload(); return; }
+    try {
+      const r = await fetch('/api/health');
+      if (r.ok) { clearInterval(poll); location.reload(); }
+    } catch(e) { /* still restarting */ }
+  }, 2000);
 }
 
 // ── Change password ───────────────────────────────────────────────────────
@@ -1217,6 +1249,7 @@ async function _checkAdminAccess() {
   checkUpdate();
   _checkAdminAccess();
   setInterval(refreshDashboard, 60000);
+  setInterval(checkUpdate, 1800000); // auto-check for updates every 30 min
 })();
 </script>
 </body>
