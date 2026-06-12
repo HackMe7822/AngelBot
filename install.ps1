@@ -15,7 +15,7 @@ function OK($msg)   { Write-Host "  ✅  $msg" -ForegroundColor Green ; Log "OK:
 function Warn($msg) { Write-Host "  ⚠️   $msg" -ForegroundColor Yellow; Log "WARN: $msg" }
 function Step($n, $title) {
     Write-Host ""
-    Write-Host "  ── Step $n/6  $title " -ForegroundColor White -NoNewline
+    Write-Host "  ── Step $n/5  $title " -ForegroundColor White -NoNewline
     Write-Host ("─" * [Math]::Max(0, 46 - $title.Length)) -ForegroundColor DarkGray
 }
 function Download($url, $dest) {
@@ -23,7 +23,7 @@ function Download($url, $dest) {
     Info "Downloading $(Split-Path $dest -Leaf)..."
     Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
 }
-function Refresh-Path {
+function Update-EnvPath {
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("PATH","User")
 }
@@ -52,9 +52,9 @@ if (-not $pyOK) {
     Download "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" $exe
     Info "Installing Python 3.11 (~1 min)..."
     Start-Process $exe -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0" -Wait -NoNewWindow
-    Refresh-Path
+    Update-EnvPath
     try { $pyOK = ((python --version 2>&1) -match "Python 3") } catch {}
-    if (-not $pyOK) { Write-Host "  ❌  Python install failed. Check $LOG_FILE" -ForegroundColor Red; Read-Host; exit 1 }
+    if (-not $pyOK) { Write-Host "  ❌  Python install failed. See $LOG_FILE" -ForegroundColor Red; Read-Host; exit 1 }
     OK "Python 3.11 installed"
 } else {
     OK "Python already installed — $((python --version 2>&1))"
@@ -69,36 +69,35 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Download "https://github.com/git-for-windows/git/releases/download/v2.45.2.windows.1/Git-2.45.2-64-bit.exe" $exe
     Info "Installing Git silently..."
     Start-Process $exe -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS" -Wait -NoNewWindow
-    Refresh-Path
+    Update-EnvPath
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host "  ❌  Git install failed." -ForegroundColor Red; Read-Host; exit 1 }
     OK "Git installed"
 } else { OK "Git already installed" }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3 — Clone bot code
+# 3 — Clone / update bot (includes db + learning files)
 # ─────────────────────────────────────────────────────────────────────────────
-Step 3 "Downloading AngelBot code"
+Step 3 "Downloading AngelBot"
 if (Test-Path "$BOT_DIR\.git") {
     Info "Updating to latest version..."
     git -C $BOT_DIR pull
-    OK "Code updated"
+    OK "Updated to latest"
 } else {
-    Info "Cloning from GitHub..."
+    Info "Cloning from GitHub (includes DB and ML model)..."
     git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR
-    OK "Code downloaded to $BOT_DIR"
+    OK "Downloaded to $BOT_DIR"
 }
-New-Item -ItemType Directory -Force -Path "$BOT_DIR\learning" | Out-Null
-New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs"     | Out-Null
+New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs" | Out-Null
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4 — API Keys
 # ─────────────────────────────────────────────────────────────────────────────
 Step 4 "API Keys"
 if (Test-Path "$BOT_DIR\.env") {
-    OK ".env already exists — skipping key entry"
+    OK ".env already exists — skipping"
 } else {
     Write-Host ""
-    Write-Host "  Enter your API keys. All trading stays in PAPER mode." -ForegroundColor White
+    Write-Host "  Enter your API keys. Bot runs in PAPER mode until you change it." -ForegroundColor White
     Write-Host ""
     Write-Host "  🇮🇳  Angel One (India NSE)" -ForegroundColor Yellow
     $aKey    = Read-Host "     API Key"
@@ -146,20 +145,19 @@ PORTAL_PASS=$pPass
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5 — Python packages
+# 5 — Python packages + NSSM + Services
 # ─────────────────────────────────────────────────────────────────────────────
-Step 5 "Installing Python packages"
-Info "Running pip install (2-4 minutes)..."
+Step 5 "Installing packages and Windows Services"
+
+Info "Installing Python packages (2-4 min)..."
 python -m pip install --upgrade pip --quiet
 python -m pip install -r "$BOT_DIR\requirements.txt" --quiet
-OK "All packages installed"
+OK "Python packages installed"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6 — NSSM + Windows Services
-# ─────────────────────────────────────────────────────────────────────────────
-Step 6 "Installing Windows Services"
+# NSSM
 $nssmDest = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssmDest)) {
+    Info "Downloading NSSM..."
     $zip = "$tmp\nssm.zip"
     Download "https://nssm.cc/ci/nssm-2.24-103-gdee49fc.zip" $zip
     Expand-Archive $zip "$tmp\nssm_ext" -Force
@@ -172,7 +170,7 @@ if (-not (Test-Path $nssmDest)) {
     OK "NSSM installed"
 }
 
-Refresh-Path
+Update-EnvPath
 $pyExe = (Get-Command python).Source
 
 $services = @(

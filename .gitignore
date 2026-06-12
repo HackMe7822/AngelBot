@@ -1,14 +1,12 @@
 # API keys and secrets — never commit
 .env
 
-# Database — contains real trade history and learnings
-*.db
+# DB WAL temp files only (not the main db)
 *.db-shm
 *.db-wal
 
-# ML model learnings — never overwrite
-learning/weights.json
-learning/model.pkl
+# ML cache only
+learning/__pycache__/
 
 # Logs
 logs/

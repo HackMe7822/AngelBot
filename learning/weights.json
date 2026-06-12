@@ -1,0 +1,8 @@
+{
+  "rsi": 0.3,
+  "macd": 0.3,
+  "bollinger": 0.3,
+  "ema": 0.3,
+  "volume": 0.3,
+  "sentiment": 0.3
+}
