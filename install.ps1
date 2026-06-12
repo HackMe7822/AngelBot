@@ -286,19 +286,27 @@ OK "All packages installed"
 Step 8 "NSSM + Windows Services"
 $nssmDest = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssmDest)) {
-    $zip = "$tmp\nssm.zip"
-    Download "https://nssm.cc/ci/nssm-2.24-103-gdee49fc.zip" $zip
-    if (Test-Path $zip) {
-        Expand-Archive $zip "$tmp\nssm_ext" -Force
-        $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse |
-                 Where-Object { $_.FullName -match "win64" } | Select-Object -First 1
-        if (-not $found) {
-            $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse | Select-Object -First 1
-        }
-        Copy-Item $found.FullName $nssmDest -Force
-        OK "NSSM installed"
+    # Use bundled nssm.exe from repo (most reliable)
+    $nssmBundled = "$BOT_DIR\prerequisite\setup\nssm\nssm.exe"
+    if (Test-Path $nssmBundled) {
+        Copy-Item $nssmBundled $nssmDest -Force
+        OK "NSSM installed from repo"
     } else {
-        Err "NSSM download failed -- services cannot be registered"; Read-Host; exit 1
+        # Fallback: download from nssm.cc release (stable zip)
+        $zip = "$tmp\nssm.zip"
+        Download "https://nssm.cc/release/nssm-2.24.zip" $zip
+        if ((Test-Path $zip) -and (Get-Item $zip).Length -gt 100000) {
+            Expand-Archive $zip "$tmp\nssm_ext" -Force
+            $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse |
+                     Where-Object { $_.FullName -match "win64" } | Select-Object -First 1
+            if (-not $found) {
+                $found = Get-ChildItem "$tmp\nssm_ext" -Filter "nssm.exe" -Recurse | Select-Object -First 1
+            }
+            Copy-Item $found.FullName $nssmDest -Force
+            OK "NSSM installed from download"
+        } else {
+            Err "NSSM not available -- services cannot be registered"; Read-Host; exit 1
+        }
     }
 } else {
     OK "NSSM already present"
