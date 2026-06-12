@@ -823,6 +823,29 @@ def hourly_pnl(market: Optional[str] = None, user: str = Depends(require_auth)):
     return {"hourly": rows}
 
 
+# ── Debug ─────────────────────────────────────────────────────────────────────
+@app.get("/api/debug/trades")
+def debug_trades(user: str = Depends(require_auth)):
+    """Return raw open trade IDs + timestamps for debugging force-sell issues."""
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT id, symbol, source, entry_time, status FROM trades ORDER BY id DESC OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY")
+    cols = ['id', 'symbol', 'source', 'entry_time', 'status']
+    rows = [dict(zip(cols, r)) for r in c.fetchall()]
+    c.execute("SELECT COUNT(*) FROM trades WHERE status='open'")
+    open_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM trades")
+    total_count = c.fetchone()[0]
+    conn.close()
+    import sys
+    return {
+        "open_count": open_count,
+        "total_count": total_count,
+        "portal_version": "173b926",
+        "last_50_trades": rows
+    }
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/api/health")
 def health():
