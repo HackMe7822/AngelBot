@@ -95,11 +95,11 @@ def init_db():
         BEGIN
             CREATE TABLE signal_performance (
                 id          INT IDENTITY(1,1) PRIMARY KEY,
-                signal_name NVARCHAR(MAX),
+                signal_name NVARCHAR(200),
                 correct     INT DEFAULT 0,
                 total       INT DEFAULT 0,
                 weight      FLOAT DEFAULT 1.0,
-                updated_at  NVARCHAR(MAX)
+                updated_at  NVARCHAR(50)
             )
         END
     """)
@@ -126,12 +126,12 @@ def init_db():
         IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='monitor_state')
         BEGIN
             CREATE TABLE monitor_state (
-                market      NVARCHAR(MAX) NOT NULL,
+                market      NVARCHAR(100) NOT NULL,
                 pos_id      INT,
-                symbol      NVARCHAR(MAX),
-                key         NVARCHAR(MAX) NOT NULL,
+                symbol      NVARCHAR(50),
+                key         NVARCHAR(500) NOT NULL,
                 value       NVARCHAR(MAX) NOT NULL,
-                updated_at  NVARCHAR(MAX) NOT NULL,
+                updated_at  NVARCHAR(50) NOT NULL,
                 CONSTRAINT pk_monitor_state PRIMARY KEY (market, key)
             )
         END
