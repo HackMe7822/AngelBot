@@ -649,7 +649,11 @@ async function refreshDashboard() {
     document.getElementById(id + '-pnl').textContent = fmtPnl(pnl, cur);
     document.getElementById(id + '-trades').textContent =
       `${periodLabel}: ${data.today_trades} trades  ✅${data.today_wins}  ❌${data.today_losses}  ${wr}% win`;
+    const balCls  = (data.balance||0) >= (data.capital||0) ? 'pnl-pos' : 'pnl-neg';
+    const depPct  = data.capital > 0 ? Math.round((data.deployed||0) / data.capital * 100) : 0;
     document.getElementById(id + '-details').innerHTML =
+      `<div class="stat-row"><span style="color:var(--muted)">Available balance</span><span class="${balCls}" style="font-weight:600">${fmtPnl(data.balance||0, cur)}</span></div>` +
+      `<div class="stat-row"><span style="color:var(--muted)">Deployed in positions</span><span>${fmtPnl(data.deployed||0, cur)} (${depPct}%)</span></div>` +
       `<div class="stat-row"><span style="color:var(--muted)">Open positions</span><span>${data.open_positions}</span></div>` +
       `<div class="stat-row"><span style="color:var(--muted)">All-time P&L</span><span class="${data.total_pnl>=0?'pnl-pos':'pnl-neg'}">${fmtPnl(data.total_pnl, cur)}</span></div>`;
   }

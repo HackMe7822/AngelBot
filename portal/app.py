@@ -146,16 +146,28 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
         open_pos = c.fetchone()[0]
         c.execute(f"SELECT COALESCE(SUM(pnl),0) FROM trades WHERE status='closed' AND {source_clause}")
         total_pnl = c.fetchone()[0]
+        c.execute(f"SELECT COALESCE(SUM(capital_used),0) FROM trades WHERE status='open' AND {source_clause}")
+        deployed = c.fetchone()[0] or 0.0
         return {
             "today_trades": trades, "today_pnl": round(day_pnl or 0, dec),
             "today_wins": wins, "today_losses": (trades or 0) - (wins or 0),
             "open_positions": open_pos, "total_pnl": round(total_pnl or 0, dec),
+            "deployed": round(deployed, dec),
             "currency": cur_sym,
         }
 
+    import config as _cfg
     india  = _market_summary("(source='paper' OR source IS NULL)", "₹", 2)
-    us     = _market_summary("source='us_paper'",                 "$", 2)
-    crypto = _market_summary("source='crypto_paper'",             "$", 4)
+    india["capital"]   = _cfg.CAPITAL
+    india["balance"]   = round(_cfg.CAPITAL + india["total_pnl"] - india["deployed"], 2)
+
+    us     = _market_summary("source='us_paper'",  "$", 2)
+    us["capital"]      = _cfg.US_CAPITAL
+    us["balance"]      = round(_cfg.US_CAPITAL + us["total_pnl"] - us["deployed"], 2)
+
+    crypto = _market_summary("source='crypto_paper'", "$", 4)
+    crypto["capital"]  = _cfg.CRYPTO_CAPITAL
+    crypto["balance"]  = round(_cfg.CRYPTO_CAPITAL + crypto["total_pnl"] - crypto["deployed"], 4)
 
     # Bot status
     paused = os.path.exists(os.path.join(os.path.dirname(__file__), '..', 'paused.flag'))
