@@ -686,14 +686,15 @@ async function loadServices() {
     const labelMap  = { running: 'Running', stopped: 'Stopped', paused: 'Paused', pending: 'Pending…', not_installed: 'Not Installed', unknown: 'Unknown' };
     const badgeCls  = statusMap[s.status] || 'yellow';
     const label     = labelMap[s.status]  || s.status;
+    const isPortal  = s.name === 'AngelBot-Portal';
     const isRunning = s.status === 'running';
     const isStopped = s.status === 'stopped' || s.status === 'paused' || s.status === 'not_installed';
     return `<div class="service-row">
       <span class="service-name">${s.name.replace('AngelBot-', '')}</span>
       <div style="display:flex; align-items:center; gap:8px;">
         <span class="badge ${badgeCls}">${label}</span>
-        ${isStopped ? `<button class="btn sm" style="color:#fff;background:#38a169" onclick="svcAction('${s.name}','start')">▶ Start</button>` : ''}
-        ${isRunning ? `<button class="btn sm" style="color:#fff;background:#e53e3e" onclick="svcAction('${s.name}','stop')">■ Stop</button>` : ''}
+        ${(isStopped && !isPortal) ? `<button class="btn sm" style="color:#fff;background:#38a169" onclick="svcAction('${s.name}','start')">▶ Start</button>` : ''}
+        ${(isRunning && !isPortal) ? `<button class="btn sm" style="color:#fff;background:#e53e3e" onclick="svcAction('${s.name}','stop')">■ Stop</button>` : ''}
         ${(isRunning || isStopped) ? `<button class="btn sm" onclick="svcAction('${s.name}','restart')">↻ Restart</button>` : ''}
       </div>
     </div>`;
