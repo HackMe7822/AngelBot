@@ -85,18 +85,18 @@ async def root():
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 def _build_date_clause(date_filter: Optional[str]) -> tuple:
-    """Return (sql_fragment, params_list) for a date_filter on exit_time column."""
+    """Return (sql_fragment, params_list) filtering on entry_time (so open trades appear too)."""
     now_ist = datetime.now(_IST)
     if date_filter == 'today':
         d = now_ist.strftime("%Y-%m-%d")
-        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?", [d]
+        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) = ?", [d]
     elif date_filter == 'yesterday':
         d = (now_ist - timedelta(days=1)).strftime("%Y-%m-%d")
-        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?", [d]
+        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) = ?", [d]
     elif date_filter == 'week':
-        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-7,GETDATE()) AS DATE)", []
+        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-7,GETDATE()) AS DATE)", []
     elif date_filter == 'month':
-        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-30,GETDATE()) AS DATE)", []
+        return "AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-30,GETDATE()) AS DATE)", []
     return "", []
 
 
