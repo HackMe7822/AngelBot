@@ -76,12 +76,13 @@ def patch(path):
     txt = txt.replace('date(exit_time)', 'TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)')
     txt = txt.replace('date(time)',      'TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)')
     if 'c.lastrowid' in txt:
+        txt = txt.replace('trade_id = c.lastrowid', 'trade_id = c.fetchone()[0]')
+        # Add OUTPUT INSERTED.id before VALUES — handle Windows \r\n and multi-line INSERT
         txt = re.sub(
-            r'(INSERT INTO trades \([^)]+\))\s*\n(\s+)VALUES',
-            r'\1\n\2    OUTPUT INSERTED.id\n\2VALUES',
+            r'(status(?:, source)?)\)\s*\r?\n(\s+)VALUES',
+            lambda m: m.group(1) + ')\n' + m.group(2) + 'OUTPUT INSERTED.id\n' + m.group(2) + 'VALUES',
             txt
         )
-        txt = txt.replace('trade_id = c.lastrowid', 'trade_id = c.fetchone()[0]')
     if txt != orig:
         with open(full, 'w', encoding='utf-8') as f:
             f.write(txt)
