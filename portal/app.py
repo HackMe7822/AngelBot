@@ -5,11 +5,12 @@ Provides REST API + serves the web UI.
 Run: uvicorn portal.app:app --host 0.0.0.0 --port 8080 --reload
 
 Default admin credentials:  admin / AngelBot@1234
-Change via PORTAL_USER / PORTAL_PASS in .env
+Change via PORTAL_PASS in .env (sets initial admin password on first run)
 """
 
 import os, sys, json, subprocess, hashlib, hmac, secrets
 from datetime import datetime, timezone, timedelta
+from hashlib import sha256
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -28,25 +29,45 @@ app = FastAPI(title="AngelBot Portal", version="1.0.0")
 # ── Auth ──────────────────────────────────────────────────────────────────────
 _security = HTTPBasic()
 
-def _get_credentials():
-    from dotenv import load_dotenv
-    load_dotenv()
-    return (
-        os.getenv("PORTAL_USER", "admin"),
-        os.getenv("PORTAL_PASS", "AngelBot@1234"),
-    )
+def _hash_password(pw: str) -> str:
+    return sha256(pw.encode()).hexdigest()
 
 def require_auth(credentials: HTTPBasicCredentials = Depends(_security)):
-    user, pw = _get_credentials()
-    ok_user = secrets.compare_digest(credentials.username.encode(), user.encode())
-    ok_pass = secrets.compare_digest(credentials.password.encode(), pw.encode())
-    if not (ok_user and ok_pass):
+    """Authenticate against the portal_users table in SQL Server."""
+    username = credentials.username
+    pw_hash  = _hash_password(credentials.password)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute(
+        "SELECT username, role FROM portal_users WHERE username=? AND password_hash=? AND role IS NOT NULL",
+        (username, pw_hash)
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Basic"},
         )
-    return credentials.username
+    # Update last_login
+    c.execute(
+        "UPDATE portal_users SET last_login=? WHERE username=?",
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username)
+    )
+    conn.commit()
+    conn.close()
+    return username
+
+def _require_admin(username: str):
+    """Raise 403 if username is not an admin."""
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT role FROM portal_users WHERE username=?", (username,))
+    row = c.fetchone()
+    conn.close()
+    if not row or row[0] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required.")
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -68,14 +89,14 @@ def _build_date_clause(date_filter: Optional[str]) -> tuple:
     now_ist = datetime.now(_IST)
     if date_filter == 'today':
         d = now_ist.strftime("%Y-%m-%d")
-        return "AND date(exit_time) = ?", [d]
+        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?", [d]
     elif date_filter == 'yesterday':
         d = (now_ist - timedelta(days=1)).strftime("%Y-%m-%d")
-        return "AND date(exit_time) = ?", [d]
+        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?", [d]
     elif date_filter == 'week':
-        return "AND date(exit_time) >= date('now','-7 days')", []
+        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-7,GETDATE()) AS DATE)", []
     elif date_filter == 'month':
-        return "AND date(exit_time) >= date('now','-30 days')", []
+        return "AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) >= CAST(DATEADD(day,-30,GETDATE()) AS DATE)", []
     return "", []
 
 
@@ -105,13 +126,14 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
         else:
             c.execute(
                 f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades "
-                f"WHERE status='closed' AND {source_clause} AND date(exit_time)=?",
+                f"WHERE status='closed' AND {source_clause} "
+                f"AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?",
                 (today_ist,)
             )
             trades, day_pnl = c.fetchone()
             c.execute(
                 f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} AND pnl>0 "
-                f"AND date(exit_time)=?",
+                f"AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?",
                 (today_ist,)
             )
             wins = c.fetchone()[0]
@@ -288,36 +310,108 @@ class PasswordChange(BaseModel):
 
 @app.post("/api/auth/change-password")
 def change_password(body: PasswordChange, user: str = Depends(require_auth)):
-    """Change portal username and/or password. Writes PORTAL_USER/PORTAL_PASS to .env."""
-    _, current_pw = _get_credentials()
-    if not secrets.compare_digest(body.current_password.encode(), current_pw.encode()):
-        raise HTTPException(400, "Current password is incorrect.")
+    """Change own username and/or password. Updates the portal_users table."""
     if len(body.new_password) < 8:
         raise HTTPException(400, "New password must be at least 8 characters.")
-
-    _BOT_DIR = Path(__file__).parent.parent
-    env_path = _BOT_DIR / '.env'
-    lines = env_path.read_text(encoding='utf-8').splitlines() if env_path.exists() else []
-
-    updates = {'PORTAL_USER': body.new_username.strip(), 'PORTAL_PASS': body.new_password.strip()}
-    new_lines = []
-    seen = set()
-    for line in lines:
-        matched = False
-        for k, v in updates.items():
-            if line.startswith(f"{k}="):
-                new_lines.append(f"{k}={v}")
-                seen.add(k)
-                matched = True
-                break
-        if not matched:
-            new_lines.append(line)
-    for k, v in updates.items():
-        if k not in seen:
-            new_lines.append(f"{k}={v}")
-
-    env_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
+    current_hash = _hash_password(body.current_password)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT id FROM portal_users WHERE username=? AND password_hash=?", (user, current_hash))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(400, "Current password is incorrect.")
+    new_hash = _hash_password(body.new_password.strip())
+    new_username = body.new_username.strip()
+    c.execute(
+        "UPDATE portal_users SET username=?, password_hash=? WHERE username=?",
+        (new_username, new_hash, user)
+    )
+    conn.commit()
+    conn.close()
     return {"ok": True, "message": "Credentials updated. Re-login with your new password."}
+
+
+# ── User management ───────────────────────────────────────────────────────────
+class NewUser(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+class UserPatch(BaseModel):
+    role: Optional[str] = None
+    new_password: Optional[str] = None
+
+@app.get("/api/users")
+def list_users(user: str = Depends(require_auth)):
+    """Return all portal users. Admin only."""
+    _require_admin(user)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT id, username, role, created_at, last_login FROM portal_users ORDER BY id")
+    cols = ['id', 'username', 'role', 'created_at', 'last_login']
+    rows = [dict(zip(cols, r)) for r in c.fetchall()]
+    conn.close()
+    return {"users": rows}
+
+@app.post("/api/users")
+def create_user(body: NewUser, user: str = Depends(require_auth)):
+    """Create a new portal user. Admin only."""
+    _require_admin(user)
+    if body.role not in ('admin', 'viewer'):
+        raise HTTPException(400, "Role must be 'admin' or 'viewer'.")
+    if len(body.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters.")
+    pw_hash = _hash_password(body.password)
+    conn = get_conn()
+    c    = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO portal_users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
+            (body.username.strip(), pw_hash, body.role, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, f"Could not create user: {e}")
+    conn.close()
+    return {"ok": True, "message": f"User '{body.username}' created."}
+
+@app.delete("/api/users/{username}")
+def delete_user(username: str, user: str = Depends(require_auth)):
+    """Delete a portal user. Admin only. Cannot delete own account."""
+    _require_admin(user)
+    if username == user:
+        raise HTTPException(400, "Cannot delete your own account.")
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("DELETE FROM portal_users WHERE username=?", (username,))
+    if c.rowcount == 0:
+        conn.close()
+        raise HTTPException(404, f"User '{username}' not found.")
+    conn.commit()
+    conn.close()
+    return {"ok": True, "message": f"User '{username}' deleted."}
+
+@app.patch("/api/users/{username}")
+def patch_user(username: str, body: UserPatch, user: str = Depends(require_auth)):
+    """Change role or reset password for a user. Admin only."""
+    _require_admin(user)
+    conn = get_conn()
+    c    = conn.cursor()
+    if body.role is not None:
+        if body.role not in ('admin', 'viewer'):
+            conn.close()
+            raise HTTPException(400, "Role must be 'admin' or 'viewer'.")
+        c.execute("UPDATE portal_users SET role=? WHERE username=?", (body.role, username))
+    if body.new_password is not None:
+        if len(body.new_password) < 8:
+            conn.close()
+            raise HTTPException(400, "Password must be at least 8 characters.")
+        pw_hash = _hash_password(body.new_password)
+        c.execute("UPDATE portal_users SET password_hash=? WHERE username=?", (pw_hash, username))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "message": f"User '{username}' updated."}
 
 
 # ── Bot controls ──────────────────────────────────────────────────────────────
@@ -517,7 +611,7 @@ def hourly_pnl(market: Optional[str] = None, user: str = Depends(require_auth)):
         where = "AND source='crypto_paper'"
 
     c.execute(f"""
-        SELECT CAST(strftime('%H', exit_time) AS INTEGER) as hour,
+        SELECT DATEPART(hour, TRY_CAST(exit_time AS DATETIME2)) as hour,
                COUNT(*) as trades,
                ROUND(SUM(pnl), 4) as total_pnl,
                SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) as wins

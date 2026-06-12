@@ -244,10 +244,15 @@ def _update_signal_performance(feature_names, importances, rows):
     c    = conn.cursor()
     now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for name, importance in zip(feature_names, importances):
-        c.execute("""
-            INSERT OR REPLACE INTO signal_performance (signal_name, weight, updated_at)
-            VALUES (?, ?, ?)
-        """, (name, round(float(importance), 4), now))
+        c.execute(
+            "MERGE INTO signal_performance AS target "
+            "USING (SELECT ? AS signal_name, ? AS weight, ? AS updated_at) AS src "
+            "ON target.signal_name = src.signal_name "
+            "WHEN MATCHED THEN UPDATE SET weight = src.weight, updated_at = src.updated_at "
+            "WHEN NOT MATCHED THEN INSERT (signal_name, weight, updated_at) "
+            "VALUES (src.signal_name, src.weight, src.updated_at);",
+            (name, round(float(importance), 4), now)
+        )
     conn.commit()
     conn.close()
 

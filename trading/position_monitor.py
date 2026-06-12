@@ -95,8 +95,12 @@ class PositionMonitor:
 
             def _upsert(key, value):
                 c.execute(
-                    "INSERT INTO monitor_state (market, key, value, updated_at) VALUES (?,?,?,?) "
-                    "ON CONFLICT(market, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    "MERGE INTO monitor_state AS target "
+                    "USING (SELECT ? AS market, ? AS key, ? AS value, ? AS updated_at) AS src "
+                    "ON target.market = src.market AND target.key = src.key "
+                    "WHEN MATCHED THEN UPDATE SET value = src.value, updated_at = src.updated_at "
+                    "WHEN NOT MATCHED THEN INSERT (market, key, value, updated_at) "
+                    "VALUES (src.market, src.key, src.value, src.updated_at);",
                     (market, key, json.dumps(value), now)
                 )
 

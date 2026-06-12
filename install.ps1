@@ -162,6 +162,18 @@ if ($sqlSvc) {
         $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
         if ($sqlSvc) { OK "SQL Server ANGELBOT installed" }
         else { Warn "SQL Server may need a reboot to complete -- continuing" }
+
+        # Save SA password to .env so Python workers can connect
+        $envPath = "$BOT_DIR\.env"
+        if (Test-Path $envPath) {
+            $envContent = Get-Content $envPath -Raw -ErrorAction SilentlyContinue
+            if ($envContent -notmatch "SQL_SA_PASS=") {
+                Add-Content $envPath "`nSQL_SA_PASS=$saPass" -Encoding ASCII
+            }
+        } else {
+            Set-Content $envPath "SQL_SA_PASS=$saPass" -Encoding ASCII
+        }
+        OK "SQL SA password saved to .env"
     }
 }
 
@@ -272,9 +284,30 @@ if (Test-Path "$BOT_DIR\.env") {
 }
 
 # ---------------------------------------------------------------------------
-# STEP 7 -- Python packages
+# STEP 7 -- ODBC Driver 17 + Python packages
 # ---------------------------------------------------------------------------
-Step 7 "Python packages"
+Step 7 "ODBC Driver 17 + Python packages"
+
+$odbcInstalled = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" `
+    -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 17*SQL*" }
+if (-not $odbcInstalled) {
+    $odbcInstalled = Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" `
+        -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 17*SQL*" }
+}
+if ($odbcInstalled) {
+    OK "ODBC Driver 17 for SQL Server already installed"
+} else {
+    Info "Downloading ODBC Driver 17 for SQL Server (~6 MB)..."
+    $odbcMsi = "$tmp\msodbcsql17.msi"
+    Download "https://go.microsoft.com/fwlink/?linkid=2168524" $odbcMsi
+    if (Test-Path $odbcMsi) {
+        Start-Process msiexec -ArgumentList "/i `"$odbcMsi`" /qn IACCEPTMSODBCSQLLICENSETERMS=YES" -Wait -NoNewWindow
+        OK "ODBC Driver 17 installed"
+    } else {
+        Warn "ODBC Driver 17 download failed -- pyodbc may not connect to SQL Server"
+    }
+}
+
 Info "Running pip install (2-4 min) ..."
 python -m pip install --upgrade pip --quiet
 python -m pip install -r "$BOT_DIR\requirements.txt" --quiet
