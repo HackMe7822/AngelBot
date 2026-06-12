@@ -1084,21 +1084,32 @@ async function applyUpdate() {
     const r = await apiFetch('/api/update/apply', { method: 'POST' });
     stepsEl.innerHTML = '';
     if (!r) {
-      addStep('Portal restarting…', true, 'Connection dropped — this is expected');
+      addStep('Portal restarting…', true, 'Connection dropped — reconnecting');
       reconEl.style.display = 'block';
       _waitForPortalRestart(overlay);
       return;
     }
-    const d = await r.json();
-    if (d.ok && d.steps) {
-      for (const s of d.steps) addStep(s.step, s.ok, s.detail);
-      addStep('Portal restarting…', true, 'Will reconnect in ~10s');
-      reconEl.style.display = 'block';
-      _waitForPortalRestart(overlay);
-    } else {
-      addStep('Update failed', false, d.detail || 'unknown error');
-      if (btn) { btn.disabled = false; btn.textContent = 'Update & Restart'; }
+    // Stream NDJSON — show each step as it arrives
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const s = JSON.parse(line);
+          addStep(s.step, s.ok, s.detail);
+        } catch(_) {}
+      }
     }
+    addStep('Portal restarting…', true, 'Will reconnect in ~30s');
+    reconEl.style.display = 'block';
+    _waitForPortalRestart(overlay);
   } catch(e) {
     stepsEl.innerHTML = '';
     addStep('Portal restarting…', true, 'Connection dropped — reconnecting');
@@ -1114,8 +1125,8 @@ function _waitForPortalRestart(progressOverlay) {
   const msgEl = document.getElementById('update-reconnect-msg');
   const poll = setInterval(async () => {
     attempts++;
-    if (msgEl) msgEl.textContent = `Reconnecting… (${attempts}/30)`;
-    if (attempts > 30) { clearInterval(poll); location.reload(); return; }
+    if (msgEl) msgEl.textContent = `Reconnecting… (${attempts}/45)`;
+    if (attempts > 45) { clearInterval(poll); location.reload(); return; }
     try {
       const r = await fetch('/api/health');
       if (r.ok) { clearInterval(poll); location.reload(); }

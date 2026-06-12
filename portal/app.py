@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
@@ -585,52 +585,54 @@ def check_update(user: str = Depends(require_auth)):
 
 @app.post("/api/update/apply")
 def apply_update(user: str = Depends(require_auth)):
-    """Pull latest code from GitHub and restart all workers, then the portal."""
+    """Pull latest code from GitHub and restart all workers, then the portal.
+    Streams NDJSON — one line per step — so the browser sees live progress."""
     _BOT_DIR = str(Path(__file__).parent.parent)
-    steps = []
 
-    # 1. git pull
-    try:
-        r = subprocess.run(
-            ['git', 'pull', 'origin', 'main'],
-            capture_output=True, text=True, timeout=60, cwd=_BOT_DIR
-        )
-        if r.returncode == 0:
-            steps.append({"step": "git pull", "ok": True,  "detail": r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "up to date"})
-        else:
-            steps.append({"step": "git pull", "ok": False, "detail": r.stderr.strip()})
-            raise HTTPException(500, f"git pull failed: {r.stderr.strip()}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"git pull error: {e}")
+    def _stream():
+        def emit(step, ok, detail=""):
+            yield json.dumps({"step": step, "ok": ok, "detail": detail}) + "\n"
 
-    # 2. Restart the 3 workers
-    for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
+        # 1. git pull
         try:
-            subprocess.run(['net', 'stop', svc], capture_output=True, timeout=20)
-            sr = subprocess.run(['net', 'start', svc], capture_output=True, text=True, timeout=20)
-            ok = sr.returncode == 0
-            steps.append({"step": f"restart {svc}", "ok": ok, "detail": "restarted" if ok else (sr.stdout.strip() or sr.stderr.strip())})
+            r = subprocess.run(
+                ['git', 'pull', 'origin', 'main'],
+                capture_output=True, text=True, timeout=60, cwd=_BOT_DIR
+            )
+            ok     = r.returncode == 0
+            detail = (r.stdout.strip().splitlines()[-1] if ok and r.stdout.strip() else r.stderr.strip()) or "up to date"
+            yield from emit("git pull", ok, detail)
+            if not ok:
+                return
         except Exception as e:
-            steps.append({"step": f"restart {svc}", "ok": False, "detail": str(e)})
+            yield from emit("git pull", False, str(e))
+            return
 
-    # 3. Restart the portal via a fully detached cmd.exe process.
-    # We cannot use threading here: when net stop kills uvicorn, any daemon
-    # thread dies with it. A DETACHED_PROCESS cmd.exe survives independently.
-    try:
-        DETACHED = 0x00000008   # CREATE_NEW_PROCESS_GROUP
-        NEW_CON  = 0x00000010   # DETACHED_PROCESS — keeps running after parent dies
-        subprocess.Popen(
-            'cmd /c "timeout /t 8 /nobreak >nul & net stop AngelBot-Portal & timeout /t 2 /nobreak >nul & net start AngelBot-Portal"',
-            shell=True,
-            creationflags=DETACHED | NEW_CON
-        )
-        steps.append({"step": "restart portal", "ok": True, "detail": "scheduled in 8s via detached process"})
-    except Exception as e:
-        steps.append({"step": "restart portal", "ok": False, "detail": str(e)})
+        # 2. Restart the 3 workers (stop then start each)
+        for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
+            try:
+                subprocess.run(['net', 'stop', svc], capture_output=True, timeout=25)
+                sr = subprocess.run(['net', 'start', svc], capture_output=True, text=True, timeout=25)
+                ok = sr.returncode == 0
+                yield from emit(f"restart {svc}", ok,
+                                "restarted" if ok else (sr.stdout.strip() or sr.stderr.strip()))
+            except Exception as e:
+                yield from emit(f"restart {svc}", False, str(e))
 
-    return {"ok": True, "steps": steps, "message": "Update applied — portal will restart in ~8 seconds."}
+        # 3. Portal restarts via detached cmd.exe — 30s delay lets this response fully reach browser
+        try:
+            DETACHED_PROCESS      = 0x00000008
+            CREATE_NEW_PROC_GROUP = 0x00000010
+            subprocess.Popen(
+                'cmd /c "timeout /t 30 /nobreak >nul & net stop AngelBot-Portal & timeout /t 3 /nobreak >nul & net start AngelBot-Portal"',
+                shell=True,
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP
+            )
+            yield from emit("restart portal", True, "portal restarts in ~30s — page will auto-reconnect")
+        except Exception as e:
+            yield from emit("restart portal", False, str(e))
+
+    return StreamingResponse(_stream(), media_type="text/plain")
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────

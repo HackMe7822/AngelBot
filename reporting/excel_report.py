@@ -2,7 +2,6 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from datetime import datetime
-import sqlite3
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from data.database import get_conn

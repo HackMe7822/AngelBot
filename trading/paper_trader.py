@@ -1,6 +1,5 @@
-import sqlite3
-import json
 import threading
+import json
 from datetime import datetime, timezone, timedelta
 import sys, os
 
@@ -143,10 +142,10 @@ class PaperTrader:
 
         conn = get_conn()
         c = conn.cursor()
-        c.execute('''
-            UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status='closed'
-            WHERE id=?
-        ''', (now, current_price, pnl, pnl_pct, reason, position['id']))
+        c.execute(
+            "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=?",
+            (now, current_price, pnl, pnl_pct, reason, 'closed', position['id'])
+        )
         conn.commit()
         conn.close()
 

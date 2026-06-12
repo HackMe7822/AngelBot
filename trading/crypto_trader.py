@@ -4,7 +4,7 @@ All trades stored in DB with source='crypto_paper'.
 Binance is ONLY used as a price/data source — no real orders are ever placed.
 """
 
-import sqlite3, json, threading
+import json, threading
 from datetime import datetime, timezone, timedelta
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -145,10 +145,10 @@ class CryptoTrader:
 
         conn = get_conn()
         c    = conn.cursor()
-        c.execute('''
-            UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status='closed'
-            WHERE id=?
-        ''', (now, current_price, pnl, pnl_pct, reason, position['id']))
+        c.execute(
+            "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=?",
+            (now, current_price, pnl, pnl_pct, reason, 'closed', position['id'])
+        )
         conn.commit()
         conn.close()
 
