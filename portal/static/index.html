@@ -6,10 +6,10 @@
 <title>AngelBot Portal</title>
 <style>
   :root {
-    --bg: #0d1117; --card: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
-    --blue: #58a6ff; --yellow: #d29922; --purple: #bc8cff;
-    --accent: #1f6feb;
+    --bg: #f5f7fa; --card: #ffffff; --border: #e1e4e8;
+    --text: #24292f; --muted: #656d76; --green: #1a7f37; --red: #cf222e;
+    --blue: #0969da; --yellow: #9a6700; --purple: #8250df;
+    --accent: #0969da;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
@@ -19,7 +19,7 @@
   .sidebar { position: fixed; top: 0; left: 0; width: 200px; height: 100vh; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; z-index: 100; }
   .sidebar h1 { font-size: 16px; font-weight: 700; padding: 0 16px 16px; border-bottom: 1px solid var(--border); color: var(--blue); }
   .sidebar nav a { display: flex; align-items: center; gap: 8px; padding: 10px 16px; color: var(--muted); transition: all .15s; border-left: 3px solid transparent; }
-  .sidebar nav a:hover, .sidebar nav a.active { color: var(--text); background: rgba(88,166,255,.08); border-left-color: var(--blue); }
+  .sidebar nav a:hover, .sidebar nav a.active { color: var(--text); background: rgba(9,105,218,.08); border-left-color: var(--blue); }
   .main { margin-left: 200px; padding: 24px; min-height: 100vh; }
   .page { display: none; }
   .page.active { display: block; }
@@ -49,13 +49,13 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); background: var(--card); position: sticky; top: 0; }
   td { padding: 8px 12px; border-bottom: 1px solid rgba(48,54,61,.5); }
-  tr:hover td { background: rgba(255,255,255,.02); }
+  tr:hover td { background: rgba(0,0,0,.03); }
   .pnl-pos { color: var(--green); font-weight: 600; }
   .pnl-neg { color: var(--red); font-weight: 600; }
 
   /* Controls */
   .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); transition: all .15s; }
-  .btn:hover { background: rgba(255,255,255,.05); }
+  .btn:hover { background: rgba(0,0,0,.05); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.primary:hover { background: #388bfd; }
   .btn.danger { background: rgba(248,81,73,.15); border-color: var(--red); color: var(--red); }
@@ -71,7 +71,7 @@
   .config-val { font-family: monospace; }
 
   /* Log viewer */
-  .log-box { background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; height: 500px; overflow-y: auto; white-space: pre-wrap; color: #c9d1d9; }
+  .log-box { background: #f6f8fa; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; height: 500px; overflow-y: auto; white-space: pre-wrap; color: #24292f; }
   .log-box .err { color: var(--red); }
   .log-box .warn { color: var(--yellow); }
   .log-box .ok { color: var(--green); }
