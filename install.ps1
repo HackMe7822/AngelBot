@@ -119,12 +119,6 @@ $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
 if ($sqlSvc) {
     OK "SQL Server instance ANGELBOT already installed"
 } else {
-    $sqlExe = "$tmp\SQLEXPR_x64_ENU.exe"
-    if (-not (Test-Path $sqlExe)) {
-        Info "Downloading SQL Server 2019 Express (280 MB) ..."
-        Download "https://go.microsoft.com/fwlink/p/?linkid=866658" $sqlExe
-    }
-
     Write-Host ""
     Write-Host "  Set a password for SQL Server SA account." -ForegroundColor White
     Write-Host "  Min 8 chars, must include uppercase + number" -ForegroundColor DarkGray
@@ -132,18 +126,40 @@ if ($sqlSvc) {
     $saPass   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($saSecure))
 
-    Info "Installing SQL Server 2019 Express (3-5 min) ..."
-    $sqlArgs = "/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /FEATURES=SQLEngine" +
-               " /INSTANCENAME=ANGELBOT" +
-               " /SQLSYSADMINACCOUNTS=`"$env:USERDOMAIN\$env:USERNAME`"" +
-               " /SECURITYMODE=SQL /SAPWD=`"$saPass`"" +
-               " /TCPENABLED=1 /BROWSERSVCSTARTUPTYPE=Automatic"
-    Start-Process $sqlExe -ArgumentList $sqlArgs -Wait -NoNewWindow
-    Log "SQL Server install attempted"
+    # Step 1: download the SSEI web bootstrapper
+    $ssei = "$tmp\sql_ssei.exe"
+    if (-not (Test-Path $ssei)) {
+        Info "Downloading SQL Server installer bootstrapper ..."
+        Download "https://go.microsoft.com/fwlink/p/?linkid=866658" $ssei
+    }
 
-    $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
-    if ($sqlSvc) { OK "SQL Server ANGELBOT installed" }
-    else { Warn "SQL Server may need a reboot to complete -- continuing" }
+    # Step 2: use SSEI to download the full installer package (~280 MB)
+    $sqlMedia = "$tmp\sql_media"
+    New-Item -ItemType Directory -Force -Path $sqlMedia | Out-Null
+    $fullExe = Get-ChildItem $sqlMedia -Filter "SQLEXPR*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $fullExe) {
+        Info "Downloading SQL Server 2019 Express full package (280 MB) ..."
+        Start-Process $ssei -ArgumentList "/Action=Download /MediaPath=`"$sqlMedia`" /MediaType=Advanced /Quiet" -Wait -NoNewWindow
+        $fullExe = Get-ChildItem $sqlMedia -Filter "SQLEXPR*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+
+    if (-not $fullExe) {
+        Warn "SQL Server download failed -- skipping. Install manually later if needed."
+    } else {
+        # Step 3: silent install from full package
+        Info "Installing SQL Server 2019 Express (3-5 min) ..."
+        $sqlArgs = "/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /FEATURES=SQLEngine" +
+                   " /INSTANCENAME=ANGELBOT" +
+                   " /SQLSYSADMINACCOUNTS=`"$env:USERDOMAIN\$env:USERNAME`"" +
+                   " /SECURITYMODE=SQL /SAPWD=`"$saPass`"" +
+                   " /TCPENABLED=1 /BROWSERSVCSTARTUPTYPE=Automatic"
+        Start-Process $fullExe.FullName -ArgumentList $sqlArgs -Wait -NoNewWindow
+        Log "SQL Server install attempted"
+
+        $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
+        if ($sqlSvc) { OK "SQL Server ANGELBOT installed" }
+        else { Warn "SQL Server may need a reboot to complete -- continuing" }
+    }
 }
 
 # ---------------------------------------------------------------------------
