@@ -750,15 +750,17 @@ async function forceSell(id, symbol) {
   if (!confirm(`Force sell ${symbol} at current market price?`)) return;
   const btn = document.querySelector(`#pos-row-${id} button`);
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
-  const r = await apiFetch(`/api/positions/${id}/force_sell`, {method:'POST'});
+  const r = await apiFetch(`/api/positions/force_sell?trade_id=${id}`, {method:'POST'});
   if (!r) { if (btn) { btn.disabled = false; btn.textContent = '⚡ Sell'; } return; }
   const d = await r.json();
-  if (d.ok) {
+  if (r.ok && d.ok) {
     const pnlSign = d.pnl >= 0 ? '+' : '';
-    toast(`${symbol} sold @ ${d.exit_price.toFixed(4)} | P&L: ${pnlSign}${d.pnl.toFixed(2)} (${pnlSign}${d.pnl_pct}%)`);
+    const dp = d.exit_price < 1 ? 6 : 2;
+    toast(`${symbol} sold @ ${d.exit_price.toFixed(dp)} | P&L: ${pnlSign}${d.pnl.toFixed(2)} (${pnlSign}${d.pnl_pct}%)`);
     document.getElementById(`pos-row-${id}`)?.remove();
   } else {
-    toast(d.detail || 'Force sell failed.');
+    const msg = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail);
+    toast(`[${r.status}] ${msg || 'Force sell failed.'}`);
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Sell'; }
   }
 }
@@ -771,7 +773,12 @@ async function forceSellAll() {
   const r = await apiFetch(url, {method:'POST'});
   if (!r) return;
   const d = await r.json();
-  toast(`Sold ${d.sold} position(s). ${d.failed > 0 ? d.failed + ' failed (price unavailable).' : ''}`);
+  if (!r.ok) {
+    toast(`[${r.status}] ${typeof d.detail === 'string' ? d.detail : 'Force sell all failed.'}`);
+    return;
+  }
+  const failMsg = d.failed > 0 ? ` ${d.failed} failed (no price).` : '';
+  toast(`Sold ${d.sold} position(s).${failMsg}`);
   loadPositions();
 }
 

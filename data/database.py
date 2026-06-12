@@ -189,6 +189,29 @@ def init_db():
         VALUES ('admin', '{pass_hash}', 'admin', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     """)
 
+    # ── One-time: normalize US trade timestamps ET → IST ─────────────────────
+    # Before June 2026 fix, alpaca_trader stored entry/exit_time in ET (UTC-4).
+    # US market hours in ET are 09:30–16:00, so any us_paper trade with time
+    # component 01:00–16:59 is in ET and needs +570 min to become IST.
+    # Trades already stored in IST have time 19:00–01:30, so hour >= 17 or == 0 → skip.
+    _exec(c, """
+        UPDATE trades
+        SET
+            entry_time = CONVERT(NVARCHAR(50),
+                            DATEADD(minute, 570,
+                                TRY_CAST(entry_time AS DATETIME2)), 20),
+            exit_time  = CASE
+                WHEN exit_time IS NOT NULL AND LEN(RTRIM(exit_time)) > 5
+                THEN CONVERT(NVARCHAR(50),
+                        DATEADD(minute, 570,
+                            TRY_CAST(exit_time AS DATETIME2)), 20)
+                ELSE exit_time
+                END
+        WHERE source = 'us_paper'
+          AND TRY_CAST(entry_time AS DATETIME2) IS NOT NULL
+          AND DATEPART(hour, TRY_CAST(entry_time AS DATETIME2)) BETWEEN 1 AND 16
+    """)
+
     conn.close()
     print("Database ready.")
 

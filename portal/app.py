@@ -253,36 +253,39 @@ def get_positions(market: Optional[str] = None, user: str = Depends(require_auth
 # ── Force Sell ────────────────────────────────────────────────────────────────
 
 def _get_live_price_for_source(symbol: str, source: str) -> Optional[float]:
-    """Fetch the best current price for a symbol given its market source."""
+    """Fetch best current price. Always returns float or None — never raises."""
     import math
-    if source == 'us_paper':
-        from data.alpaca_client import get_us_live_price
-        price = get_us_live_price(symbol)
-    elif source == 'crypto_paper':
-        try:
+    try:
+        if source == 'us_paper':
+            from data.alpaca_client import get_us_live_price
+            price = get_us_live_price(symbol)
+        elif source == 'crypto_paper':
             import yfinance as yf
             df = yf.Ticker(symbol + '-USD').history(period='1d', interval='1m')
             if df.empty:
                 df = yf.Ticker(symbol).history(period='1d', interval='1m')
             price = float(df['Close'].iloc[-1]) if not df.empty else None
-        except Exception:
-            price = None
-    else:  # india paper
-        try:
+        else:
             import yfinance as yf
             sym = symbol if symbol.endswith('.NS') else symbol + '.NS'
             df  = yf.Ticker(sym).history(period='1d', interval='1m')
             price = float(df['Close'].iloc[-1]) if not df.empty else None
-        except Exception:
-            price = None
-    if price is None or (isinstance(price, float) and math.isnan(price)) or price <= 0:
+    except Exception:
         return None
-    return round(price, 6)
+    if price is None:
+        return None
+    try:
+        f = float(price)
+        if math.isnan(f) or f <= 0:
+            return None
+        return round(f, 6)
+    except Exception:
+        return None
 
 
-@app.post("/api/positions/{trade_id}/force_sell")
+@app.post("/api/positions/force_sell")
 def force_sell(trade_id: int, user: str = Depends(require_auth)):
-    """Force-close an open position at current market price."""
+    """Force-close an open position at current market price. Pass trade_id as query param."""
     conn = get_conn()
     c    = conn.cursor()
     c.execute(
@@ -291,17 +294,23 @@ def force_sell(trade_id: int, user: str = Depends(require_auth)):
     )
     row = c.fetchone()
     if not row:
+        c.execute("SELECT COUNT(*) FROM trades WHERE status='open'")
+        open_count = c.fetchone()[0]
         conn.close()
-        raise HTTPException(404, f"Trade {trade_id} not found.")
-    tid, symbol, source, entry_price, quantity, status = row
-    if status == 'closed':
+        raise HTTPException(404, f"Trade id={trade_id} not found. Open trades in DB: {open_count}")
+    tid, symbol, source, entry_price, quantity, trade_status = row
+    if trade_status == 'closed':
         conn.close()
-        raise HTTPException(400, "Position already closed.")
+        raise HTTPException(400, f"{symbol} (id={tid}) is already closed.")
+
+    if not entry_price or entry_price <= 0:
+        conn.close()
+        raise HTTPException(400, f"Invalid entry_price ({entry_price}) for trade {tid}.")
 
     price = _get_live_price_for_source(symbol, source or 'paper')
     if price is None:
         conn.close()
-        raise HTTPException(502, f"Could not fetch live price for {symbol}. Try again.")
+        raise HTTPException(502, f"Could not fetch live price for {symbol}. Market may be closed — try again later.")
 
     pnl     = round((price - entry_price) * quantity, 4)
     pnl_pct = round(((price - entry_price) / entry_price) * 100, 2)
@@ -335,22 +344,25 @@ def force_sell_all(market: Optional[str] = None, user: str = Depends(require_aut
 
     results = []
     for tid, symbol, source, entry_price, quantity in rows:
-        price = _get_live_price_for_source(symbol, source or 'paper')
-        if price is None:
-            results.append({"id": tid, "symbol": symbol, "ok": False, "error": "price unavailable"})
-            continue
-        pnl     = round((price - entry_price) * quantity, 4)
-        pnl_pct = round(((price - entry_price) / entry_price) * 100, 2)
-        now     = datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
-        conn2 = get_conn()
-        c2    = conn2.cursor()
-        c2.execute(
-            "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=? AND status='open'",
-            (now, price, pnl, pnl_pct, 'force_sell', 'closed', tid)
-        )
-        conn2.commit()
-        conn2.close()
-        results.append({"id": tid, "symbol": symbol, "ok": True, "exit_price": price, "pnl": pnl})
+        try:
+            price = _get_live_price_for_source(symbol, source or 'paper')
+            if price is None or not entry_price or entry_price <= 0:
+                results.append({"id": tid, "symbol": symbol, "ok": False, "error": "price unavailable"})
+                continue
+            pnl     = round((price - entry_price) * quantity, 4)
+            pnl_pct = round(((price - entry_price) / entry_price) * 100, 2)
+            now     = datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
+            conn2 = get_conn()
+            c2    = conn2.cursor()
+            c2.execute(
+                "UPDATE trades SET exit_time=?, exit_price=?, pnl=?, pnl_pct=?, exit_reason=?, status=? WHERE id=? AND status='open'",
+                (now, price, pnl, pnl_pct, 'force_sell', 'closed', tid)
+            )
+            conn2.commit()
+            conn2.close()
+            results.append({"id": tid, "symbol": symbol, "ok": True, "exit_price": price, "pnl": pnl})
+        except Exception as e:
+            results.append({"id": tid, "symbol": symbol, "ok": False, "error": str(e)})
 
     sold = sum(1 for r in results if r.get('ok'))
     failed = len(results) - sold
