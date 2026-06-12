@@ -1,11 +1,15 @@
 import json
 import sqlite3
+import warnings
 import numpy as np
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.exceptions import InconsistentVersionWarning
 import pickle
 import os, sys
+
+warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from data.database import get_conn
 
