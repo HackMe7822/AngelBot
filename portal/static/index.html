@@ -1046,21 +1046,41 @@ async function applyUpdate() {
   const overlay = document.getElementById('update-progress-overlay');
   const stepsEl = document.getElementById('update-steps');
   const reconEl = document.getElementById('update-reconnecting');
-  stepsEl.innerHTML = '<div style="color:var(--muted); font-size:13px;">Contacting GitHub…</div>';
   reconEl.style.display = 'none';
   overlay.style.display = 'flex';
 
   function addStep(label, ok, detail) {
-    const icon = ok ? '✅' : '❌';
-    stepsEl.innerHTML += `<div style="display:flex; gap:10px; align-items:flex-start; font-size:13px;">
-      <span style="flex-shrink:0;">${icon}</span>
-      <div><strong>${label}</strong>${detail ? `<div style="color:var(--muted); font-size:12px; margin-top:2px;">${detail}</div>` : ''}</div>
-    </div>`;
+    // Remove spinner if present
+    const spinner = stepsEl.querySelector('.update-spinner');
+    if (spinner) spinner.remove();
+    const icon = ok === null ? '⏳' : (ok ? '✅' : '❌');
+    const el = document.createElement('div');
+    el.style = 'display:flex; gap:10px; align-items:flex-start; font-size:13px;';
+    el.innerHTML = `<span style="flex-shrink:0;">${icon}</span><div><strong>${label}</strong>${detail ? `<div style="color:var(--muted); font-size:12px; margin-top:2px;">${detail}</div>` : ''}</div>`;
+    stepsEl.appendChild(el);
+  }
+  function addSpinner(msg) {
+    const el = document.createElement('div');
+    el.className = 'update-spinner';
+    el.style = 'display:flex; gap:10px; align-items:center; font-size:13px; color:var(--muted);';
+    el.innerHTML = `<span style="animation:spin 1s linear infinite; display:inline-block;">↻</span> ${msg}`;
+    stepsEl.appendChild(el);
+  }
+
+  stepsEl.innerHTML = '';
+  addSpinner('Connecting to GitHub…');
+
+  // Add spin animation if not present
+  if (!document.getElementById('spin-style')) {
+    const s = document.createElement('style');
+    s.id = 'spin-style';
+    s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(s);
   }
 
   try {
-    stepsEl.innerHTML = '';
     const r = await apiFetch('/api/update/apply', { method: 'POST' });
+    stepsEl.innerHTML = '';
     if (!r) {
       addStep('Portal restarting…', true, 'Connection dropped — this is expected');
       reconEl.style.display = 'block';
@@ -1070,7 +1090,7 @@ async function applyUpdate() {
     const d = await r.json();
     if (d.ok && d.steps) {
       for (const s of d.steps) addStep(s.step, s.ok, s.detail);
-      addStep('Portal restarting…', true, 'Will reconnect automatically in ~10s');
+      addStep('Portal restarting…', true, 'Will reconnect in ~10s');
       reconEl.style.display = 'block';
       _waitForPortalRestart(overlay);
     } else {
@@ -1078,6 +1098,7 @@ async function applyUpdate() {
       if (btn) { btn.disabled = false; btn.textContent = 'Update & Restart'; }
     }
   } catch(e) {
+    stepsEl.innerHTML = '';
     addStep('Portal restarting…', true, 'Connection dropped — reconnecting');
     reconEl.style.display = 'block';
     _waitForPortalRestart(overlay);
