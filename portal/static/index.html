@@ -250,6 +250,7 @@
         </select>
         <button class="btn" onclick="loadPositions()">↻ Refresh</button>
         <button class="btn btn-danger" onclick="forceSellAll()">⚡ Force Sell All</button>
+        <button class="btn btn-danger" style="background:#3a1a1a; border-color:#666;" onclick="cancelAll()">🗑 Cancel All (no price)</button>
       </div>
     </div>
     <div class="table-wrap" id="positions-table">Loading...</div>
@@ -763,6 +764,18 @@ async function forceSell(id, symbol) {
     toast(`[${r.status}] ${msg || 'Force sell failed.'}`);
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Sell'; }
   }
+}
+
+async function cancelAll() {
+  const market = document.getElementById('pos-market-filter').value;
+  const label = market ? market.toUpperCase() : 'ALL';
+  if (!confirm(`Cancel (close with $0 P&L) ALL open ${label} positions? Use this if Force Sell is unavailable.`)) return;
+  const url = '/api/positions/cancel_all' + (market ? '?market=' + market : '');
+  const r = await apiFetch(url, {method:'POST'});
+  if (!r) return;
+  const d = await r.json();
+  if (r.ok) { toast(`Cancelled ${d.cancelled} open position(s).`); loadPositions(); }
+  else toast(`[${r.status}] ${d.detail || 'Failed.'}`);
 }
 
 async function forceSellAll() {

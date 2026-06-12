@@ -325,6 +325,31 @@ def force_sell(trade_id: int, user: str = Depends(require_auth)):
     return {"ok": True, "id": tid, "symbol": symbol, "exit_price": price, "pnl": pnl, "pnl_pct": pnl_pct}
 
 
+@app.post("/api/positions/cancel_all")
+def cancel_all_open(market: Optional[str] = None, user: str = Depends(require_auth)):
+    """Mark all open positions as cancelled — no live price needed."""
+    conn = get_conn()
+    c    = conn.cursor()
+    if market == 'india':
+        where = "(source='paper' OR source IS NULL)"
+    elif market == 'us':
+        where = "source='us_paper'"
+    elif market == 'crypto':
+        where = "source='crypto_paper'"
+    else:
+        where = "1=1"
+    now = datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S")
+    c.execute(
+        f"UPDATE trades SET status='closed', exit_reason='cancelled', exit_time=?, pnl=0, pnl_pct=0 "
+        f"WHERE status='open' AND {where}",
+        (now,)
+    )
+    affected = c.rowcount
+    conn.commit()
+    conn.close()
+    return {"ok": True, "cancelled": affected}
+
+
 @app.post("/api/positions/force_sell_all")
 def force_sell_all(market: Optional[str] = None, user: str = Depends(require_auth)):
     """Force-close all open positions (optionally filtered by market)."""
