@@ -123,6 +123,8 @@
   /* Modal */
   #modal-overlay { display: none; }
   #modal-overlay.open { display: flex !important; }
+  #confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 2000; align-items: center; justify-content: center; }
+  #confirm-overlay.open { display: flex; }
 </style>
 </head>
 <body>
@@ -329,31 +331,6 @@
       </div>
     </div>
 
-    <div class="config-section">
-      <div class="card">
-        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🔐 Portal Login</div>
-        <p style="color:var(--muted); font-size:12px; margin-bottom:16px;">Single admin account. Change username or password below.</p>
-        <div style="display:grid; gap:10px; max-width:400px;">
-          <div>
-            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Current Password</label>
-            <input type="password" id="auth-current" placeholder="Current password" style="width:100%">
-          </div>
-          <div>
-            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">New Username</label>
-            <input type="text" id="auth-newuser" placeholder="New username" style="width:100%">
-          </div>
-          <div>
-            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">New Password (min 8 chars)</label>
-            <input type="password" id="auth-newpass" placeholder="New password" style="width:100%">
-          </div>
-          <div>
-            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Confirm New Password</label>
-            <input type="password" id="auth-confirm" placeholder="Confirm new password" style="width:100%">
-          </div>
-          <button class="btn primary" onclick="changePassword()" style="width:fit-content">Save New Credentials</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- LOGS -->
@@ -476,6 +453,18 @@
 
 </main>
 
+<!-- Confirm dialog (replaces browser confirm()) -->
+<div id="confirm-overlay">
+  <div class="card" style="width:380px; padding:28px; box-shadow:0 8px 32px rgba(0,0,0,.25);">
+    <h3 style="font-size:16px; font-weight:600; margin-bottom:10px;" id="confirm-title">Confirm</h3>
+    <p style="color:var(--muted); font-size:13px; margin-bottom:22px; line-height:1.5;" id="confirm-msg"></p>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button class="btn" id="confirm-cancel-btn" style="min-width:80px; justify-content:center;">Cancel</button>
+      <button class="btn primary" id="confirm-ok-btn" style="min-width:80px; justify-content:center;">OK</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -483,6 +472,22 @@ const API = '';  // same origin
 let _autoRefreshInterval = null;
 let _tradeOffset = 0;
 const _tradeLimit = 50;
+
+// ── In-page confirm dialog (no browser prompt) ─────────────────────────────
+function showConfirm(title, msg, okLabel) {
+  return new Promise(resolve => {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent   = msg;
+    document.getElementById('confirm-ok-btn').textContent = okLabel || 'OK';
+    const overlay = document.getElementById('confirm-overlay');
+    overlay.classList.add('open');
+    const ok  = document.getElementById('confirm-ok-btn');
+    const can = document.getElementById('confirm-cancel-btn');
+    const close = (val) => { overlay.classList.remove('open'); ok.onclick = null; can.onclick = null; resolve(val); };
+    ok.onclick  = () => close(true);
+    can.onclick = () => close(false);
+  });
+}
 let _dashDateFilter = '';
 let _tradeDateFilter = '';
 
@@ -686,7 +691,8 @@ async function loadServices() {
 
 async function svcAction(name, action) {
   const labels = { start: 'Starting', stop: 'Stopping', restart: 'Restarting' };
-  if (!confirm(`${labels[action]} service "${name}"?`)) return;
+  const okLabels = { start: 'Start', stop: 'Stop', restart: 'Restart' };
+  if (!await showConfirm(`${labels[action]} Service`, `${labels[action]} "${name}"?`, okLabels[action])) return;
   toast(`${labels[action]} ${name}…`, 10000);
   const r = await apiFetch(`/api/services/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
   if (!r) return;
@@ -1019,7 +1025,7 @@ async function checkUpdate() {
 }
 
 async function applyUpdate() {
-  if (!confirm('Apply update and restart all services? Portal will be back in ~10 seconds.')) return;
+  if (!await showConfirm('Apply Update', 'Pull latest code from GitHub and restart all services? The portal will be back in ~10 seconds.', 'Update & Restart')) return;
 
   const btn = document.querySelector('#update-banner .btn.primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Updating...'; }
@@ -1214,7 +1220,7 @@ async function saveUserModal() {
 }
 
 async function changeUserRole(username, newRole) {
-  if (!confirm(`Change ${username}'s role to ${newRole}?`)) return;
+  if (!await showConfirm('Change Role', `Change ${username}'s role to ${newRole}?`, 'Confirm')) return;
   const r = await apiFetch(`/api/users/${username}`, { method:'PATCH', body: JSON.stringify({role: newRole}) });
   if (!r) return;
   const d = await r.json();
@@ -1223,7 +1229,7 @@ async function changeUserRole(username, newRole) {
 }
 
 async function confirmDeleteUser(username) {
-  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  if (!await showConfirm('Delete User', `Delete "${username}"? This cannot be undone.`, 'Delete')) return;
   const r = await apiFetch(`/api/users/${username}`, { method:'DELETE' });
   if (!r) return;
   const d = await r.json();
