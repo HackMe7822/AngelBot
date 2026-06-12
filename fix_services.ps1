@@ -226,12 +226,14 @@ CREATE TABLE signal_performance (
 );
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='idx_signal_name' AND object_id=OBJECT_ID('signal_performance'))
 CREATE UNIQUE INDEX idx_signal_name ON signal_performance(signal_name);
+IF EXISTS (SELECT * FROM sys.columns WHERE object_id=OBJECT_ID('monitor_state') AND name='key')
+DROP TABLE monitor_state;
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='monitor_state')
 CREATE TABLE monitor_state (
     market NVARCHAR(100) NOT NULL, pos_id INT, symbol NVARCHAR(50),
-    key NVARCHAR(500) NOT NULL, value NVARCHAR(MAX) NOT NULL,
+    state_key NVARCHAR(500) NOT NULL, value NVARCHAR(MAX) NOT NULL,
     updated_at NVARCHAR(50) NOT NULL,
-    CONSTRAINT pk_monitor_state PRIMARY KEY (market, key)
+    CONSTRAINT pk_monitor_state PRIMARY KEY (market, state_key)
 );
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='portal_users')
 CREATE TABLE portal_users (

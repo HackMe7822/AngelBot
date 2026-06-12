@@ -96,11 +96,11 @@ class PositionMonitor:
             def _upsert(key, value):
                 c.execute(
                     "MERGE INTO monitor_state AS target "
-                    "USING (SELECT ? AS market, ? AS key, ? AS value, ? AS updated_at) AS src "
-                    "ON target.market = src.market AND target.key = src.key "
+                    "USING (SELECT ? AS market, ? AS state_key, ? AS value, ? AS updated_at) AS src "
+                    "ON target.market = src.market AND target.state_key = src.state_key "
                     "WHEN MATCHED THEN UPDATE SET value = src.value, updated_at = src.updated_at "
-                    "WHEN NOT MATCHED THEN INSERT (market, key, value, updated_at) "
-                    "VALUES (src.market, src.key, src.value, src.updated_at);",
+                    "WHEN NOT MATCHED THEN INSERT (market, state_key, value, updated_at) "
+                    "VALUES (src.market, src.state_key, src.value, src.updated_at);",
                     (market, key, json.dumps(value), now)
                 )
 
@@ -130,7 +130,7 @@ class PositionMonitor:
             market = self._market
             conn = get_conn()
             c    = conn.cursor()
-            c.execute("SELECT key, value FROM monitor_state WHERE market=?", (market,))
+            c.execute("SELECT state_key, value FROM monitor_state WHERE market=?", (market,))
             rows = {row[0]: json.loads(row[1]) for row in c.fetchall()}
             conn.close()
 

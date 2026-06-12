@@ -203,8 +203,8 @@ def get_trades(
     sql = "SELECT id,symbol,entry_time,exit_time,entry_price,exit_price,quantity,capital_used,pnl,pnl_pct,exit_reason,status,source FROM trades"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
-    params += [limit, offset]
+    sql += " ORDER BY id DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
+    params += [offset, limit]
 
     c.execute(sql, params)
     cols = ['id','symbol','entry_time','exit_time','entry_price','exit_price',
@@ -481,17 +481,23 @@ def get_log_live(market: str, lines: int = 200, user: str = Depends(require_auth
 _SERVICE_NAMES = ['AngelBot-India', 'AngelBot-US', 'AngelBot-Crypto', 'AngelBot-Portal']
 
 def _sc_status(name: str) -> str:
-    """Query a Windows service status via sc.exe. Returns 'running', 'stopped', or 'unknown'."""
+    """Query a Windows service status via sc.exe."""
     try:
         result = subprocess.run(
             ['sc', 'query', name],
             capture_output=True, text=True, timeout=10
         )
-        out = result.stdout.lower()
-        if 'running' in out:
+        out = result.stdout.upper()
+        if 'RUNNING' in out:
             return 'running'
-        elif 'stopped' in out:
+        elif 'PAUSED' in out:
+            return 'paused'
+        elif 'STOPPED' in out:
             return 'stopped'
+        elif 'START_PENDING' in out or 'STOP_PENDING' in out:
+            return 'pending'
+        elif result.returncode != 0 or 'FAILED' in out or 'does not exist' in result.stdout:
+            return 'not_installed'
         return 'unknown'
     except Exception:
         return 'unknown'
@@ -506,17 +512,49 @@ def get_services(user: str = Depends(require_auth)):
     return {"services": services}
 
 
+@app.post("/api/services/{name}/start")
+def start_service(name: str, user: str = Depends(require_auth)):
+    """Start a stopped Windows service."""
+    if name not in _SERVICE_NAMES:
+        raise HTTPException(400, f"Unknown service '{name}'.")
+    try:
+        r = subprocess.run(['net', 'start', name], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            raise HTTPException(500, f"Failed to start {name}: {(r.stderr or r.stdout).strip()}")
+        return {"ok": True, "name": name, "message": f"{name} started."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/services/{name}/stop")
+def stop_service(name: str, user: str = Depends(require_auth)):
+    """Stop a running Windows service."""
+    if name not in _SERVICE_NAMES:
+        raise HTTPException(400, f"Unknown service '{name}'.")
+    try:
+        r = subprocess.run(['net', 'stop', name], capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            raise HTTPException(500, f"Failed to stop {name}: {(r.stderr or r.stdout).strip()}")
+        return {"ok": True, "name": name, "message": f"{name} stopped."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.post("/api/services/{name}/restart")
 def restart_service(name: str, user: str = Depends(require_auth)):
     """Stop then start a named Windows service."""
     if name not in _SERVICE_NAMES:
-        raise HTTPException(400, f"Unknown service '{name}'. Valid: {_SERVICE_NAMES}")
+        raise HTTPException(400, f"Unknown service '{name}'.")
     try:
-        stop = subprocess.run(['net', 'stop', name], capture_output=True, text=True, timeout=30)
+        subprocess.run(['net', 'stop', name], capture_output=True, text=True, timeout=30)
         start = subprocess.run(['net', 'start', name], capture_output=True, text=True, timeout=30)
         if start.returncode != 0:
-            raise HTTPException(500, f"Failed to start {name}: {start.stderr or start.stdout}")
-        return {"ok": True, "name": name, "message": f"{name} restarted successfully."}
+            raise HTTPException(500, f"Failed to start {name}: {(start.stderr or start.stdout).strip()}")
+        return {"ok": True, "name": name, "message": f"{name} restarted."}
     except HTTPException:
         raise
     except Exception as e:
