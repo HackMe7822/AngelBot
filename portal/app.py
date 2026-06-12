@@ -63,21 +63,61 @@ async def root():
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
+def _build_date_clause(date_filter: Optional[str]) -> tuple:
+    """Return (sql_fragment, params_list) for a date_filter on exit_time column."""
+    now_ist = datetime.now(_IST)
+    if date_filter == 'today':
+        d = now_ist.strftime("%Y-%m-%d")
+        return "AND date(exit_time) = ?", [d]
+    elif date_filter == 'yesterday':
+        d = (now_ist - timedelta(days=1)).strftime("%Y-%m-%d")
+        return "AND date(exit_time) = ?", [d]
+    elif date_filter == 'week':
+        return "AND date(exit_time) >= date('now','-7 days')", []
+    elif date_filter == 'month':
+        return "AND date(exit_time) >= date('now','-30 days')", []
+    return "", []
+
+
 @app.get("/api/dashboard")
-def dashboard(user: str = Depends(require_auth)):
+def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_auth)):
     conn = get_conn()
     c    = conn.cursor()
     today_ist = datetime.now(_IST).strftime("%Y-%m-%d")
 
+    date_sql, date_params = _build_date_clause(date_filter)
+
     def _market_summary(source_clause, cur_sym, dec):
-        c.execute(f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades "
-                  f"WHERE status='closed' AND {source_clause} AND date(exit_time)=?", (today_ist,))
-        trades, day_pnl = c.fetchone()
+        # For the main display period (respects date_filter, falls back to today for labels)
+        if date_filter:
+            c.execute(
+                f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades "
+                f"WHERE status='closed' AND {source_clause} {date_sql}",
+                date_params
+            )
+            trades, day_pnl = c.fetchone()
+            c.execute(
+                f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} "
+                f"AND pnl>0 {date_sql}",
+                date_params
+            )
+            wins = c.fetchone()[0]
+        else:
+            c.execute(
+                f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades "
+                f"WHERE status='closed' AND {source_clause} AND date(exit_time)=?",
+                (today_ist,)
+            )
+            trades, day_pnl = c.fetchone()
+            c.execute(
+                f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} AND pnl>0 "
+                f"AND date(exit_time)=?",
+                (today_ist,)
+            )
+            wins = c.fetchone()[0]
+
         c.execute(f"SELECT COUNT(*) FROM trades WHERE status='open' AND {source_clause}")
         open_pos = c.fetchone()[0]
-        c.execute(f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} AND pnl>0 "
-                  f"AND date(exit_time)=?", (today_ist,))
-        wins = c.fetchone()[0]
         c.execute(f"SELECT COALESCE(SUM(pnl),0) FROM trades WHERE status='closed' AND {source_clause}")
         total_pnl = c.fetchone()[0]
         return {
@@ -98,6 +138,7 @@ def dashboard(user: str = Depends(require_auth)):
     return {
         "timestamp": datetime.now(_IST).isoformat(),
         "bot_paused": paused,
+        "date_filter": date_filter,
         "india": india,
         "us": us,
         "crypto": crypto,
@@ -109,6 +150,7 @@ def dashboard(user: str = Depends(require_auth)):
 def get_trades(
     market: Optional[str] = None,
     status_filter: Optional[str] = None,
+    date_filter: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
     user: str = Depends(require_auth)
@@ -129,6 +171,13 @@ def get_trades(
         where.append("status=?")
         params.append(status_filter)
 
+    # Date filter
+    date_sql, date_params = _build_date_clause(date_filter)
+    if date_sql:
+        # Strip leading "AND " since we handle it via where list
+        where.append(date_sql.lstrip("AND ").strip())
+        params.extend(date_params)
+
     sql = "SELECT id,symbol,entry_time,exit_time,entry_price,exit_price,quantity,capital_used,pnl,pnl_pct,exit_reason,status,source FROM trades"
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -140,15 +189,18 @@ def get_trades(
             'quantity','capital_used','pnl','pnl_pct','exit_reason','status','source']
     rows = [dict(zip(cols, r)) for r in c.fetchall()]
 
-    # Total count
-    count_sql = "SELECT COUNT(*) FROM trades"
+    # Total count and total P&L for current filter
+    count_params = params[:-2]  # exclude limit/offset
+    count_sql = "SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades"
     if where:
         count_sql += " WHERE " + " AND ".join(where)
-    c.execute(count_sql, params[:-2])
-    total = c.fetchone()[0]
+    c.execute(count_sql, count_params)
+    row = c.fetchone()
+    total = row[0]
+    total_pnl = round(row[1] or 0, 4)
 
     conn.close()
-    return {"trades": rows, "total": total, "limit": limit, "offset": offset}
+    return {"trades": rows, "total": total, "total_pnl": total_pnl, "limit": limit, "offset": offset}
 
 
 # ── Open positions ────────────────────────────────────────────────────────────
@@ -228,6 +280,46 @@ def update_config(update: ConfigUpdate, user: str = Depends(require_auth)):
     return {"ok": True, "message": f"{key} updated. Restart bot workers for changes to take effect."}
 
 
+# ── Auth management ───────────────────────────────────────────────────────────
+class PasswordChange(BaseModel):
+    current_password: str
+    new_username: str
+    new_password: str
+
+@app.post("/api/auth/change-password")
+def change_password(body: PasswordChange, user: str = Depends(require_auth)):
+    """Change portal username and/or password. Writes PORTAL_USER/PORTAL_PASS to .env."""
+    _, current_pw = _get_credentials()
+    if not secrets.compare_digest(body.current_password.encode(), current_pw.encode()):
+        raise HTTPException(400, "Current password is incorrect.")
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters.")
+
+    _BOT_DIR = Path(__file__).parent.parent
+    env_path = _BOT_DIR / '.env'
+    lines = env_path.read_text(encoding='utf-8').splitlines() if env_path.exists() else []
+
+    updates = {'PORTAL_USER': body.new_username.strip(), 'PORTAL_PASS': body.new_password.strip()}
+    new_lines = []
+    seen = set()
+    for line in lines:
+        matched = False
+        for k, v in updates.items():
+            if line.startswith(f"{k}="):
+                new_lines.append(f"{k}={v}")
+                seen.add(k)
+                matched = True
+                break
+        if not matched:
+            new_lines.append(line)
+    for k, v in updates.items():
+        if k not in seen:
+            new_lines.append(f"{k}={v}")
+
+    env_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
+    return {"ok": True, "message": "Credentials updated. Re-login with your new password."}
+
+
 # ── Bot controls ──────────────────────────────────────────────────────────────
 @app.post("/api/bot/pause")
 def bot_pause(user: str = Depends(require_auth)):
@@ -248,14 +340,16 @@ def bot_status(user: str = Depends(require_auth)):
     return {"paused": flag.exists()}
 
 
-# ── Logs ──────────────────────────────────────────────────────────────────────
+# ── Logs (historical) ─────────────────────────────────────────────────────────
 @app.get("/api/logs/{market}")
 def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
-    if market not in ('india', 'us', 'crypto', 'watchdog'):
-        raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog")
+    if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
+        raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog, portal")
     today = datetime.now().strftime('%Y%m%d')
     if market == 'watchdog':
         log_path = Path(__file__).parent.parent / 'logs' / 'watchdog.log'
+    elif market == 'portal':
+        log_path = Path(__file__).parent.parent / 'logs' / 'portal.log'
     else:
         log_path = Path(__file__).parent.parent / 'logs' / f'{market}_{today}.log'
     if not log_path.exists():
@@ -264,6 +358,75 @@ def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
         all_lines = f.readlines()
     tail = all_lines[-lines:]
     return {"lines": [l.rstrip() for l in tail], "path": str(log_path)}
+
+
+# ── Logs (live — returns size for change detection) ───────────────────────────
+@app.get("/api/logs/live/{market}")
+def get_log_live(market: str, lines: int = 200, user: str = Depends(require_auth)):
+    """Return last N lines of a log file plus the file's current byte size.
+    The frontend compares size to detect new content without re-fetching unchanged data."""
+    if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
+        raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog, portal")
+    today = datetime.now().strftime('%Y%m%d')
+    if market == 'watchdog':
+        log_path = Path(__file__).parent.parent / 'logs' / 'watchdog.log'
+    elif market == 'portal':
+        log_path = Path(__file__).parent.parent / 'logs' / 'portal.log'
+    else:
+        log_path = Path(__file__).parent.parent / 'logs' / f'{market}_{today}.log'
+    if not log_path.exists():
+        return {"lines": [], "size": 0, "path": str(log_path)}
+    size = log_path.stat().st_size
+    with open(log_path, encoding='utf-8', errors='replace') as f:
+        all_lines = f.readlines()
+    tail = all_lines[-lines:]
+    return {"lines": [l.rstrip() for l in tail], "size": size, "path": str(log_path)}
+
+
+# ── Services ──────────────────────────────────────────────────────────────────
+_SERVICE_NAMES = ['AngelBot-India', 'AngelBot-US', 'AngelBot-Crypto', 'AngelBot-Portal']
+
+def _sc_status(name: str) -> str:
+    """Query a Windows service status via sc.exe. Returns 'running', 'stopped', or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ['sc', 'query', name],
+            capture_output=True, text=True, timeout=10
+        )
+        out = result.stdout.lower()
+        if 'running' in out:
+            return 'running'
+        elif 'stopped' in out:
+            return 'stopped'
+        return 'unknown'
+    except Exception:
+        return 'unknown'
+
+
+@app.get("/api/services")
+def get_services(user: str = Depends(require_auth)):
+    """Return status of the 4 AngelBot Windows services."""
+    services = []
+    for name in _SERVICE_NAMES:
+        services.append({"name": name, "status": _sc_status(name)})
+    return {"services": services}
+
+
+@app.post("/api/services/{name}/restart")
+def restart_service(name: str, user: str = Depends(require_auth)):
+    """Stop then start a named Windows service."""
+    if name not in _SERVICE_NAMES:
+        raise HTTPException(400, f"Unknown service '{name}'. Valid: {_SERVICE_NAMES}")
+    try:
+        stop = subprocess.run(['net', 'stop', name], capture_output=True, text=True, timeout=30)
+        start = subprocess.run(['net', 'start', name], capture_output=True, text=True, timeout=30)
+        if start.returncode != 0:
+            raise HTTPException(500, f"Failed to start {name}: {start.stderr or start.stdout}")
+        return {"ok": True, "name": name, "message": f"{name} restarted successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 # ── GitHub update check ───────────────────────────────────────────────────────

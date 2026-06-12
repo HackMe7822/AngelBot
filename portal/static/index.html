@@ -8,15 +8,14 @@
   :root {
     --bg: #f5f7fa; --card: #ffffff; --border: #e1e4e8;
     --text: #24292f; --muted: #656d76; --green: #1a7f37; --red: #cf222e;
-    --blue: #0969da; --yellow: #9a6700; --purple: #8250df;
-    --accent: #0969da;
+    --blue: #0969da; --yellow: #9a6700; --purple: #8250df; --accent: #0969da;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
   a { color: var(--blue); text-decoration: none; }
 
   /* Layout */
-  .sidebar { position: fixed; top: 0; left: 0; width: 200px; height: 100vh; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; z-index: 100; }
+  .sidebar { position: fixed; top: 0; left: 0; width: 200px; height: 100vh; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; z-index: 100; overflow-y: auto; }
   .sidebar h1 { font-size: 16px; font-weight: 700; padding: 0 16px 16px; border-bottom: 1px solid var(--border); color: var(--blue); }
   .sidebar nav a { display: flex; align-items: center; gap: 8px; padding: 10px 16px; color: var(--muted); transition: all .15s; border-left: 3px solid transparent; }
   .sidebar nav a:hover, .sidebar nav a.active { color: var(--text); background: rgba(9,105,218,.08); border-left-color: var(--blue); }
@@ -61,11 +60,20 @@
   .btn.danger { background: rgba(248,81,73,.15); border-color: var(--red); color: var(--red); }
   .btn.danger:hover { background: rgba(248,81,73,.25); }
   .btn.success { background: rgba(63,185,80,.15); border-color: var(--green); color: var(--green); }
+  .btn.sm { padding: 4px 10px; font-size: 12px; }
   .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-  select, input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 13px; outline: none; }
+  select, input[type=text], input[type=number] { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: 6px; font-size: 13px; outline: none; }
   select:focus, input:focus { border-color: var(--blue); }
 
+  /* Date filter pills */
+  .pill-group { display: flex; gap: 4px; flex-wrap: wrap; }
+  .pill { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--muted); transition: all .15s; }
+  .pill:hover { border-color: var(--blue); color: var(--blue); }
+  .pill.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
   /* Config */
+  .config-section { margin-bottom: 24px; }
+  .config-section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
   .config-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .config-key { font-family: monospace; font-size: 13px; color: var(--purple); }
   .config-val { font-family: monospace; }
@@ -75,6 +83,21 @@
   .log-box .err { color: var(--red); }
   .log-box .warn { color: var(--yellow); }
   .log-box .ok { color: var(--green); }
+  .log-box .sell { color: #e36209; }
+
+  /* Live monitor terminal */
+  .monitor-terminal { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 12px; height: calc(100vh - 220px); min-height: 400px; overflow-y: auto; white-space: pre-wrap; color: #c9d1d9; }
+  .monitor-terminal .t-err  { color: #ff7b72; }
+  .monitor-terminal .t-warn { color: #e3b341; }
+  .monitor-terminal .t-buy  { color: #56d364; }
+  .monitor-terminal .t-sell { color: #f78166; }
+  .monitor-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .monitor-ts { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  /* Services widget */
+  .service-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .service-row:last-child { border-bottom: none; }
+  .service-name { font-family: monospace; font-size: 13px; }
 
   /* Update banner */
   .update-banner { background: rgba(88,166,255,.1); border: 1px solid var(--blue); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -89,12 +112,39 @@
   .win-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 4px; overflow: hidden; }
   .win-fill { height: 100%; background: var(--green); border-radius: 3px; }
 
+  /* Clickable market cards */
+  .market-card-link { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .market-card-link:hover { box-shadow: 0 4px 16px rgba(9,105,218,.15); transform: translateY(-1px); }
+
   /* Toast */
   .toast { position: fixed; bottom: 24px; right: 24px; background: #1f6feb; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none; }
   .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
+
+<!-- Login overlay -->
+<div id="login-overlay" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:9999; align-items:center; justify-content:center;">
+  <div class="card" style="width:340px; padding:32px;">
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:36px; margin-bottom:8px;">🤖</div>
+      <h1 style="font-size:22px; font-weight:700; color:var(--blue);">AngelBot Portal</h1>
+      <p style="color:var(--muted); font-size:13px; margin-top:4px;">Sign in to continue</p>
+    </div>
+    <div style="display:grid; gap:12px;">
+      <div>
+        <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Username</label>
+        <input type="text" id="login-user" placeholder="admin" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Password</label>
+        <input type="password" id="login-pass" placeholder="Password" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div id="login-err" style="color:var(--red); font-size:12px; display:none;"></div>
+      <button class="btn primary" onclick="doLogin()" style="width:100%; justify-content:center; padding:10px;">Sign In</button>
+    </div>
+  </div>
+</div>
 
 <aside class="sidebar">
   <h1>🤖 AngelBot</h1>
@@ -105,7 +155,12 @@
     <a href="#" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
     <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Config</a>
     <a href="#" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
+    <a href="#" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
   </nav>
+  <div style="position:absolute; bottom:0; left:0; right:0; padding:12px 16px; border-top:1px solid var(--border);">
+    <div style="font-size:11px; color:var(--muted); margin-bottom:8px;" id="sidebar-user">Logged in</div>
+    <button class="btn sm danger" onclick="logout()" style="width:100%; justify-content:center;">🚪 Logout</button>
+  </div>
 </aside>
 
 <main class="main">
@@ -118,29 +173,39 @@
 
   <!-- DASHBOARD -->
   <div id="page-dashboard" class="page active">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-      <h2>Dashboard</h2>
-      <div style="display:flex; gap:10px; align-items:center;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin-bottom:0">Dashboard</h2>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <span id="bot-status-badge" class="badge active">● Active</span>
         <button class="btn danger" id="pause-btn" onclick="toggleBot()">⏸ Pause Bot</button>
         <button class="btn" onclick="refreshDashboard()">↻ Refresh</button>
       </div>
     </div>
 
-    <div class="grid grid-3" id="market-cards">
-      <div class="card">
+    <!-- Date filter pills for dashboard -->
+    <div class="toolbar" style="margin-bottom:16px;">
+      <div class="pill-group" id="dash-date-pills">
+        <span class="pill active" data-val="" onclick="setDashFilter(this,'')">All Time</span>
+        <span class="pill" data-val="today" onclick="setDashFilter(this,'today')">Today</span>
+        <span class="pill" data-val="yesterday" onclick="setDashFilter(this,'yesterday')">Yesterday</span>
+        <span class="pill" data-val="week" onclick="setDashFilter(this,'week')">7 Days</span>
+      </div>
+    </div>
+
+    <div class="grid grid-3" id="market-cards" style="margin-bottom:16px;">
+      <div class="card market-card-link" onclick="goToMarket('india')" id="card-india">
         <h3>🇮🇳 India (NSE)</h3>
         <div class="stat" id="india-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="india-trades">—</div>
         <div style="margin-top:12px;" id="india-details"></div>
       </div>
-      <div class="card">
+      <div class="card market-card-link" onclick="goToMarket('us')" id="card-us">
         <h3>🇺🇸 US Market</h3>
         <div class="stat" id="us-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="us-trades">—</div>
         <div style="margin-top:12px;" id="us-details"></div>
       </div>
-      <div class="card">
+      <div class="card market-card-link" onclick="goToMarket('crypto')" id="card-crypto">
         <h3>🪙 Crypto (24/7)</h3>
         <div class="stat" id="crypto-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="crypto-trades">—</div>
@@ -148,7 +213,16 @@
       </div>
     </div>
 
-    <div style="margin-top:20px;" class="card">
+    <!-- Services widget -->
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin-bottom:0;">⚡ Windows Services</h3>
+        <button class="btn sm" onclick="loadServices()">↻</button>
+      </div>
+      <div id="services-list">Loading...</div>
+    </div>
+
+    <div class="card">
       <h3>Recent Closed Trades (All Markets)</h3>
       <div class="table-wrap" id="recent-trades-table">Loading...</div>
     </div>
@@ -173,20 +247,30 @@
 
   <!-- TRADES -->
   <div id="page-trades" class="page">
-    <h2>Trade History</h2>
-    <div class="toolbar">
-      <select id="trade-market" onchange="loadTrades()">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin-bottom:0">Trade History</h2>
+      <span id="trade-total-pnl" style="font-size:15px; font-weight:600;"></span>
+    </div>
+    <div class="toolbar" style="flex-wrap:wrap; gap:8px;">
+      <select id="trade-market" onchange="_tradeOffset=0;loadTrades()">
         <option value="">All Markets</option>
         <option value="india">🇮🇳 India</option>
         <option value="us">🇺🇸 US</option>
         <option value="crypto">🪙 Crypto</option>
       </select>
-      <select id="trade-status" onchange="loadTrades()">
+      <select id="trade-status" onchange="_tradeOffset=0;loadTrades()">
         <option value="">All Status</option>
         <option value="closed">Closed</option>
         <option value="open">Open</option>
       </select>
-      <button class="btn" onclick="loadTrades()">↻ Refresh</button>
+      <div class="pill-group" id="trade-date-pills">
+        <span class="pill active" data-val="" onclick="setTradeFilter(this,'')">All</span>
+        <span class="pill" data-val="today" onclick="setTradeFilter(this,'today')">Today</span>
+        <span class="pill" data-val="yesterday" onclick="setTradeFilter(this,'yesterday')">Yesterday</span>
+        <span class="pill" data-val="week" onclick="setTradeFilter(this,'week')">7 Days</span>
+        <span class="pill" data-val="month" onclick="setTradeFilter(this,'month')">30 Days</span>
+      </div>
+      <button class="btn" onclick="_tradeOffset=0;loadTrades()">↻ Refresh</button>
       <span id="trade-count" style="color:var(--muted); font-size:12px;"></span>
     </div>
     <div class="table-wrap" id="trades-table">Loading...</div>
@@ -208,19 +292,75 @@
   <!-- CONFIG -->
   <div id="page-config" class="page">
     <h2>Configuration</h2>
-    <p style="color:var(--muted); margin-bottom:16px; font-size:13px;">Changes are written to .env. Restart bot workers to apply.</p>
-    <div id="config-list">Loading...</div>
+    <p style="color:var(--muted); margin-bottom:20px; font-size:13px;">Changes are written to .env. Restart bot workers to apply.</p>
+
+    <div class="config-section">
+      <div class="config-section-title">
+        <div class="card">
+          <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🇮🇳 India Settings</div>
+          <div id="config-india"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="card">
+        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🇺🇸 US Settings</div>
+        <div id="config-us"></div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="card">
+        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🪙 Crypto Settings</div>
+        <div id="config-crypto"></div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="card">
+        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">⚙️ General</div>
+        <div id="config-general"></div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="card">
+        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🔐 Portal Login</div>
+        <p style="color:var(--muted); font-size:12px; margin-bottom:16px;">Single admin account. Change username or password below.</p>
+        <div style="display:grid; gap:10px; max-width:400px;">
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Current Password</label>
+            <input type="password" id="auth-current" placeholder="Current password" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">New Username</label>
+            <input type="text" id="auth-newuser" placeholder="New username" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">New Password (min 8 chars)</label>
+            <input type="password" id="auth-newpass" placeholder="New password" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Confirm New Password</label>
+            <input type="password" id="auth-confirm" placeholder="Confirm new password" style="width:100%">
+          </div>
+          <button class="btn primary" onclick="changePassword()" style="width:fit-content">Save New Credentials</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- LOGS -->
   <div id="page-logs" class="page">
-    <h2>Live Logs</h2>
+    <h2>Logs</h2>
     <div class="toolbar">
       <select id="log-market" onchange="loadLog()">
         <option value="india">🇮🇳 India</option>
         <option value="us">🇺🇸 US</option>
         <option value="crypto">🪙 Crypto</option>
         <option value="watchdog">🐕 Watchdog</option>
+        <option value="portal">🌐 Portal</option>
       </select>
       <select id="log-lines" onchange="loadLog()">
         <option value="100">Last 100 lines</option>
@@ -235,6 +375,23 @@
     <div class="log-box" id="log-box">Select a market log above.</div>
   </div>
 
+  <!-- LIVE MONITOR -->
+  <div id="page-monitor" class="page">
+    <h2>Live Monitor</h2>
+    <div class="monitor-bar">
+      <div class="pill-group" id="monitor-market-pills">
+        <span class="pill active" data-val="india" onclick="setMonitorMarket(this,'india')">🇮🇳 India</span>
+        <span class="pill" data-val="us" onclick="setMonitorMarket(this,'us')">🇺🇸 US</span>
+        <span class="pill" data-val="crypto" onclick="setMonitorMarket(this,'crypto')">🪙 Crypto</span>
+        <span class="pill" data-val="portal" onclick="setMonitorMarket(this,'portal')">🌐 Portal</span>
+      </div>
+      <button class="btn sm" onclick="clearMonitor()">Clear</button>
+      <button class="btn sm" id="monitor-pause-btn" onclick="toggleMonitorPause()">⏸ Pause</button>
+      <span class="monitor-ts" id="monitor-ts"></span>
+    </div>
+    <div class="monitor-terminal" id="monitor-terminal">Connecting...</div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -244,19 +401,62 @@ const API = '';  // same origin
 let _autoRefreshInterval = null;
 let _tradeOffset = 0;
 const _tradeLimit = 50;
+let _dashDateFilter = '';
+let _tradeDateFilter = '';
+
+// Live monitor state
+let _monitorMarket = 'india';
+let _monitorLastSize = 0;
+let _monitorPaused = false;
+let _monitorInterval = null;
 
 // ── Auth (Basic) ───────────────────────────────────────────────────────────
+function showLogin(errMsg) {
+  const overlay = document.getElementById('login-overlay');
+  overlay.style.display = 'flex';
+  document.querySelector('aside.sidebar').style.visibility = 'hidden';
+  document.querySelector('main.main').style.visibility = 'hidden';
+  if (errMsg) {
+    const e = document.getElementById('login-err');
+    e.textContent = errMsg;
+    e.style.display = 'block';
+  }
+}
+
+function hideLogin(username) {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.querySelector('aside.sidebar').style.visibility = 'visible';
+  document.querySelector('main.main').style.visibility = 'visible';
+  const el = document.getElementById('sidebar-user');
+  if (el) el.textContent = '👤 ' + username;
+}
+
+async function doLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  if (!u || !p) { document.getElementById('login-err').textContent = 'Enter username and password.'; document.getElementById('login-err').style.display='block'; return; }
+  const creds = btoa(u + ':' + p);
+  const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+  if (r.status === 401) {
+    document.getElementById('login-err').textContent = 'Invalid username or password.';
+    document.getElementById('login-err').style.display = 'block';
+    return;
+  }
+  localStorage.setItem('ab_creds', creds);
+  localStorage.setItem('ab_user', u);
+  hideLogin(u);
+  refreshDashboard();
+  checkUpdate();
+}
+
 async function apiFetch(path, opts = {}) {
   const creds = localStorage.getItem('ab_creds');
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (creds) headers['Authorization'] = 'Basic ' + creds;
   const r = await fetch(API + path, { ...opts, headers });
   if (r.status === 401) {
-    const u = prompt('Username:');
-    const p = prompt('Password:');
-    if (!u || !p) return null;
-    localStorage.setItem('ab_creds', btoa(u + ':' + p));
-    return apiFetch(path, opts);
+    showLogin('Session expired. Please sign in again.');
+    return null;
   }
   return r;
 }
@@ -281,16 +481,44 @@ function showPage(name) {
   if (name === 'leaderboard') loadLeaderboard('');
   if (name === 'config')      loadConfig();
   if (name === 'logs')        loadLog();
+  if (name === 'monitor')     startMonitor();
+  // Stop live monitor polling when leaving monitor page
+  if (name !== 'monitor')     stopMonitor();
+}
+
+// ── Dashboard date filter ─────────────────────────────────────────────────
+function setDashFilter(el, val) {
+  document.querySelectorAll('#dash-date-pills .pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  _dashDateFilter = val;
+  refreshDashboard();
+}
+
+// Navigate to trades page with market + date filter pre-set
+function goToMarket(market) {
+  document.getElementById('trade-market').value = market;
+  // Sync date filter
+  const targetPill = document.querySelector(`#trade-date-pills .pill[data-val="${_dashDateFilter}"]`);
+  if (targetPill) {
+    document.querySelectorAll('#trade-date-pills .pill').forEach(p => p.classList.remove('active'));
+    targetPill.classList.add('active');
+    _tradeDateFilter = _dashDateFilter;
+  }
+  _tradeOffset = 0;
+  showPage('trades');
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 function fmtPnl(pnl, cur) {
   const sign = pnl >= 0 ? '+' : '';
-  return sign + cur + Math.abs(pnl).toFixed(cur === '₹' ? 2 : (cur === '$' ? 2 : 4));
+  const dec  = cur === '₹' ? 2 : (cur === '$' ? 2 : 4);
+  return sign + cur + Math.abs(pnl).toFixed(dec);
 }
 
 async function refreshDashboard() {
-  const r = await apiFetch('/api/dashboard');
+  let url = '/api/dashboard';
+  if (_dashDateFilter) url += '?date_filter=' + _dashDateFilter;
+  const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
 
@@ -303,16 +531,22 @@ async function refreshDashboard() {
   pbtn.textContent  = paused ? '▶️ Resume Bot' : '⏸ Pause Bot';
   pbtn.className    = paused ? 'btn success' : 'btn danger';
 
+  // Label for period
+  const periodLabel = {
+    '': 'all time', 'today': 'today', 'yesterday': 'yesterday', 'week': '7 days'
+  }[_dashDateFilter] || 'today';
+
   // Market cards
   function renderCard(id, data, cur) {
-    const pnl   = data.today_pnl;
-    const cls   = pnl >= 0 ? 'green' : 'red';
+    const pnl = data.today_pnl;
+    const cls = pnl >= 0 ? 'green' : 'red';
+    const wr  = data.today_trades > 0 ? Math.round(data.today_wins / data.today_trades * 100) : 0;
     document.getElementById(id + '-pnl').className  = 'stat ' + cls;
     document.getElementById(id + '-pnl').textContent = fmtPnl(pnl, cur);
     document.getElementById(id + '-trades').textContent =
-      `Today: ${data.today_trades} trades  ✅${data.today_wins}  ❌${data.today_losses}`;
+      `${periodLabel}: ${data.today_trades} trades  ✅${data.today_wins}  ❌${data.today_losses}  ${wr}% win`;
     document.getElementById(id + '-details').innerHTML =
-      `<div class="stat-row"><span style="color:var(--muted)">Open</span><span>${data.open_positions}</span></div>` +
+      `<div class="stat-row"><span style="color:var(--muted)">Open positions</span><span>${data.open_positions}</span></div>` +
       `<div class="stat-row"><span style="color:var(--muted)">All-time P&L</span><span class="${data.total_pnl>=0?'pnl-pos':'pnl-neg'}">${fmtPnl(data.total_pnl, cur)}</span></div>`;
   }
   renderCard('india',  d.india,  '₹');
@@ -321,7 +555,8 @@ async function refreshDashboard() {
 
   // Recent trades
   loadRecentTrades();
-
+  // Services
+  loadServices();
   // Check for updates
   checkUpdate();
 }
@@ -338,6 +573,34 @@ async function toggleBot() {
   const ep = paused ? '/api/bot/resume' : '/api/bot/pause';
   const r  = await apiFetch(ep, { method: 'POST' });
   if (r) { toast(paused ? 'Bot resumed ▶️' : 'Bot paused ⏸'); refreshDashboard(); }
+}
+
+// ── Services widget ────────────────────────────────────────────────────────
+async function loadServices() {
+  const r = await apiFetch('/api/services');
+  if (!r) return;
+  const d = await r.json();
+  const el = document.getElementById('services-list');
+  el.innerHTML = d.services.map(s => {
+    const badgeCls = s.status === 'running' ? 'green' : (s.status === 'stopped' ? 'red' : 'yellow');
+    return `<div class="service-row">
+      <span class="service-name">${s.name}</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="badge ${badgeCls}">${s.status}</span>
+        <button class="btn sm" onclick="restartService('${s.name}')">↻ Restart</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function restartService(name) {
+  if (!confirm(`Restart service "${name}"?`)) return;
+  toast('Restarting ' + name + '...', 8000);
+  const r = await apiFetch(`/api/services/${encodeURIComponent(name)}/restart`, { method: 'POST' });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) { toast('✅ ' + d.message); loadServices(); }
+  else toast('❌ ' + (d.detail || 'Restart failed'), 5000);
 }
 
 // ── Positions ─────────────────────────────────────────────────────────────
@@ -368,6 +631,14 @@ async function loadPositions() {
 }
 
 // ── Trade history ─────────────────────────────────────────────────────────
+function setTradeFilter(el, val) {
+  document.querySelectorAll('#trade-date-pills .pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  _tradeDateFilter = val;
+  _tradeOffset = 0;
+  loadTrades();
+}
+
 function buildTradeTable(trades) {
   if (!trades.length) return '<p style="color:var(--muted);padding:16px">No trades found.</p>';
   return `<table>
@@ -399,11 +670,22 @@ async function loadTrades() {
   let url = `/api/trades?limit=${_tradeLimit}&offset=${_tradeOffset}`;
   if (market) url += '&market=' + market;
   if (status) url += '&status_filter=' + status;
+  if (_tradeDateFilter) url += '&date_filter=' + _tradeDateFilter;
   const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
   document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades);
   document.getElementById('trade-count').textContent = `${d.total} total trades`;
+
+  // Total P&L display
+  const pnlEl = document.getElementById('trade-total-pnl');
+  if (d.total_pnl !== undefined) {
+    const pnl = d.total_pnl;
+    const cls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+    pnlEl.innerHTML = `Total P&L: <span class="${cls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>`;
+  } else {
+    pnlEl.textContent = '';
+  }
 
   // Pagination
   const pages = Math.ceil(d.total / _tradeLimit);
@@ -449,17 +731,47 @@ async function loadLeaderboard(market) {
 }
 
 // ── Config ────────────────────────────────────────────────────────────────
+const _CONFIG_SECTIONS = {
+  india: {
+    label: '🇮🇳 India Settings',
+    keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
+           'SCALP_TARGET_PCT','SCALP_SL_PCT','SL_CONFIRM_POLLS',
+           'MAX_DAILY_LOSS_PCT','MIN_STOCK_PRICE','ENTRY_START_MIN','ENTRY_END_MIN']
+  },
+  us: {
+    label: '🇺🇸 US Settings',
+    keys: ['US_CAPITAL','US_MAX_DAILY_TRADES','US_MIN_STOCK_PRICE']
+  },
+  crypto: {
+    label: '🪙 Crypto Settings',
+    keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
+  },
+  general: {
+    label: '⚙️ General',
+    keys: ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','SLIPPAGE_PCT']
+  }
+};
+
 async function loadConfig() {
   const r = await apiFetch('/api/config');
   if (!r) return;
   const d = await r.json();
-  const el = document.getElementById('config-list');
-  el.innerHTML = Object.entries(d).map(([k, v]) => `
-    <div class="config-row">
-      <span class="config-key">${k}</span>
-      <input type="text" id="cfg-${k}" value="${v}" class="config-val" />
-      <button class="btn primary" onclick="saveConfig('${k}')">Save</button>
-    </div>`).join('');
+
+  function renderSection(containerId, keys) {
+    const el = document.getElementById('config-' + containerId);
+    const rows = keys.filter(k => d[k] !== undefined).map(k => `
+      <div class="config-row">
+        <span class="config-key">${k}</span>
+        <input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" />
+        <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
+      </div>`).join('');
+    el.innerHTML = rows || '<p style="color:var(--muted);font-size:13px">No settings available.</p>';
+  }
+
+  renderSection('india',   _CONFIG_SECTIONS.india.keys);
+  renderSection('us',      _CONFIG_SECTIONS.us.keys);
+  renderSection('crypto',  _CONFIG_SECTIONS.crypto.keys);
+  renderSection('general', _CONFIG_SECTIONS.general.keys);
 }
 
 async function saveConfig(key) {
@@ -474,7 +786,7 @@ async function saveConfig(key) {
   else toast('❌ ' + (d.detail || 'Error'), 5000);
 }
 
-// ── Logs ──────────────────────────────────────────────────────────────────
+// ── Logs (historical) ─────────────────────────────────────────────────────
 async function loadLog() {
   const market = document.getElementById('log-market').value;
   const lines  = document.getElementById('log-lines').value;
@@ -482,21 +794,8 @@ async function loadLog() {
   if (!r) return;
   const d = await r.json();
   const box = document.getElementById('log-box');
-  box.innerHTML = d.lines.map(l => {
-    const lc = l.toLowerCase();
-    if (lc.includes('error') || lc.includes('exception') || lc.includes('fatal') || lc.includes('traceback'))
-      return `<span class="err">${escHtml(l)}</span>`;
-    if (lc.includes('warn') || lc.includes('cooldown') || lc.includes('paused'))
-      return `<span class="warn">${escHtml(l)}</span>`;
-    if (lc.includes('buy') || lc.includes('profit') || lc.includes('ok'))
-      return `<span class="ok">${escHtml(l)}</span>`;
-    return escHtml(l);
-  }).join('\n') || 'No log data.';
+  box.innerHTML = d.lines.map(l => colorLogLine(l, false)).join('\n') || 'No log data.';
   box.scrollTop = box.scrollHeight;
-}
-
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function toggleAutoRefresh() {
@@ -506,6 +805,105 @@ function toggleAutoRefresh() {
   } else {
     clearInterval(_autoRefreshInterval);
     _autoRefreshInterval = null;
+  }
+}
+
+// ── Log line colorizer ────────────────────────────────────────────────────
+function colorLogLine(l, dark) {
+  const lc = l.toLowerCase();
+  const e  = escHtml(l);
+  const errCls  = dark ? 't-err'  : 'err';
+  const warnCls = dark ? 't-warn' : 'warn';
+  const buyCls  = dark ? 't-buy'  : 'ok';
+  const sellCls = dark ? 't-sell' : 'sell';
+  if (lc.includes('error') || lc.includes('exception') || lc.includes('fatal') || lc.includes('traceback'))
+    return `<span class="${errCls}">${e}</span>`;
+  if (lc.includes('warn') || lc.includes('cooldown') || lc.includes('paused'))
+    return `<span class="${warnCls}">${e}</span>`;
+  if (lc.includes('sell'))
+    return `<span class="${sellCls}">${e}</span>`;
+  if (lc.includes('buy') || lc.includes('profit') || lc.includes('ok'))
+    return `<span class="${buyCls}">${e}</span>`;
+  return e;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Live Monitor ──────────────────────────────────────────────────────────
+function setMonitorMarket(el, market) {
+  document.querySelectorAll('#monitor-market-pills .pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  _monitorMarket = market;
+  _monitorLastSize = 0;
+  clearMonitor();
+  // Immediately fetch
+  pollMonitor();
+}
+
+function startMonitor() {
+  stopMonitor();
+  _monitorLastSize = 0;
+  document.getElementById('monitor-terminal').textContent = 'Connecting...';
+  pollMonitor();
+  _monitorInterval = setInterval(pollMonitor, 2000);
+}
+
+function stopMonitor() {
+  if (_monitorInterval) {
+    clearInterval(_monitorInterval);
+    _monitorInterval = null;
+  }
+}
+
+function clearMonitor() {
+  document.getElementById('monitor-terminal').innerHTML = '';
+  _monitorLastSize = 0;
+}
+
+function toggleMonitorPause() {
+  _monitorPaused = !_monitorPaused;
+  const btn = document.getElementById('monitor-pause-btn');
+  btn.textContent = _monitorPaused ? '▶ Resume' : '⏸ Pause';
+  btn.className   = _monitorPaused ? 'btn sm success' : 'btn sm';
+}
+
+async function pollMonitor() {
+  try {
+    const r = await apiFetch(`/api/logs/live/${_monitorMarket}?lines=200`);
+    if (!r) return;
+    const d = await r.json();
+    const term = document.getElementById('monitor-terminal');
+    const now = new Date().toLocaleTimeString();
+    document.getElementById('monitor-ts').textContent = 'Last update: ' + now;
+
+    if (d.size === 0 && d.lines.length === 0) {
+      if (term.textContent === 'Connecting...' || term.innerHTML === '') {
+        term.textContent = 'No log file found.';
+      }
+      _monitorLastSize = 0;
+      return;
+    }
+
+    if (_monitorLastSize === 0) {
+      // First load — show all lines
+      term.innerHTML = d.lines.map(l => colorLogLine(l, true)).join('\n');
+      _monitorLastSize = d.size;
+      if (!_monitorPaused) term.scrollTop = term.scrollHeight;
+    } else if (d.size !== _monitorLastSize) {
+      // File changed — append new lines
+      // We re-fetch to get the diff; since the backend returns last N lines,
+      // we detect change by size and append all returned lines that aren't already shown.
+      // Simple approach: append all lines returned (the backend already tails the file).
+      // To avoid duplicates, we track which content was last shown via size comparison.
+      // Re-show all lines to keep it simple and accurate for a 200-line tail.
+      term.innerHTML = d.lines.map(l => colorLogLine(l, true)).join('\n');
+      _monitorLastSize = d.size;
+      if (!_monitorPaused) term.scrollTop = term.scrollHeight;
+    }
+  } catch(e) {
+    // Silently ignore poll errors
   }
 }
 
@@ -536,9 +934,58 @@ async function applyUpdate() {
   else toast('❌ Update failed', 5000);
 }
 
+// ── Change password ───────────────────────────────────────────────────────
+async function changePassword() {
+  const current  = document.getElementById('auth-current').value;
+  const newUser  = document.getElementById('auth-newuser').value.trim();
+  const newPass  = document.getElementById('auth-newpass').value;
+  const confirm  = document.getElementById('auth-confirm').value;
+  if (!current || !newUser || !newPass) { toast('❌ All fields required', 4000); return; }
+  if (newPass !== confirm) { toast('❌ Passwords do not match', 4000); return; }
+  if (newPass.length < 8) { toast('❌ Password must be at least 8 characters', 4000); return; }
+  const r = await apiFetch('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: current, new_username: newUser, new_password: newPass }),
+  });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) {
+    toast('✅ ' + d.message, 5000);
+    // Update stored credentials so the next request succeeds
+    localStorage.setItem('ab_creds', btoa(newUser + ':' + newPass));
+    document.getElementById('auth-current').value = '';
+    document.getElementById('auth-newpass').value = '';
+    document.getElementById('auth-confirm').value = '';
+  } else {
+    toast('❌ ' + (d.detail || 'Error'), 5000);
+  }
+}
+
+function logout() {
+  localStorage.removeItem('ab_creds');
+  location.reload();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
-refreshDashboard();
-setInterval(refreshDashboard, 60000);  // auto-refresh every 60s
+(async function init() {
+  const creds = localStorage.getItem('ab_creds');
+  const user  = localStorage.getItem('ab_user') || 'admin';
+  if (!creds) {
+    showLogin();
+    return;
+  }
+  // Verify saved credentials are still valid
+  const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+  if (r.status === 401) {
+    localStorage.removeItem('ab_creds');
+    showLogin();
+    return;
+  }
+  hideLogin(user);
+  refreshDashboard();
+  checkUpdate();
+  setInterval(refreshDashboard, 60000);
+})();
 </script>
 </body>
 </html>
