@@ -1,0 +1,44 @@
+# API keys and secrets — never commit
+.env
+
+# Database — contains real trade history and learnings
+*.db
+*.db-shm
+*.db-wal
+
+# ML model learnings — never overwrite
+learning/weights.json
+learning/model.pkl
+
+# Logs
+logs/
+*.log
+
+# Prerequisite installers — too large for GitHub (100MB limit)
+prerequisite/setup/sql/*.exe
+prerequisite/setup/sql/*.msi
+prerequisite/setup/arr/*.exe
+prerequisite/setup/urlrewrite/*.msi
+prerequisite/setup/cloudflared/*.exe
+prerequisite/setup/nssm/*.exe
+prerequisite/setup/nssm/nssm-*/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+reports/
+
+# Mac junk
+.DS_Store
+._*
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
