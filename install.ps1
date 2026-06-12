@@ -93,21 +93,24 @@ if (-not $gitFound) {
 # STEP 3 -- Clone / update AngelBot
 # ---------------------------------------------------------------------------
 Step 3 "AngelBot code"
+$oldPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 if (Test-Path "$BOT_DIR\.git") {
     Info "Updating to latest code ..."
-    git -C $BOT_DIR fetch --all 2>&1 | Out-Null
-    git -C $BOT_DIR reset --hard origin/main 2>&1 | Out-Null
+    $null = git -C $BOT_DIR fetch --all 2>&1
+    $null = git -C $BOT_DIR reset --hard origin/main 2>&1
     OK "Code updated"
 } elseif (Test-Path $BOT_DIR) {
     Info "Folder exists but not a git repo -- cleaning and cloning ..."
-    Remove-Item $BOT_DIR -Recurse -Force
-    git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR
+    Remove-Item $BOT_DIR -Recurse -Force -ErrorAction SilentlyContinue
+    $null = git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR 2>&1
     OK "Downloaded to $BOT_DIR"
 } else {
     Info "Cloning from GitHub ..."
-    git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR
+    $null = git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR 2>&1
     OK "Downloaded to $BOT_DIR"
 }
+$ErrorActionPreference = $oldPref
 New-Item -ItemType Directory -Force -Path "$BOT_DIR\learning" | Out-Null
 New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs"     | Out-Null
 
