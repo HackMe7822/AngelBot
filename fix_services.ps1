@@ -1,11 +1,6 @@
-﻿# AngelBot Service Diagnostic & Fix
-# Run as Administrator when workers fail to start
-#
-# What this does:
-#   1. Finds the real Python.exe (not the Windows Store stub)
-#   2. Shows the last 30 lines of each worker's NSSM log
-#   3. Re-registers the 3 worker services with the correct Python path
-#   4. Starts them and reports status
+# AngelBot Service Fix
+# Right-click -> Run as Administrator
+# Handles: ODBC Driver, pyodbc, UTF-8 encoding, service re-registration
 
 $BOT_DIR = "C:\AngelBot"
 
@@ -14,87 +9,91 @@ function Info { param($m) Write-Host "  [..] $m"  -ForegroundColor Cyan }
 function Warn { param($m) Write-Host "  [!!] $m"  -ForegroundColor Yellow }
 function Fail { param($m) Write-Host "  [XX] $m"  -ForegroundColor Red }
 
-Write-Host ""
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host "  AngelBot Service Diagnostics & Fix  " -ForegroundColor Cyan
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host ""
-
-# ---- Find real Python -------------------------------------------------------
-Info "Locating Python executable..."
-$pyReal = $null
-
-# Try python -c sys.executable first
-try {
-    $pyReal = (& python -c "import sys; print(sys.executable)" 2>$null).Trim()
-} catch {}
-
-# Reject Windows Store stub (doesn't work for services)
-if ($pyReal -and ($pyReal -match "WindowsApps" -or $pyReal -match "Microsoft\\WindowsApps")) {
-    Warn "Found Windows Store stub: $pyReal  (will not work as service)"
-    $pyReal = $null
+function Download {
+    param($url, $dest)
+    try {
+        Invoke-WebRequest $url -OutFile $dest -UseBasicParsing -ErrorAction Stop
+        return $true
+    } catch {
+        return $false
+    }
 }
 
-# Search common install locations
+Write-Host ""
+Write-Host "======================================" -ForegroundColor Cyan
+Write-Host "   AngelBot Full Service Fix Script   " -ForegroundColor Cyan
+Write-Host "======================================" -ForegroundColor Cyan
+Write-Host ""
+
+# ── 1. Pull latest code from GitHub ──────────────────────────────────────────
+Info "Pulling latest code from GitHub..."
+$oldPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$null = git -C $BOT_DIR fetch --all 2>&1
+$null = git -C $BOT_DIR reset --hard origin/main 2>&1
+$ErrorActionPreference = $oldPref
+OK "Code up to date"
+
+# ── 2. Find real Python ───────────────────────────────────────────────────────
+Info "Locating Python executable..."
+$pyReal = $null
+try { $pyReal = (& python -c "import sys; print(sys.executable)" 2>$null).Trim() } catch {}
+
+if ($pyReal -and ($pyReal -match "WindowsApps")) { $pyReal = $null }
+
 if (-not $pyReal) {
-    $candidates = @(
-        "C:\Python313\python.exe",
-        "C:\Python312\python.exe",
-        "C:\Python311\python.exe",
-        "C:\Python310\python.exe",
+    foreach ($c in @(
+        "C:\Program Files\Python313\python.exe","C:\Program Files\Python312\python.exe",
+        "C:\Program Files\Python311\python.exe","C:\Program Files\Python310\python.exe",
+        "C:\Python313\python.exe","C:\Python312\python.exe",
+        "C:\Python311\python.exe","C:\Python310\python.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
-        "C:\Program Files\Python313\python.exe",
-        "C:\Program Files\Python312\python.exe",
-        "C:\Program Files\Python311\python.exe"
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { $pyReal = $c; break }
-    }
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe"
+    )) { if (Test-Path $c) { $pyReal = $c; break } }
 }
 
-if (-not $pyReal) {
-    Fail "Cannot locate Python.exe. Make sure Python 3.10+ is installed."
-    exit 1
-}
+if (-not $pyReal) { Fail "Python not found. Run the main installer first."; pause; exit 1 }
 OK "Python: $pyReal"
 
-# ---- Show last NSSM log lines for each service ------------------------------
-Write-Host ""
-Write-Host "--- Service Status & Recent Logs ---" -ForegroundColor White
-
-$allServices = @("AngelBot-India","AngelBot-US","AngelBot-Crypto","AngelBot-Portal")
-foreach ($svc in $allServices) {
-    $svcObj = Get-Service -Name $svc -ErrorAction SilentlyContinue
-    $status  = if ($svcObj) { $svcObj.Status } else { "Not Installed" }
-    $color   = if ($status -eq "Running") { "Green" } else { "Red" }
-    Write-Host ""
-    Write-Host "[$svc]  Status: $status" -ForegroundColor $color
-
-    $log = "$BOT_DIR\logs\$svc.log"
-    if (Test-Path $log) {
-        Write-Host "  Last 30 lines of log:" -ForegroundColor Gray
-        Get-Content $log -Tail 30 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+# ── 3. Install ODBC Driver 17 for SQL Server ──────────────────────────────────
+$odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" `
+    -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" }
+if (-not $odbcOk) {
+    $odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" `
+        -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" }
+}
+if ($odbcOk) {
+    OK "ODBC Driver already installed"
+} else {
+    Info "Downloading ODBC Driver 17 for SQL Server (~6 MB)..."
+    $odbcMsi = "$env:TEMP\msodbcsql17.msi"
+    if (Download "https://go.microsoft.com/fwlink/?linkid=2168524" $odbcMsi) {
+        Start-Process msiexec -ArgumentList "/i `"$odbcMsi`" /qn IACCEPTMSODBCSQLLICENSETERMS=YES" -Wait -NoNewWindow
+        OK "ODBC Driver 17 installed"
     } else {
-        Write-Host "  No log file yet at: $log" -ForegroundColor DarkYellow
+        Warn "ODBC Driver download failed -- SQL Server connection may not work"
     }
 }
 
-# ---- Re-register the 3 worker services with correct Python ------------------
-Write-Host ""
-Write-Host "--- Re-registering Worker Services ---" -ForegroundColor White
+# ── 4. Install / upgrade Python packages ─────────────────────────────────────
+Info "Installing Python packages (pyodbc + requirements)..."
+& $pyReal -m pip install pyodbc --quiet
+& $pyReal -m pip install -r "$BOT_DIR\requirements.txt" --quiet
+OK "Packages ready"
 
+# ── 5. NSSM setup ────────────────────────────────────────────────────────────
 $nssm = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssm)) {
-    $nssm = "$BOT_DIR\prerequisite\setup\nssm\nssm.exe"
-    if (-not (Test-Path $nssm)) {
-        Fail "NSSM not found. Run the main installer first."
-        exit 1
-    }
-    Copy-Item $nssm "C:\Windows\nssm.exe" -Force
+    $bundled = "$BOT_DIR\prerequisite\setup\nssm\nssm.exe"
+    if (Test-Path $bundled) { Copy-Item $bundled $nssm -Force }
+    else { Fail "NSSM not found."; pause; exit 1 }
 }
+
+# ── 6. Re-register worker services ───────────────────────────────────────────
+Write-Host ""
+Info "Re-registering worker services..."
 
 $workers = @(
     @{ Name="AngelBot-India";  Script="india_worker.py"  },
@@ -107,33 +106,39 @@ foreach ($w in $workers) {
     $script = "$BOT_DIR\$($w.Script)"
     $log    = "$BOT_DIR\logs\$name.log"
 
-    Info "Registering $name..."
     Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
     & $nssm remove $name confirm 2>$null | Out-Null
     Start-Sleep -Seconds 1
 
-    & $nssm install         $name $pyReal $script
-    & $nssm set $name AppDirectory   $BOT_DIR
-    & $nssm set $name AppStdout      $log
-    & $nssm set $name AppStderr      $log
-    & $nssm set $name AppRotateFiles 1
-    & $nssm set $name AppRotateBytes 10485760
-    & $nssm set $name Start          SERVICE_AUTO_START
-    & $nssm set $name AppThrottle    5000
+    & $nssm install         $name $pyReal $script         | Out-Null
+    & $nssm set $name AppDirectory          $BOT_DIR      | Out-Null
+    & $nssm set $name AppStdout             $log          | Out-Null
+    & $nssm set $name AppStderr             $log          | Out-Null
+    & $nssm set $name AppRotateFiles        1             | Out-Null
+    & $nssm set $name AppRotateBytes        10485760      | Out-Null
+    & $nssm set $name Start                 SERVICE_AUTO_START | Out-Null
+    & $nssm set $name AppThrottle           5000          | Out-Null
+    & $nssm set $name AppEnvironmentExtra   "PYTHONUTF8=1" | Out-Null
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 3
 
     $st = (Get-Service -Name $name -ErrorAction SilentlyContinue).Status
-    if ($st -eq "Running") {
-        OK "$name is Running"
-    } else {
-        Fail "$name failed to start -- check log: $log"
+    if ($st -eq "Running") { OK "$name -- Running" }
+    else {
+        Fail "$name -- failed. Last log:"
+        if (Test-Path $log) { Get-Content $log -Tail 15 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
     }
 }
 
+# ── Also set UTF-8 on portal service ─────────────────────────────────────────
+& $nssm set AngelBot-Portal AppEnvironmentExtra "PYTHONUTF8=1" | Out-Null
+Restart-Service AngelBot-Portal -Force -ErrorAction SilentlyContinue
+Start-Sleep 3
+$st = (Get-Service AngelBot-Portal -ErrorAction SilentlyContinue).Status
+if ($st -eq "Running") { OK "AngelBot-Portal -- Running" }
+
 Write-Host ""
-Write-Host "Done. If services still fail, check the log files listed above for the Python error." -ForegroundColor Cyan
-Write-Host "Common causes: missing .env file, wrong API keys, missing Python package." -ForegroundColor DarkGray
+OK "All done. Open http://localhost:8080 to verify."
 Write-Host ""
 pause
