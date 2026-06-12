@@ -77,13 +77,35 @@ if ($odbcOk) {
     }
 }
 
-# ── 4. Install / upgrade Python packages ─────────────────────────────────────
+# ── 4. Ensure SQL_SA_PASS is in .env ─────────────────────────────────────────
+$envFile    = "$BOT_DIR\.env"
+$envContent = if (Test-Path $envFile) { Get-Content $envFile -Raw } else { "" }
+
+if ($envContent -notmatch "SQL_SA_PASS=\S") {
+    Write-Host ""
+    Warn "SQL_SA_PASS not found in .env"
+    Write-Host "  Enter the SA password you set during SQL Server installation:" -ForegroundColor White
+    $saSecure = Read-Host "  SA Password" -AsSecureString
+    $saPass   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+                    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($saSecure))
+    if ($envContent -match "SQL_SA_PASS=") {
+        $envContent = $envContent -replace "SQL_SA_PASS=.*", "SQL_SA_PASS=$saPass"
+        Set-Content $envFile $envContent -Encoding ASCII
+    } else {
+        Add-Content $envFile "`nSQL_SA_PASS=$saPass" -Encoding ASCII
+    }
+    OK "SQL_SA_PASS saved to .env"
+} else {
+    OK "SQL_SA_PASS found in .env"
+}
+
+# ── 5. Install / upgrade Python packages ─────────────────────────────────────
 Info "Installing Python packages (pyodbc + requirements)..."
 & $pyReal -m pip install pyodbc --quiet
 & $pyReal -m pip install -r "$BOT_DIR\requirements.txt" --quiet
 OK "Packages ready"
 
-# ── 5. NSSM setup ────────────────────────────────────────────────────────────
+# ── 6. NSSM setup ────────────────────────────────────────────────────────────
 $nssm = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssm)) {
     $bundled = "$BOT_DIR\prerequisite\setup\nssm\nssm.exe"
@@ -91,7 +113,7 @@ if (-not (Test-Path $nssm)) {
     else { Fail "NSSM not found."; pause; exit 1 }
 }
 
-# ── 6. Re-register worker services ───────────────────────────────────────────
+# ── 7. Re-register worker services ───────────────────────────────────────────
 Write-Host ""
 Info "Re-registering worker services..."
 
