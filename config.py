@@ -47,6 +47,10 @@ US_MAX_POSITION_PCT = 0.10      # 10% per stock — same as India
 US_MAX_DAILY_LOSS_PCT = 0.02    # 2% daily loss limit in USD
 US_MAX_DAILY_TRADES   = 30     # circuit breaker for US session
 US_MIN_STOCK_PRICE  = 10.0      # skip stocks under $10 — penny stocks are erratic
+US_SCALP_TARGET_PCT = 0.015     # exit on 1.5% profit (same as India default)
+US_SCALP_SL_PCT     = 0.006     # exit on 0.6% loss (same as India default)
+US_MAX_DEPLOYED_PCT = 0.70      # never deploy more than 70% of US balance at once
+US_PEAK_DRAWDOWN_PCT = 0.03     # pause new buys if US account drops 3% from session high
 
 # US market entry window (ET → IST: 9:30 AM ET = 7:00 PM IST, 3:30 PM ET = 1:00 AM IST)
 US_ENTRY_START_IST = (19, 30)   # 7:30 PM IST = 30 min after US open (skip opening volatility)

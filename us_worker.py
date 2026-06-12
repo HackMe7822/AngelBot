@@ -125,7 +125,8 @@ def _next_us_open():
 
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAILY_TRADES,
-                    MAX_DEPLOYED_PCT, PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE)
+                    US_MAX_DEPLOYED_PCT, US_PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE,
+                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT)
 from trading.alpaca_trader import AlpacaTrader
 from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
@@ -231,12 +232,12 @@ def run_us_scan():
         return
 
     dd = us_trader.get_drawdown_pct()
-    if dd >= PEAK_DRAWDOWN_PCT:
+    if dd >= US_PEAK_DRAWDOWN_PCT:
         cprint(f"[US] Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
         return
 
     dep = us_trader.get_deployed_pct()
-    if dep >= MAX_DEPLOYED_PCT:
+    if dep >= US_MAX_DEPLOYED_PCT:
         cprint(f"[US] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
         return
 
@@ -290,7 +291,7 @@ def run_us_scan():
             return {
                 'symbol': sym, 'score': total, 'weighted_score': wscore, 'ml_prob': ml,
                 'confidence': confidence, 'price': price,
-                'stop_loss': calc_stop_loss(price), 'target': calc_target(price),
+                'stop_loss': calc_stop_loss(price, sl_pct=US_SCALP_SL_PCT), 'target': calc_target(price, target_pct=US_SCALP_TARGET_PCT),
                 'signals': tech['signals'], 'reason': reason,
             }
         except Exception as e:
