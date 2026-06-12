@@ -108,12 +108,8 @@ if ($patchOut) {
 Remove-Item $patchFile -ErrorAction SilentlyContinue
 
 # ── 4. Install ODBC Driver 17 ─────────────────────────────────────────────────
-$odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" `
-    -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" }
-if (-not $odbcOk) {
-    $odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" `
-        -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" }
-}
+$odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" }
+if (-not $odbcOk) { $odbcOk = Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*ODBC Driver 1*SQL*" } }
 if ($odbcOk) {
     OK "ODBC Driver already installed"
 } else {
