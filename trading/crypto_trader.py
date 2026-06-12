@@ -186,7 +186,7 @@ class CryptoTrader:
         c    = conn.cursor()
         c.execute(
             "SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
-            "WHERE status='closed' AND source=? AND date(exit_time)=?",
+            "WHERE status='closed' AND source=? AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)=?",
             (self.SOURCE, date_str)
         )
         rows = c.fetchall()
