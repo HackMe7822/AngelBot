@@ -29,10 +29,33 @@ Write-Host ""
 Info "Pulling latest code from GitHub..."
 $oldPref = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
-$null = git -C $BOT_DIR fetch --all 2>&1
-$null = git -C $BOT_DIR reset --hard origin/main 2>&1
+$fetchOut  = git -C $BOT_DIR fetch --all 2>&1
+$resetOut  = git -C $BOT_DIR reset --hard origin/main 2>&1
+$gitOk     = ($LASTEXITCODE -eq 0)
 $ErrorActionPreference = $oldPref
-OK "Code up to date"
+if ($gitOk) { OK "Code up to date (git reset --hard done)" }
+else {
+    Warn "git command had issues — patching files directly as fallback"
+    Write-Host "    git output: $resetOut" -ForegroundColor DarkGray
+}
+
+# ── Direct file patches — fix SQLite-only SQL that breaks SQL Server ─────────
+# These are idempotent: if git already applied the fix they change nothing.
+$filesToPatch = @(
+    "$BOT_DIR\trading\alpaca_trader.py",
+    "$BOT_DIR\trading\crypto_trader.py",
+    "$BOT_DIR\trading\paper_trader.py"
+)
+foreach ($fp in $filesToPatch) {
+    if (Test-Path $fp) {
+        $txt = Get-Content $fp -Raw -Encoding UTF8
+        if ($txt -match "date\(exit_time\)") {
+            $txt = $txt -replace "date\(exit_time\)", "TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)"
+            Set-Content $fp $txt -Encoding UTF8 -NoNewline
+            OK "Patched date() in $(Split-Path $fp -Leaf)"
+        }
+    }
+}
 
 # ── 2. Find real Python ───────────────────────────────────────────────────────
 Info "Locating Python executable..."
