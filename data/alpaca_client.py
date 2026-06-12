@@ -69,10 +69,12 @@ def get_us_live_price(symbol):
 def _yf_us_fallback(symbol):
     """yfinance 1-min fallback for US stocks — no .NS suffix."""
     try:
-        import yfinance as yf
+        import yfinance as yf, math
         df = yf.Ticker(symbol).history(period="1d", interval="1m")
         if not df.empty:
-            return float(df['Close'].iloc[-1])
+            val = float(df['Close'].iloc[-1])
+            if val > 0 and not math.isnan(val):
+                return val
     except Exception:
         pass
     return None

@@ -13,6 +13,7 @@ This module handles sell decisions in real time.
 import threading
 import time
 import json
+import math
 from datetime import datetime, date as ddate, time as dtime, timezone, timedelta
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -408,7 +409,7 @@ class PositionMonitor:
             try:
                 sym   = pos['symbol']
                 price = _get_price(sym)
-                if price is None:
+                if price is None or price <= 0 or math.isnan(price):
                     continue
 
                 last   = self._last_price.get(sym)
