@@ -849,7 +849,7 @@ def debug_trades(user: str = Depends(require_auth)):
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "time": datetime.now(_IST).isoformat()}
+    return {"status": "ok", "time": datetime.now(_IST).isoformat(), "version": "dec5594"}
 
 
 if __name__ == "__main__":
