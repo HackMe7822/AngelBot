@@ -42,15 +42,26 @@ _ansi_re = _re.compile(r'\033\[[0-9;]*m')
 _flog = _lg.getLogger('india')
 _flog.setLevel(_lg.INFO)
 _flog.propagate = False
-_fh = _lg.FileHandler(
-    os.path.join(_ROOT, 'logs', f"india_{datetime.now().strftime('%Y%m%d')}.log"),
-    encoding='utf-8'
-)
-_fh.setFormatter(_lg.Formatter('%(asctime)s  %(message)s', '%Y-%m-%d %H:%M:%S'))
-_flog.addHandler(_fh)
+_log_date = [None]
+_fh = [None]
+
+def _ensure_log_rotated():
+    today = datetime.now().strftime('%Y%m%d')
+    if today != _log_date[0]:
+        if _fh[0]:
+            _flog.removeHandler(_fh[0])
+            _fh[0].close()
+        _log_date[0] = today
+        h = _lg.FileHandler(os.path.join(_ROOT, 'logs', f"india_{today}.log"), encoding='utf-8')
+        h.setFormatter(_lg.Formatter('%(asctime)s  %(message)s', '%Y-%m-%d %H:%M:%S'))
+        _flog.addHandler(h)
+        _fh[0] = h
+
+_ensure_log_rotated()
 
 
 def cprint(msg, color=WH):
+    _ensure_log_rotated()
     ts  = datetime.now().strftime('%Y-%m-%d %I:%M:%S %p')
     sys.__stdout__.write(f"{color}{ts}  {msg}{R}\n")
     sys.__stdout__.flush()

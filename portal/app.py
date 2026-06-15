@@ -596,18 +596,28 @@ def bot_status(user: str = Depends(require_auth)):
     return {"paused": flag.exists()}
 
 
+def _resolve_log_path(market: str) -> Path:
+    """Find the most recent log file for a market — falls back if today's file not yet created."""
+    log_dir = Path(__file__).parent.parent / 'logs'
+    if market == 'watchdog':
+        return log_dir / 'watchdog.log'
+    if market == 'portal':
+        return log_dir / 'AngelBot-Portal.log'
+    # Try today then the 3 previous days (service may have started before midnight)
+    for days_ago in range(4):
+        d = (datetime.now() - timedelta(days=days_ago)).strftime('%Y%m%d')
+        p = log_dir / f'{market}_{d}.log'
+        if p.exists():
+            return p
+    return log_dir / f'{market}_{datetime.now().strftime("%Y%m%d")}.log'
+
+
 # ── Logs (historical) ─────────────────────────────────────────────────────────
 @app.get("/api/logs/{market}")
 def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
     if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
         raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog, portal")
-    today = datetime.now().strftime('%Y%m%d')
-    if market == 'watchdog':
-        log_path = Path(__file__).parent.parent / 'logs' / 'watchdog.log'
-    elif market == 'portal':
-        log_path = Path(__file__).parent.parent / 'logs' / 'AngelBot-Portal.log'
-    else:
-        log_path = Path(__file__).parent.parent / 'logs' / f'{market}_{today}.log'
+    log_path = _resolve_log_path(market)
     if not log_path.exists():
         return {"lines": [], "path": str(log_path)}
     with open(log_path, encoding='utf-8', errors='replace') as f:
@@ -623,13 +633,7 @@ def get_log_live(market: str, lines: int = 200, user: str = Depends(require_auth
     The frontend compares size to detect new content without re-fetching unchanged data."""
     if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
         raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog, portal")
-    today = datetime.now().strftime('%Y%m%d')
-    if market == 'watchdog':
-        log_path = Path(__file__).parent.parent / 'logs' / 'watchdog.log'
-    elif market == 'portal':
-        log_path = Path(__file__).parent.parent / 'logs' / 'AngelBot-Portal.log'
-    else:
-        log_path = Path(__file__).parent.parent / 'logs' / f'{market}_{today}.log'
+    log_path = _resolve_log_path(market)
     if not log_path.exists():
         return {"lines": [], "size": 0, "path": str(log_path)}
     size = log_path.stat().st_size
