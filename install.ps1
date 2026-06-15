@@ -527,6 +527,7 @@ foreach ($svc in $services) {
     & $nssmDest set $name Start                 SERVICE_AUTO_START   2>&1 | Out-Null
     & $nssmDest set $name AppThrottle           5000                2>&1 | Out-Null
     & $nssmDest set $name AppEnvironmentExtra   "PYTHONPATH=$BOT_DIR" 2>&1 | Out-Null
+    & $nssmDest set $name AppEnvironmentExtra + "PYTHONUTF8=1"        2>&1 | Out-Null
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
     if (Wait-ServiceRunning $name 60) {
