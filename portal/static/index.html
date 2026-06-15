@@ -49,8 +49,16 @@
   th { text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); background: var(--card); position: sticky; top: 0; }
   td { padding: 8px 12px; border-bottom: 1px solid rgba(48,54,61,.5); }
   tr:hover td { background: rgba(0,0,0,.03); }
-  .pnl-pos { color: var(--green); font-weight: 600; }
-  .pnl-neg { color: var(--red); font-weight: 600; }
+  .pnl-pos { color: #00c853; font-weight: 700; }
+  .pnl-neg { color: #cf222e; font-weight: 700; }
+  .pnl-badge { display: inline-block; border-radius: 5px; padding: 3px 9px; font-size: 12px; font-weight: 700; letter-spacing: .2px; line-height: 1.5; white-space: nowrap; }
+  .pnl-badge.pos { background: rgba(0,200,83,.13); color: #00c853; border: 1px solid rgba(0,200,83,.3); }
+  .pnl-badge.neg { background: rgba(207,34,46,.10); color: #cf222e; border: 1px solid rgba(207,34,46,.25); }
+  .pnl-badge.flat { background: rgba(100,100,100,.08); color: var(--muted); border: 1px solid var(--border); }
+  .info-box { background: rgba(9,105,218,.07); border: 1px solid rgba(9,105,218,.2); border-radius: 7px; padding: 10px 14px; margin: 6px 0 12px; font-size: 12px; color: var(--text); line-height: 1.65; }
+  .info-box code { background: rgba(9,105,218,.12); color: var(--blue); border-radius: 3px; padding: 1px 5px; font-size: 11px; }
+  .cred-note { display: flex; align-items: flex-start; gap: 8px; background: rgba(255,170,0,.07); border: 1px solid rgba(255,170,0,.25); border-radius: 6px; padding: 9px 13px; margin-bottom: 14px; font-size: 12px; color: #c9a227; line-height: 1.6; }
+  .cred-note .icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
 
   /* Controls */
   .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); transition: all .15s; }
@@ -130,6 +138,12 @@
   .sort-th:hover { color: var(--blue); }
   .sort-icon { display: inline-block; font-size: 10px; color: var(--muted); margin-left: 3px; vertical-align: middle; opacity: .6; }
   .sort-icon.active { color: var(--blue); opacity: 1; font-weight: 700; }
+
+  /* Live price flash animation */
+  @keyframes flash-up   { 0%{background:rgba(0,200,83,.35)}100%{background:transparent} }
+  @keyframes flash-down { 0%{background:rgba(207,34,46,.28)}100%{background:transparent} }
+  .price-flash-up   { animation: flash-up   .8s ease-out; border-radius:3px; }
+  .price-flash-down { animation: flash-down .8s ease-out; border-radius:3px; }
 
   /* Symbol chips */
   .sym-chip { display: inline-flex; align-items: center; background: rgba(9,105,218,.08); color: var(--blue); border: 1px solid rgba(9,105,218,.2); border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; font-family: monospace; margin: 3px 3px 3px 0; letter-spacing: .3px; }
@@ -284,6 +298,8 @@
         <button class="btn btn-danger" style="background:#3a1a1a; border-color:#666;" onclick="cancelAll()">Cancel All (no price)</button>
       </div>
     </div>
+    <!-- Live summary bar (populated after price fetch) -->
+    <div id="pos-summary" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;"></div>
     <div class="table-wrap" id="positions-table">Loading...</div>
   </div>
 
@@ -429,31 +445,102 @@
 
   <!-- API KEYS -->
   <div id="page-apikeys" class="page">
-    <h2>API Keys &amp; Tokens</h2>
-    <p style="color:var(--muted); margin-bottom:20px; font-size:13px;">Saved to .env on the server. Restart workers after changes.</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h2 style="margin-bottom:4px;">API Keys &amp; Tokens</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0;">Credentials are saved to <code>.env</code> on the server. Restart bot workers after any changes.</p>
+      </div>
+    </div>
 
-    <div class="config-section"><div class="card">
-      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Angel One (India NSE)</div>
+    <!-- Angel One -->
+    <div class="config-section" style="margin-top:20px;"><div class="card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="background:#0a2e18;color:#7ef0a0;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.5px;">IN</span>
+        <div style="font-size:15px;font-weight:600;">Angel One (India NSE)</div>
+        <span class="badge" style="background:rgba(126,240,160,.1);color:#7ef0a0;border:1px solid rgba(126,240,160,.25);margin-left:auto;font-size:11px;">Paper Trading</span>
+      </div>
+      <div class="cred-note">
+        <span class="icon">&#9432;</span>
+        <div>
+          <strong>How to get your Angel One credentials:</strong><br>
+          1. Login to <strong>SmartAPI</strong> at <code>smartapi.angelone.in</code> &rarr; My Account &rarr; Generate API Key.<br>
+          2. <strong>MPIN</strong> is the 4-digit PIN you use to login to the Angel One app.<br>
+          3. <strong>TOTP Secret</strong> — enable TOTP in Angel One app under Settings &rarr; Security, scan the QR code, and save the <em>secret key</em> shown below the QR (26-character base32 string, e.g. <code>F6ZPU4RVSBJ7BO7YUJGV…</code>).<br>
+          4. <strong>Client ID</strong> is your Angel One user ID (e.g. <code>AAAK500258</code>).
+        </div>
+      </div>
       <div id="cred-angelone"></div>
     </div></div>
 
+    <!-- Alpaca -->
     <div class="config-section"><div class="card">
-      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Alpaca (US Paper)</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="background:#0d2a4a;color:#7eb8f0;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.5px;">US</span>
+        <div style="font-size:15px;font-weight:600;">Alpaca (US Markets)</div>
+        <span class="badge" style="background:rgba(126,184,240,.1);color:#7eb8f0;border:1px solid rgba(126,184,240,.25);margin-left:auto;font-size:11px;">Paper Trading</span>
+      </div>
+      <div class="cred-note">
+        <span class="icon">&#9432;</span>
+        <div>
+          <strong>How to get Alpaca Paper API keys:</strong><br>
+          1. Sign up free at <strong>alpaca.markets</strong>. Go to <strong>Paper Trading</strong> (not Live) in the dashboard.<br>
+          2. Click <strong>View API Keys</strong> in the right panel &rarr; <strong>Generate New Key</strong>.<br>
+          3. Copy both the <strong>API Key ID</strong> and <strong>Secret Key</strong> immediately — the secret is only shown once.<br>
+          4. Paper trading has unlimited free trades and $100,000 virtual capital by default.
+        </div>
+      </div>
       <div id="cred-alpaca"></div>
     </div></div>
 
+    <!-- Binance -->
     <div class="config-section"><div class="card">
-      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Binance (Crypto)</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="background:#3a2600;color:#f0c07e;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.5px;">Crypto</span>
+        <div style="font-size:15px;font-weight:600;">Binance (Crypto 24/7)</div>
+        <span class="badge" style="background:rgba(240,192,126,.1);color:#f0c07e;border:1px solid rgba(240,192,126,.25);margin-left:auto;font-size:11px;">Paper Trading</span>
+      </div>
+      <div class="cred-note">
+        <span class="icon">&#9432;</span>
+        <div>
+          <strong>How to get Binance API keys:</strong><br>
+          1. Login to <strong>binance.com</strong> &rarr; Profile &rarr; <strong>API Management</strong> &rarr; <strong>Create API</strong>.<br>
+          2. Choose <em>System Generated</em>. Give it a label like <code>AngelBot</code>.<br>
+          3. Under <strong>API Restrictions</strong>, enable only <strong>Enable Reading</strong> (paper mode never places real orders).<br>
+          4. Complete 2FA, then copy both keys — the secret is only shown once.<br>
+          5. If you don't have a Binance account, keys can be left blank — the bot uses simulated prices via fallback.
+        </div>
+      </div>
       <div id="cred-binance"></div>
     </div></div>
 
+    <!-- Telegram -->
     <div class="config-section"><div class="card">
-      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Telegram</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:18px; line-height:1;">&#9992;</span>
+        <div style="font-size:15px;font-weight:600;">Telegram Alerts</div>
+      </div>
+      <div class="cred-note">
+        <span class="icon">&#9432;</span>
+        <div>
+          <strong>How to set up Telegram alerts:</strong><br>
+          1. Open Telegram &rarr; search for <strong>@BotFather</strong> &rarr; send <code>/newbot</code>.<br>
+          2. Follow prompts to name your bot. BotFather gives you a <strong>Bot Token</strong> like <code>8760657306:AAH4zYb7oo5y…</code>.<br>
+          3. To get your <strong>Chat ID</strong>: message your new bot, then open <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> in a browser and look for <code>"chat":{"id":</code> — that number is your Chat ID.
+        </div>
+      </div>
       <div id="cred-telegram"></div>
     </div></div>
 
+    <!-- Portal -->
     <div class="config-section"><div class="card">
-      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Portal &amp; Database</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:18px; line-height:1;">&#128274;</span>
+        <div style="font-size:15px;font-weight:600;">Portal &amp; Database</div>
+      </div>
+      <div class="info-box">
+        <strong>Portal Admin Password</strong> — used to log in to this web portal. Change it here, then log out and back in.<br>
+        <strong>SQL SA Password</strong> — SQL Server Express <code>sa</code> account password set during installation. Changing this here does not change the SQL Server password itself — update SQL Server separately if needed.
+      </div>
       <div id="cred-portal"></div>
     </div></div>
   </div>
@@ -731,7 +818,7 @@ function thSort(table, col, label) {
 function getTradeSort() {
   var s = _sort.trades;
   if (!s.col || !s.dir) return 'date_desc';
-  var colMap = {date: 'date', pnl: 'pnl', pct: 'pnl', sym: 'sym'};
+  var colMap = {date: 'date', pnl: 'pnl', pct: 'pnl', sym: 'sym', mkt: 'mkt'};
   return (colMap[s.col] || 'date') + '_' + s.dir;
 }
 
@@ -790,7 +877,7 @@ function showPage(name) {
   document.getElementById('nav-' + name).classList.add('active');
   _stopPageTimer();
   if (name === 'dashboard')   refreshDashboard();
-  if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 15000); }
+  if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 30000); }
   if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
   if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
   if (name === 'config')      loadConfig();
@@ -884,15 +971,23 @@ async function refreshDashboard() {
 // ── Live price batch helper ────────────────────────────────────────────────
 async function fetchLivePrices(positions, callback) {
   if (!positions || !positions.length) return;
-  const items = positions.map(function(p) { return {symbol: p.symbol, source: p.source || 'paper'}; });
+  // normalise source before building request AND lookup key
+  const normed = positions.map(function(p) {
+    return { id: p.id, symbol: p.symbol, source: p.source || 'paper',
+             entry_price: p.entry_price, quantity: p.quantity };
+  });
   const r = await apiFetch('/api/prices', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({items: items})
+    body: JSON.stringify({items: normed.map(function(p){ return {symbol: p.symbol, source: p.source}; })})
   });
-  if (!r || !r.ok) return;
-  const d = await r.json();
-  callback(d.prices || {});
+  // On API failure: show N/A immediately instead of leaving '...'
+  if (!r || !r.ok) {
+    callback({}, normed);  // empty prices → all N/A
+    return;
+  }
+  var d = await r.json();
+  callback(d.prices || {}, normed);
 }
 
 // ── Dashboard recent section ───────────────────────────────────────────────
@@ -940,23 +1035,30 @@ async function loadRecentBuys() {
         '<td id="rb-upnl-' + p.id + '" style="color:var(--muted)">...</td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
-  fetchLivePrices(rows, function(prices) {
-    rows.forEach(function(p) {
-      var key    = p.symbol + '|' + p.source;
+  fetchLivePrices(rows, function(prices, normed) {
+    (normed || rows).forEach(function(p) {
+      var key    = p.symbol + '|' + (p.source || 'paper');
       var lp     = prices[key];
       var cur    = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       var lpEl   = document.getElementById('rb-lp-'   + p.id);
       var upnlEl = document.getElementById('rb-upnl-' + p.id);
       if (!lpEl || !upnlEl) return;
-      if (lp == null) { lpEl.textContent = 'N/A'; upnlEl.textContent = '—'; return; }
-      var dp = lp < 1 ? 6 : 2;
-      lpEl.textContent = cur + lp.toFixed(dp);
-      var upnl     = (lp - (p.entry_price||0)) * (p.quantity||0);
-      var invested = (p.entry_price||0) * (p.quantity||0);
+      if (lp == null) { lpEl.innerHTML = '<span style="color:var(--muted)">N/A</span>'; upnlEl.innerHTML = '&#8212;'; return; }
+      var dp    = lp < 1 ? 6 : 2;
+      var prev  = parseFloat(lpEl.dataset.price || '0');
+      lpEl.dataset.price = lp;
+      var entry = p.entry_price || 0;
+      var lpColor = lp > entry ? '#00c853' : lp < entry ? '#cf222e' : 'var(--muted)';
+      var tickDir = prev > 0 ? (lp > prev ? 'up' : lp < prev ? 'down' : '') : '';
+      var arrow   = tickDir === 'up'   ? ' <span style="color:#00c853;font-size:10px;">&#9650;</span>'
+                  : tickDir === 'down' ? ' <span style="color:#cf222e;font-size:10px;">&#9660;</span>' : '';
+      lpEl.innerHTML = '<span style="color:' + lpColor + ';font-weight:600">' + cur + lp.toFixed(dp) + '</span>' + arrow;
+      var upnl    = (lp - entry) * (p.quantity||0);
+      var invested = entry * (p.quantity||0);
       var upnlPct  = invested > 0 ? (upnl / invested * 100) : 0;
-      upnlEl.className   = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-      upnlEl.textContent = (upnl >= 0 ? '+' : '') + cur + Math.abs(upnl).toFixed(2) +
-                           ' (' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)';
+      upnlEl.className  = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      upnlEl.innerHTML  = (upnl >= 0 ? '+' : '') + cur + Math.abs(upnl).toFixed(2) +
+                          ' (' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)';
     });
   });
 }
@@ -1022,14 +1124,15 @@ async function loadPositions() {
   if (!d.positions.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
   d.positions.sort(function(a, b) {
     if (col === 'sym')  return mul * (a.symbol||'').localeCompare(b.symbol||'');
+    if (col === 'mkt')  return mul * (a.source||'').localeCompare(b.source||'');
     if (col === 'cap')  return mul * ((a.capital_used||0) - (b.capital_used||0));
     if (col === 'qty')  return mul * ((a.quantity||0) - (b.quantity||0));
     return mul * (a.entry_time||'').localeCompare(b.entry_time||'');
   });
   el.innerHTML = '<table><thead><tr>' +
-    thSort('pos','sym','Symbol') + '<th>Market</th>' +
+    thSort('pos','sym','Symbol') + thSort('pos','mkt','Market') +
     thSort('pos','time','Entry Time') + '<th>Entry Price</th>' +
-    '<th>Live Price</th><th>Unrealized P&L</th>' +
+    '<th>Live Price</th><th>Gain/Share</th><th>Unrealized P&L</th>' +
     thSort('pos','qty','Qty') + thSort('pos','cap','Capital') +
     '<th>SL</th><th>Target</th><th>Action</th>' +
     '</tr></thead><tbody>' +
@@ -1041,6 +1144,7 @@ async function loadPositions() {
         '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
         '<td id="lp-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '<td id="gain-' + p.id + '" style="color:var(--muted)">...</td>' +
         '<td id="upnl-' + p.id + '" style="color:var(--muted)">...</td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
@@ -1050,24 +1154,70 @@ async function loadPositions() {
         '</tr>';
     }).join('') + '</tbody></table>';
   updateSortIcons('pos');
-  fetchLivePrices(d.positions, function(prices) {
-    d.positions.forEach(function(p) {
-      const key    = p.symbol + '|' + p.source;
+  fetchLivePrices(d.positions, function(prices, normed) {
+    var totalUpnl = 0, totalCapital = 0, priced = 0;
+    (normed || d.positions).forEach(function(p) {
+      const key    = p.symbol + '|' + (p.source || 'paper');
       const lp     = prices[key];
-      const cur    = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '₹');
+      const cur    = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       const lpEl   = document.getElementById('lp-'   + p.id);
+      const gainEl = document.getElementById('gain-' + p.id);
       const upnlEl = document.getElementById('upnl-' + p.id);
       if (!lpEl || !upnlEl) return;
-      if (lp == null) { lpEl.textContent = 'N/A'; upnlEl.textContent = '—'; return; }
-      const dp       = lp < 1 ? 6 : 2;
-      lpEl.textContent = cur + lp.toFixed(dp);
-      const upnl    = (lp - (p.entry_price||0)) * (p.quantity||0);
-      const invested = (p.entry_price||0) * (p.quantity||0);
+      totalCapital += (p.capital_used || 0);
+      if (lp == null) {
+        lpEl.innerHTML = '<span style="color:var(--muted)">N/A</span>';
+        if (gainEl) gainEl.innerHTML = '&#8212;';
+        upnlEl.innerHTML = '&#8212;';
+        return;
+      }
+      priced++;
+      const dp         = lp < 1 ? 6 : 2;
+      const prevPrice  = parseFloat(lpEl.dataset.price || '0');
+      lpEl.dataset.price = lp;
+      const entry   = p.entry_price || 0;
+      const lpColor = lp > entry ? '#00c853' : lp < entry ? '#cf222e' : 'var(--muted)';
+      const tickDir = prevPrice > 0 ? (lp > prevPrice ? 'up' : lp < prevPrice ? 'down' : '') : '';
+      const arrow   = tickDir === 'up'   ? ' <span style="color:#00c853;font-size:10px;">&#9650;</span>'
+                    : tickDir === 'down' ? ' <span style="color:#cf222e;font-size:10px;">&#9660;</span>' : '';
+      lpEl.innerHTML = '<span style="color:' + lpColor + ';font-weight:600">' + cur + lp.toFixed(dp) + '</span>' + arrow;
+      if (tickDir) { lpEl.classList.add('price-flash-' + tickDir); setTimeout(function(){ lpEl.classList.remove('price-flash-up','price-flash-down'); }, 800); }
+      // Per-share gain
+      const gainPS  = lp - entry;
+      const gainPct = entry > 0 ? (gainPS / entry * 100) : 0;
+      if (gainEl) {
+        const gCls = gainPS > 0 ? 'pos' : gainPS < 0 ? 'neg' : 'flat';
+        gainEl.className = '';
+        gainEl.innerHTML = '<span class="pnl-badge ' + gCls + '">' +
+          (gainPS >= 0 ? '+' : '') + cur + Math.abs(gainPS).toFixed(dp) +
+          ' <span style="opacity:.75">(' + (gainPct >= 0 ? '+' : '') + gainPct.toFixed(2) + '%)</span></span>';
+      }
+      // Total P&L
+      const upnl    = gainPS * (p.quantity||0);
+      const invested = entry * (p.quantity||0);
       const upnlPct = invested > 0 ? (upnl / invested * 100) : 0;
-      upnlEl.className   = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-      upnlEl.textContent = (upnl >= 0 ? '+' : '') + cur + Math.abs(upnl).toFixed(2) +
-                           ' (' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)';
+      totalUpnl += upnl;
+      const uCls = upnl > 0 ? 'pos' : upnl < 0 ? 'neg' : 'flat';
+      upnlEl.className = '';
+      upnlEl.innerHTML = '<span class="pnl-badge ' + uCls + '" style="font-size:13px;padding:4px 10px;">' +
+        (upnl >= 0 ? '▲ +' : '▼ ') + cur + Math.abs(upnl).toFixed(2) +
+        ' <span style="opacity:.75">(' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)</span></span>';
     });
+    // Update summary bar
+    var sumEl = document.getElementById('pos-summary');
+    if (sumEl && priced > 0) {
+      var pnlCls  = totalUpnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      var pnlSign = totalUpnl >= 0 ? '+' : '';
+      var pnlPct  = totalCapital > 0 ? (totalUpnl / totalCapital * 100) : 0;
+      sumEl.innerHTML =
+        '<div class="card" style="padding:10px 16px; display:flex; gap:24px; flex-wrap:wrap; align-items:center; flex:1;">' +
+        '<span style="color:var(--muted);font-size:12px">Open Positions: <strong style="color:var(--text)">' + d.positions.length + '</strong></span>' +
+        '<span style="color:var(--muted);font-size:12px">Capital Deployed: <strong style="color:var(--text)">&#8377;' + totalCapital.toFixed(2) + '</strong></span>' +
+        '<span style="font-size:13px;font-weight:600">Total Unrealized P&amp;L: <span class="' + pnlCls + '">' +
+          pnlSign + '&#8377;' + Math.abs(totalUpnl).toFixed(2) + ' (' + pnlSign + pnlPct.toFixed(2) + '%)</span></span>' +
+        '<span style="color:var(--muted);font-size:11px">(' + priced + '/' + d.positions.length + ' priced)</span>' +
+        '</div>';
+    }
   });
 }
 
@@ -1168,7 +1318,7 @@ function buildTradeTable(trades, sortable) {
     : function(col, label) { return '<th>' + label + '</th>'; };
   return '<table><thead><tr>' +
     '<th style="color:var(--muted)">#</th>' +
-    th('sym', 'Symbol') + '<th>Market</th>' +
+    th('sym', 'Symbol') + th('mkt', 'Market') +
     th('date', 'Buy Time') + '<th>Entry</th>' +
     '<th>Sell Time</th><th>Exit</th>' +
     th('pnl', 'P&amp;L') + th('pct', '%') +
@@ -1864,16 +2014,18 @@ function addSymbol(market) {
   var input = document.getElementById('sym-' + market + '-input');
   var sym = (input.value || '').trim().toUpperCase();
   if (!sym) return;
-  if ((_symbols[market] || []).indexOf(sym) !== -1) { toast('Already in list'); return; }
+  if ((_symbols[market] || []).indexOf(sym) !== -1) { toast(sym + ' already in list'); return; }
   _symbols[market] = (_symbols[market] || []).concat([sym]);
   renderSymbolChips(market);
   input.value = '';
+  saveSymbols(sym + ' added');
 }
 function removeSymbol(market, sym) {
   _symbols[market] = (_symbols[market] || []).filter(function(s) { return s !== sym; });
   renderSymbolChips(market);
+  saveSymbols(sym + ' removed');
 }
-async function saveSymbols() {
+async function saveSymbols(msg) {
   var r = await apiFetch('/api/symbols', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1881,7 +2033,7 @@ async function saveSymbols() {
   });
   if (!r) return;
   var d = await r.json();
-  if (d.ok) toast('Symbols saved');
+  if (d.ok) toast(msg ? '✓ ' + msg : 'Symbols saved');
   else toast('Error: ' + (d.detail || 'Unknown'), 4000);
 }
 
