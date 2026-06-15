@@ -204,19 +204,19 @@
 
     <div class="grid grid-3" id="market-cards" style="margin-bottom:16px;">
       <div class="card market-card-link" onclick="goToMarket('india')" id="card-india">
-        <h3>🇮🇳 India (NSE)</h3>
+        <h3>India (NSE)</h3>
         <div class="stat" id="india-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="india-trades">—</div>
         <div style="margin-top:12px;" id="india-details"></div>
       </div>
       <div class="card market-card-link" onclick="goToMarket('us')" id="card-us">
-        <h3>🇺🇸 US Market</h3>
+        <h3>US Market</h3>
         <div class="stat" id="us-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="us-trades">—</div>
         <div style="margin-top:12px;" id="us-details"></div>
       </div>
       <div class="card market-card-link" onclick="goToMarket('crypto')" id="card-crypto">
-        <h3>🪙 Crypto (24/7)</h3>
+        <h3>Crypto (24/7)</h3>
         <div class="stat" id="crypto-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="crypto-trades">—</div>
         <div style="margin-top:12px;" id="crypto-details"></div>
@@ -245,9 +245,9 @@
       <div class="toolbar" style="margin-bottom:0">
         <select id="pos-market-filter" onchange="loadPositions()">
           <option value="">All Markets</option>
-          <option value="india">🇮🇳 India</option>
-          <option value="us">🇺🇸 US</option>
-          <option value="crypto">🪙 Crypto</option>
+          <option value="india">India</option>
+          <option value="us">US</option>
+          <option value="crypto">Crypto</option>
         </select>
         <button class="btn" onclick="loadPositions()">↻ Refresh</button>
         <button class="btn btn-danger" onclick="forceSellAll()">⚡ Force Sell All</button>
@@ -377,8 +377,8 @@
         <option value="india">🇮🇳 India</option>
         <option value="us">🇺🇸 US</option>
         <option value="crypto">🪙 Crypto</option>
-        <option value="watchdog">🐕 Watchdog</option>
-        <option value="portal">🌐 Portal</option>
+        <option value="watchdog">Watchdog</option>
+        <option value="portal">Portal</option>
       </select>
       <select id="log-lines" onchange="loadLog()">
         <option value="100">Last 100 lines</option>

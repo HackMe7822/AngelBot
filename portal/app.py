@@ -716,8 +716,23 @@ def restart_service(name: str, user: str = Depends(require_auth)):
     if name not in _SERVICE_NAMES:
         raise HTTPException(400, f"Unknown service '{name}'.")
     try:
-        subprocess.run(['net', 'stop', name], capture_output=True, text=True, timeout=30)
-        start = subprocess.run(['net', 'start', name], capture_output=True, text=True, timeout=30)
+        if name == "AngelBot-Portal":
+            # Restarting own process synchronously would kill this response mid-flight.
+            # Spawn a detached cmd.exe that waits 5s then issues the restart.
+            DETACHED_PROCESS      = 0x00000008
+            CREATE_NEW_PROC_GROUP = 0x00000200
+            subprocess.Popen(
+                ['cmd', '/c', f'timeout /t 5 /nobreak >nul & nssm restart {name}'],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return {"ok": True, "name": name, "message": f"{name} restarting in ~5s — page will reload."}
+        subprocess.run(['nssm', 'stop', name], capture_output=True, text=True,
+                       encoding='utf-8', errors='replace', timeout=30)
+        start = subprocess.run(['nssm', 'start', name], capture_output=True, text=True,
+                               encoding='utf-8', errors='replace', timeout=30)
         if start.returncode != 0:
             raise HTTPException(500, f"Failed to start {name}: {(start.stderr or start.stdout).strip()}")
         return {"ok": True, "name": name, "message": f"{name} restarted."}
