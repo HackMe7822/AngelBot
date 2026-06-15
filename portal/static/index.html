@@ -1239,14 +1239,34 @@ async function applyUpdate() {
   overlay.style.display = 'flex';
 
   function addStep(label, ok, detail) {
-    // Remove spinner if present
+    // Remove generic connecting spinner if present
     const spinner = stepsEl.querySelector('.update-spinner');
     if (spinner) spinner.remove();
-    const icon = ok === null ? '⏳' : (ok ? '✅' : '❌');
-    const el = document.createElement('div');
-    el.style = 'display:flex; gap:10px; align-items:flex-start; font-size:13px;';
-    el.innerHTML = `<span style="flex-shrink:0;">${icon}</span><div><strong>${label}</strong>${detail ? `<div style="color:var(--muted); font-size:12px; margin-top:2px;">${detail}</div>` : ''}</div>`;
-    stepsEl.appendChild(el);
+
+    const rowId = 'upd-' + label.replace(/[^a-z0-9]/gi, '-');
+    let el = document.getElementById(rowId);
+
+    if (ok === null) {
+      // In-progress: create or update the row as a spinner
+      if (!el) { el = document.createElement('div'); el.id = rowId; stepsEl.appendChild(el); }
+      el.style = 'display:flex; gap:10px; align-items:flex-start; font-size:13px; color:var(--muted);';
+      el.innerHTML = `<span style="animation:spin 1s linear infinite;display:inline-block;flex-shrink:0;">↻</span>`
+                   + `<div><strong>${label}</strong>`
+                   + (detail ? `<div style="font-size:12px;margin-top:2px;">${detail}</div>` : '')
+                   + `</div>`;
+    } else {
+      // Final result: replace existing spinner row or append new
+      const icon = ok ? '✅' : '❌';
+      const newEl = document.createElement('div');
+      newEl.id = rowId;
+      newEl.style = 'display:flex; gap:10px; align-items:flex-start; font-size:13px;';
+      newEl.innerHTML = `<span style="flex-shrink:0;">${icon}</span>`
+                      + `<div><strong>${label}</strong>`
+                      + (detail ? `<div style="color:var(--muted);font-size:12px;margin-top:2px;">${detail}</div>` : '')
+                      + `</div>`;
+      if (el) el.replaceWith(newEl); else stepsEl.appendChild(newEl);
+    }
+    stepsEl.scrollTop = stepsEl.scrollHeight;
   }
   function addSpinner(msg) {
     const el = document.createElement('div');

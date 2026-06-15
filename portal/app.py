@@ -772,28 +772,43 @@ def apply_update(user: str = Depends(require_auth)):
             yield from emit("git pull", False, str(e))
             return
 
-        # 2. Restart the 3 workers — fire nssm restart then poll sc query until RUNNING.
-        # nssm restart can return non-zero with "START_PENDING" even when the service is starting
-        # fine, so never treat the exit code as authoritative — always poll actual sc status.
+        # 2. Restart workers: explicit stop → poll STOPPED → start → poll RUNNING.
+        # Emit ok=None progress lines so the browser updates the row in-place while waiting.
         import time
         for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
             try:
-                sr = subprocess.run(
-                    ['nssm', 'restart', svc],
-                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60
-                )
-                nssm_hint = (sr.stderr.strip() or sr.stdout.strip() or "").splitlines()[-1] if (sr.stderr or sr.stdout) else ""
-
-                # Poll until RUNNING (up to 45 s) regardless of nssm exit code
-                deadline = time.time() + 45
+                # -- Stop phase --
+                yield from emit(f"restart {svc}", None, "stopping…")
+                subprocess.run(['nssm', 'stop', svc],
+                               capture_output=True, text=True, encoding='utf-8',
+                               errors='replace', timeout=30)
+                deadline = time.time() + 30
                 while time.time() < deadline:
-                    if _sc_status(svc) == 'running':
+                    if _sc_status(svc) in ('stopped', 'not_installed'):
                         break
                     time.sleep(2)
 
+                # -- Start phase --
+                yield from emit(f"restart {svc}", None, "starting…")
+                subprocess.run(['nssm', 'start', svc],
+                               capture_output=True, text=True, encoding='utf-8',
+                               errors='replace', timeout=30)
+
+                # Poll until RUNNING — up to 120 s; emit progress every 10 s so screen stays alive
+                deadline = time.time() + 120
+                waited = 0
+                while time.time() < deadline:
+                    st = _sc_status(svc)
+                    if st == 'running':
+                        break
+                    time.sleep(3)
+                    waited += 3
+                    if waited % 10 == 0:
+                        yield from emit(f"restart {svc}", None, f"waiting for RUNNING… ({waited}s)")
+
                 final = _sc_status(svc)
                 ok = final == 'running'
-                detail = "running" if ok else f"still '{final}' after 45s — nssm said: {nssm_hint}"
+                detail = "running" if ok else f"status still '{final}' after 120 s"
                 yield from emit(f"restart {svc}", ok, detail)
             except Exception as e:
                 yield from emit(f"restart {svc}", False, str(e))
