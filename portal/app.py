@@ -772,38 +772,38 @@ def apply_update(user: str = Depends(require_auth)):
             yield from emit("git pull", False, str(e))
             return
 
-        # 2. Restart the 3 workers via nssm restart, then wait until each is RUNNING before moving on
+        # 2. Restart the 3 workers — fire nssm restart then poll sc query until RUNNING.
+        # nssm restart can return non-zero with "START_PENDING" even when the service is starting
+        # fine, so never treat the exit code as authoritative — always poll actual sc status.
         import time
         for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
             try:
                 sr = subprocess.run(
                     ['nssm', 'restart', svc],
-                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60
                 )
-                if sr.returncode != 0:
-                    yield from emit(f"restart {svc}", False, sr.stderr.strip() or sr.stdout.strip() or "unknown error")
-                    continue
+                nssm_hint = (sr.stderr.strip() or sr.stdout.strip() or "").splitlines()[-1] if (sr.stderr or sr.stdout) else ""
 
-                # Poll until RUNNING (up to 30 s) before touching the next service
-                deadline = time.time() + 30
+                # Poll until RUNNING (up to 45 s) regardless of nssm exit code
+                deadline = time.time() + 45
                 while time.time() < deadline:
-                    st = _sc_status(svc)
-                    if st == 'running':
+                    if _sc_status(svc) == 'running':
                         break
                     time.sleep(2)
 
                 final = _sc_status(svc)
                 ok = final == 'running'
-                detail = "running" if ok else f"still {final} after 30s"
+                detail = "running" if ok else f"still '{final}' after 45s — nssm said: {nssm_hint}"
                 yield from emit(f"restart {svc}", ok, detail)
             except Exception as e:
                 yield from emit(f"restart {svc}", False, str(e))
 
         # 3. Portal restarts via detached cmd.exe — 30s delay lets this response fully reach browser
-        # shell=True + DETACHED_PROCESS causes [WinError 87] on Windows — pass cmd.exe explicitly instead
+        # DETACHED_PROCESS=0x8, CREATE_NEW_PROCESS_GROUP=0x200 (NOT 0x10 which is CREATE_NEW_CONSOLE
+        # and conflicts with DETACHED_PROCESS causing WinError 87)
         try:
             DETACHED_PROCESS      = 0x00000008
-            CREATE_NEW_PROC_GROUP = 0x00000010
+            CREATE_NEW_PROC_GROUP = 0x00000200
             subprocess.Popen(
                 ['cmd', '/c',
                  'timeout /t 30 /nobreak >nul & nssm restart AngelBot-Portal'],
