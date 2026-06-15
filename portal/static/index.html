@@ -240,7 +240,13 @@
     </div>
 
     <div class="card">
-      <h3>Recent Closed Trades (All Markets)</h3>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <div class="pill-group">
+          <span class="pill active" id="dash-view-closed" onclick="setDashView('closed')">Closed Trades</span>
+          <span class="pill" id="dash-view-buys" onclick="setDashView('buys')">Recent Buys</span>
+        </div>
+        <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
+      </div>
       <div class="table-wrap" id="recent-trades-table">Loading...</div>
     </div>
   </div>
@@ -773,12 +779,40 @@ async function refreshDashboard() {
   renderCard('us',     d.us,     '$');
   renderCard('crypto', d.crypto, '$');
 
-  // Recent trades
-  loadRecentTrades();
+  // Recent trades / buys
+  loadDashRecent();
   // Services
   loadServices();
   // Check for updates
   checkUpdate();
+}
+
+// ── Live price batch helper ────────────────────────────────────────────────
+async function fetchLivePrices(positions, callback) {
+  if (!positions || !positions.length) return;
+  const items = positions.map(function(p) { return {symbol: p.symbol, source: p.source || 'paper'}; });
+  const r = await apiFetch('/api/prices', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({items: items})
+  });
+  if (!r || !r.ok) return;
+  const d = await r.json();
+  callback(d.prices || {});
+}
+
+// ── Dashboard recent section ───────────────────────────────────────────────
+var _dashView = 'closed';
+function setDashView(view) {
+  _dashView = view;
+  document.getElementById('dash-view-closed').classList.toggle('active', view === 'closed');
+  document.getElementById('dash-view-buys').classList.toggle('active', view === 'buys');
+  var sub = document.getElementById('dash-recent-subtitle');
+  if (view === 'buys') { if (sub) sub.textContent = 'Current open positions (live price)'; loadRecentBuys(); }
+  else                 { if (sub) sub.textContent = 'Last 10 closed'; loadRecentTrades(); }
+}
+function loadDashRecent() {
+  if (_dashView === 'buys') loadRecentBuys(); else loadRecentTrades();
 }
 
 async function loadRecentTrades() {
@@ -786,6 +820,51 @@ async function loadRecentTrades() {
   if (!r) return;
   const d = await r.json();
   document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades);
+}
+
+async function loadRecentBuys() {
+  const r = await apiFetch('/api/positions');
+  if (!r) return;
+  const d = await r.json();
+  const el   = document.getElementById('recent-trades-table');
+  const rows = (d.positions || []).slice(0, 10);
+  if (!rows.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
+  el.innerHTML = '<table><thead><tr>' +
+    '<th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th>' +
+    '<th>Qty</th><th>Capital</th><th>Live Price</th><th>Unrealized P&L</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(function(p) {
+      var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      return '<tr>' +
+        '<td><strong>' + fmtSym(p.symbol, p.source) + '</strong></td>' +
+        '<td>' + mktBadge(p.source) + '</td>' +
+        '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
+        '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
+        '<td>' + p.quantity + '</td>' +
+        '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
+        '<td id="rb-lp-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '<td id="rb-upnl-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+  fetchLivePrices(rows, function(prices) {
+    rows.forEach(function(p) {
+      var key    = p.symbol + '|' + p.source;
+      var lp     = prices[key];
+      var cur    = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      var lpEl   = document.getElementById('rb-lp-'   + p.id);
+      var upnlEl = document.getElementById('rb-upnl-' + p.id);
+      if (!lpEl || !upnlEl) return;
+      if (lp == null) { lpEl.textContent = 'N/A'; upnlEl.textContent = '—'; return; }
+      var dp = lp < 1 ? 6 : 2;
+      lpEl.textContent = cur + lp.toFixed(dp);
+      var upnl     = (lp - (p.entry_price||0)) * (p.quantity||0);
+      var invested = (p.entry_price||0) * (p.quantity||0);
+      var upnlPct  = invested > 0 ? (upnl / invested * 100) : 0;
+      upnlEl.className   = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      upnlEl.textContent = (upnl >= 0 ? '+' : '') + cur + Math.abs(upnl).toFixed(2) +
+                           ' (' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)';
+    });
+  });
 }
 
 async function toggleBot() {
@@ -854,7 +933,7 @@ async function loadPositions() {
     return 0;
   });
   el.innerHTML = `<table>
-    <thead><tr><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th><th>Qty</th><th>Capital</th><th>SL</th><th>Target</th><th>Action</th></tr></thead>
+    <thead><tr><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th><th>Live Price</th><th>Unrealized P&L</th><th>Qty</th><th>Capital</th><th>SL</th><th>Target</th><th>Action</th></tr></thead>
     <tbody>${d.positions.map(p => {
       const cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '₹');
       return `<tr id="pos-row-${p.id}">
@@ -862,14 +941,35 @@ async function loadPositions() {
         <td>${mktBadge(p.source)}</td>
         <td style="color:var(--muted);white-space:nowrap">${fmtDt(p.entry_time, p.source)}</td>
         <td>${cur}${(p.entry_price||0).toFixed(4)}</td>
+        <td id="lp-${p.id}" style="color:var(--muted)">...</td>
+        <td id="upnl-${p.id}" style="color:var(--muted)">...</td>
         <td>${p.quantity}</td>
         <td>${cur}${(p.capital_used||0).toFixed(2)}</td>
         <td class="pnl-neg">${cur}${(p.stop_loss||0).toFixed(4)}</td>
         <td class="pnl-pos">${cur}${(p.target||0).toFixed(4)}</td>
-        <td><button class="btn btn-danger" style="padding:3px 10px; font-size:12px;" onclick="forceSell(${p.id},'${p.symbol}')">⚡ Sell</button></td>
+        <td><button class="btn btn-danger" style="padding:3px 10px; font-size:12px;" onclick="forceSell(${p.id},'${p.symbol}')">&#9889; Sell</button></td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
+  fetchLivePrices(d.positions, function(prices) {
+    d.positions.forEach(function(p) {
+      const key    = p.symbol + '|' + p.source;
+      const lp     = prices[key];
+      const cur    = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '₹');
+      const lpEl   = document.getElementById('lp-'   + p.id);
+      const upnlEl = document.getElementById('upnl-' + p.id);
+      if (!lpEl || !upnlEl) return;
+      if (lp == null) { lpEl.textContent = 'N/A'; upnlEl.textContent = '—'; return; }
+      const dp       = lp < 1 ? 6 : 2;
+      lpEl.textContent = cur + lp.toFixed(dp);
+      const upnl    = (lp - (p.entry_price||0)) * (p.quantity||0);
+      const invested = (p.entry_price||0) * (p.quantity||0);
+      const upnlPct = invested > 0 ? (upnl / invested * 100) : 0;
+      upnlEl.className   = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      upnlEl.textContent = (upnl >= 0 ? '+' : '') + cur + Math.abs(upnl).toFixed(2) +
+                           ' (' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)';
+    });
+  });
 }
 
 async function forceSell(id, symbol) {

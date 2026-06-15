@@ -305,6 +305,28 @@ def _get_live_price_for_source(symbol: str, source: str) -> Optional[float]:
         return None
 
 
+class PriceItem(BaseModel):
+    symbol: str
+    source: str = 'paper'
+
+class PricesRequest(BaseModel):
+    items: List[PriceItem]
+
+@app.post("/api/prices")
+def get_live_prices(req: PricesRequest, user: str = Depends(require_auth)):
+    """Batch live-price fetch. Returns {prices: {'SYMBOL|source': float_or_null}}."""
+    from concurrent.futures import ThreadPoolExecutor
+    def fetch(item):
+        price = _get_live_price_for_source(item.symbol, item.source)
+        return (item.symbol + '|' + item.source, price)
+    results = {}
+    if req.items:
+        with ThreadPoolExecutor(max_workers=min(len(req.items), 6)) as ex:
+            for key, price in ex.map(fetch, req.items):
+                results[key] = price
+    return {"prices": results}
+
+
 @app.post("/api/positions/force_sell")
 def force_sell(trade_id: int, user: str = Depends(require_auth)):
     """Force-close an open position at current market price. Pass trade_id as query param."""
