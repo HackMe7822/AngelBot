@@ -466,13 +466,13 @@ def _cmd_pnl_detail(market):
     total_wins = c.fetchone()[0]
 
     # Best 5 all-time
-    c.execute(f"SELECT symbol, pnl, pnl_pct FROM trades WHERE status='closed' AND {source_clause} "
-              f"ORDER BY pnl DESC LIMIT 5")
+    c.execute(f"SELECT TOP 5 symbol, pnl, pnl_pct FROM trades WHERE status='closed' AND {source_clause} "
+              f"ORDER BY pnl DESC")
     best5 = c.fetchall()
 
     # Worst 5 all-time
-    c.execute(f"SELECT symbol, pnl, pnl_pct FROM trades WHERE status='closed' AND {source_clause} "
-              f"ORDER BY pnl ASC LIMIT 5")
+    c.execute(f"SELECT TOP 5 symbol, pnl, pnl_pct FROM trades WHERE status='closed' AND {source_clause} "
+              f"ORDER BY pnl ASC")
     worst5 = c.fetchall()
 
     conn.close()
@@ -672,9 +672,39 @@ def _cmd_help():
     _reply(msg)
 
 
+def _register_commands():
+    """Register commands with Telegram so they appear in the '/' menu."""
+    commands = [
+        {"command": "update",    "description": "Live snapshot — all 3 markets"},
+        {"command": "positions", "description": "All open trades"},
+        {"command": "pnl",       "description": "Today P&L — add india / us / crypto for detail"},
+        {"command": "balance",   "description": "Cash + deployed + equity"},
+        {"command": "compare",   "description": "Side-by-side market comparison"},
+        {"command": "india",     "description": "India NSE full daily report"},
+        {"command": "us",        "description": "US market full daily report"},
+        {"command": "crypto",    "description": "Crypto 24/7 full daily report"},
+        {"command": "exit",      "description": "Manually close a position — /exit SYMBOL"},
+        {"command": "pause",     "description": "Skip a stock today — /pause SYMBOL"},
+        {"command": "unpause",   "description": "Re-enable a paused stock — /unpause SYMBOL"},
+        {"command": "stop",      "description": "Pause all scanning and monitoring"},
+        {"command": "start",     "description": "Resume after pause"},
+        {"command": "help",      "description": "Show all commands"},
+    ]
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setMyCommands"
+        r   = requests.post(url, json={"commands": commands}, timeout=10)
+        if r.json().get("ok"):
+            print("[Telegram] Commands registered — type / in Telegram to see menu.")
+        else:
+            print(f"[Telegram] setMyCommands failed: {r.json().get('description','')}")
+    except Exception as e:
+        print(f"[Telegram] Could not register commands: {e}")
+
+
 def start_listener():
     """Start the Telegram listener in a background thread."""
     _clear_stale_symbol_pauses()
+    _register_commands()
     _skip_old_messages()
     t = threading.Thread(target=_poll_loop, daemon=True)
     t.start()
@@ -686,7 +716,12 @@ def _poll_loop():
     while True:
         try:
             updates = _get_updates()
-            for update in updates:
+        except Exception:
+            time.sleep(3)
+            continue
+
+        for update in updates:
+            try:
                 uid = update['update_id']
                 _last_update_id = uid
 
@@ -708,9 +743,14 @@ def _poll_loop():
                 text = msg.get('text', '').strip()
                 if text:
                     print(f"[Telegram] Received: {text}")
-                    _handle_update(text)
-        except Exception:
-            pass
+                    try:
+                        _handle_update(text)
+                    except Exception as e:
+                        print(f"[Telegram] Error handling '{text}': {e}")
+                        _reply(f"⚠️ <b>Error</b>: {e}\n<i>({text})</i>")
+            except Exception as e:
+                print(f"[Telegram] Update loop error: {e}")
+
         time.sleep(3)
 
 
