@@ -47,7 +47,7 @@ def _fetch_index_change(ticker):
         return None
 
 
-def india_market_mood_ok(threshold_pct=-0.5):
+def india_market_mood_ok(threshold_pct=-1.5):
     """Returns True if NIFTY is NOT down more than threshold_pct% today.
 
     Fail-open: returns True if data unavailable (can't check, allow scan).
@@ -65,7 +65,7 @@ def india_market_mood_ok(threshold_pct=-0.5):
     return _cached('india_mood', _check)
 
 
-def us_market_mood_ok(threshold_pct=-0.5):
+def us_market_mood_ok(threshold_pct=-1.5):
     """Returns True if S&P 500 is NOT down more than threshold_pct% today.
 
     Fail-open: returns True if data unavailable.

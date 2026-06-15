@@ -179,15 +179,15 @@ def generate_signals_intraday(df):
     reasons = []
 
     rsi = latest['rsi']
-    if rsi < 40:
+    if rsi < 45:
         signals['rsi'] = 'buy'
         score += 2
         reasons.append(f"RSI oversold ({rsi:.0f})")
-    elif rsi < 50:
+    elif rsi < 60:
         signals['rsi'] = 'weak_buy'
         score += 1
-        reasons.append(f"RSI low ({rsi:.0f})")
-    elif rsi > 65:
+        reasons.append(f"RSI momentum ({rsi:.0f})")
+    elif rsi > 70:
         signals['rsi'] = 'sell'
         score -= 2
     else:
@@ -208,7 +208,7 @@ def generate_signals_intraday(df):
         signals['macd'] = 'neutral'
 
     bb_pct = latest['bb_pct']
-    if bb_pct < 0.25:
+    if bb_pct < 0.30:
         signals['bollinger'] = 'buy'
         score += 2
         reasons.append("Price near lower BB")
@@ -239,7 +239,7 @@ def generate_signals_intraday(df):
 
     # VWAP — most important intraday signal
     vwap = latest['vwap']
-    if price > vwap * 1.001:        # price at least 0.1% above VWAP
+    if price > vwap * 1.001:
         signals['vwap'] = 'buy'
         score += 2
         reasons.append(f"Price above VWAP (₹{vwap:.2f})")

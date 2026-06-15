@@ -357,6 +357,25 @@ class PositionMonitor:
                         cur = self._currency
                         print(f"{_G}  [SL RECOVER] {symbol} {cur}{price:.4f}  bounced back above SL after {count} poll(s) ({elapsed:.0f}s) — holding{_R}")
 
+                # Time-based exit: free capital if position is stagnating
+                if not self._trail_active.get(pos_id) and pos_id not in self._exiting:
+                    from config import MAX_HOLD_MINUTES
+                    entry_time_str = pos.get('entry_time', '')
+                    if entry_time_str:
+                        try:
+                            entry_dt  = datetime.strptime(entry_time_str[:19], '%Y-%m-%d %H:%M:%S').replace(tzinfo=_IST)
+                            mins_open = (datetime.now(_IST) - entry_dt).total_seconds() / 60
+                            pct_move  = (price - pos['entry_price']) / pos['entry_price']
+                            if mins_open >= MAX_HOLD_MINUTES and pct_move < _tgt_pct * 0.5:
+                                cur = self._currency
+                                print(f"{_YL}  [TIME EXIT]  {symbol} {cur}{price:.4f}  {mins_open:.0f}min open ({pct_move*100:+.1f}%) — freeing capital{_R}")
+                                self._exiting.add(pos_id)
+                                threading.Thread(
+                                    target=self._scalp_exit, args=(pos, price, 'TIME'), daemon=True
+                                ).start()
+                        except Exception:
+                            pass
+
     # ── Scalp exit — instant sell, no re-analysis ────────────────────────────
     def _scalp_exit(self, pos, price, trigger):
         sym = pos['symbol']
@@ -367,7 +386,7 @@ class PositionMonitor:
                 )
                 if still_open is None:
                     return
-                reason_map = {'TARGET': 'profit target', 'TRAIL': 'trailing stop', 'SL': 'stop-loss'}
+                reason_map = {'TARGET': 'profit target', 'TRAIL': 'trailing stop', 'SL': 'stop-loss', 'TIME': 'time exit — stagnating'}
                 reason = f"Scalp {reason_map.get(trigger, 'exit')} hit"
                 pnl, pct = self.trader.sell(still_open, price, reason)
                 if pnl == 0.0 and pct == 0.0:
@@ -394,9 +413,11 @@ class PositionMonitor:
                 if count >= 2:
                     print(f"{_YL}  [DAY BAN]   {sym} — {count} SL hits today, banned until EOD{_R}")
             elif trigger == 'TRAIL':
-                # Trail cooldown: time gate only (stock reversed from target, don't chase)
-                # No day-ban counter — trail exits are not necessarily bad signals
+                # Trail cooldown: time gate only
                 self._sl_cooldown[sym] = (datetime.now(_IST), price)
+            elif trigger == 'TIME':
+                # Light cooldown: 15 min — stock was stagnant, not a directional failure
+                self._sl_cooldown[sym] = (datetime.now(_IST) - timedelta(minutes=15), price)
             # Persist updated state so a restart picks up current cooldowns and day bans
             threading.Thread(target=self.save_state, daemon=True).start()
 

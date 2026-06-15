@@ -7,9 +7,8 @@ from analysis.technical import compute_indicators_intraday, generate_signals_int
 from analysis.sentiment import get_news_sentiment, prefetch_rss
 from learning.self_learner import get_weighted_score
 
-MIN_SCORE       = 4      # minimum signal quality — below this is noise
+MIN_SCORE       = 3      # minimum signal quality — below this is noise
 SCAN_WORKERS    = 20     # parallel threads for fetching data
-MIN_VOL_RATIO   = 1.2    # volume must be at least 1.2x average — confirms real momentum
 
 COMPANY_NAMES = {
     "RELIANCE": "Reliance Industries",
@@ -70,9 +69,6 @@ def scan_stocks(symbols=None, extra_symbols=None, max_price=None):
             if max_price is not None and tech['price'] > max_price:
                 return None
             # Volume gate — real breakouts have above-average volume
-            vol_ratio = tech.get('vol_ratio', 0)
-            if vol_ratio > 0 and vol_ratio < MIN_VOL_RATIO:
-                return None
             company    = COMPANY_NAMES.get(sym, sym)
             sent       = get_news_sentiment(sym, company)
             sent_boost = 1 if sent['label'] == 'positive' else (-1 if sent['label'] == 'negative' else 0)

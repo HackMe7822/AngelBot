@@ -24,7 +24,7 @@ RELOAD_AMOUNT    = CAPITAL          # reload by same amount as starting capital
 # Scalping parameters — 2.5:1 R:R gives profit at 29%+ win rate (accounts for ~0.15% NSE round-trip cost)
 SCALP_TARGET_PCT = 0.015   # exit on 1.5% profit
 SCALP_SL_PCT     = 0.006   # exit on 0.6% loss
-SL_CONFIRM_POLLS = 4       # consecutive 15s polls below SL before exit (4 × 15s = 60s ≈ 1 candle)
+SL_CONFIRM_POLLS = 2       # consecutive 15s polls below SL before exit (2 × 15s = 30s)
 
 # Risk controls
 MAX_DAILY_LOSS_PCT  = 0.02   # stop all buys if day loss exceeds 2% of capital
@@ -32,7 +32,8 @@ MAX_DAILY_TRADES    = 30     # circuit breaker — stop new buys after N closed 
 MAX_DEPLOYED_PCT    = 0.70   # never deploy more than 70% of balance at once
 PEAK_DRAWDOWN_PCT   = 0.03   # pause new buys if account drops 3% from today's session high
 SLIPPAGE_PCT        = 0.0005 # 0.05% simulated slippage on paper entries (realistic fill cost)
-ENTRY_START_MIN     = (9, 45)  # no buys before 9:45 AM — first 15 min has ~74% SL rate
+ENTRY_START_MIN     = (9, 30)  # no buys before 9:30 AM IST
+MAX_HOLD_MINUTES    = 90       # exit stagnating positions after 90 min to free capital
 ENTRY_END_MIN       = (15, 0)  # no buys after 3:00 PM (approaching force-close)
 MIN_STOCK_PRICE     = 150.0    # skip stocks under ₹150 — SL gap too small vs bid-ask spread
 
