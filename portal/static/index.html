@@ -117,6 +117,13 @@
   /* Clickable market cards */
   .market-card-link { cursor: pointer; transition: box-shadow .15s, transform .15s; }
   .market-card-link:hover { box-shadow: 0 4px 16px rgba(9,105,218,.15); transform: translateY(-1px); }
+  @keyframes pulse-live {
+    0%   { box-shadow: 0 0 0 0 rgba(0,200,83,.7); }
+    70%  { box-shadow: 0 0 0 6px rgba(0,200,83,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,200,83,0); }
+  }
+  .live-dot { display:inline-block; width:7px; height:7px; background:#00c853; border-radius:50%; animation:pulse-live 1.4s ease-out infinite; vertical-align:middle; flex-shrink:0; }
+  .live-badge { display:inline-flex; align-items:center; gap:4px; font-size:9px; color:#00c853; font-weight:700; letter-spacing:.8px; margin-left:7px; vertical-align:middle; }
 
   /* Toast */
   .toast { position: fixed; bottom: 24px; right: 24px; background: #1f6feb; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none; }
@@ -204,19 +211,19 @@
 
     <div class="grid grid-3" id="market-cards" style="margin-bottom:16px;">
       <div class="card market-card-link" onclick="goToMarket('india')" id="card-india">
-        <h3>India (NSE)</h3>
+        <h3>India (NSE) <span class="live-badge" id="live-india"></span></h3>
         <div class="stat" id="india-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="india-trades">—</div>
         <div style="margin-top:12px;" id="india-details"></div>
       </div>
       <div class="card market-card-link" onclick="goToMarket('us')" id="card-us">
-        <h3>US Market</h3>
+        <h3>US Market <span class="live-badge" id="live-us"></span></h3>
         <div class="stat" id="us-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="us-trades">—</div>
         <div style="margin-top:12px;" id="us-details"></div>
       </div>
       <div class="card market-card-link" onclick="goToMarket('crypto')" id="card-crypto">
-        <h3>Crypto (24/7)</h3>
+        <h3>Crypto (24/7) <span class="live-badge" id="live-crypto"></span></h3>
         <div class="stat" id="crypto-pnl">—</div>
         <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="crypto-trades">—</div>
         <div style="margin-top:12px;" id="crypto-details"></div>
@@ -1521,6 +1528,33 @@ async function _checkAdminAccess() {
   }
 }
 
+// --- Live market indicator ---
+function isMarketLive(market) {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (market === 'crypto') return true;
+  if (day === 0 || day === 6) return false;
+  const tz = market === 'india' ? 'Asia/Kolkata' : 'America/New_York';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false
+  }).formatToParts(now);
+  const h = parseInt(parts.find(function(p){ return p.type==='hour'; }).value);
+  const m = parseInt(parts.find(function(p){ return p.type==='minute'; }).value);
+  const mins = h * 60 + m;
+  if (market === 'india') return mins >= 9*60+15 && mins < 15*60+30;
+  if (market === 'us')    return mins >= 9*60+30 && mins < 16*60;
+  return false;
+}
+function updateLiveIndicators() {
+  ['india','us','crypto'].forEach(function(m) {
+    var el = document.getElementById('live-' + m);
+    if (!el) return;
+    el.innerHTML = isMarketLive(m)
+      ? '<span class="live-dot"></span>LIVE'
+      : '';
+  });
+}
+
 (async function init() {
   const creds = localStorage.getItem('ab_creds');
   const user  = localStorage.getItem('ab_user') || 'admin';
@@ -1539,8 +1573,10 @@ async function _checkAdminAccess() {
   refreshDashboard();
   checkUpdate();
   _checkAdminAccess();
+  updateLiveIndicators();
   setInterval(refreshDashboard, 60000);
   setInterval(checkUpdate, 1800000); // auto-check for updates every 30 min
+  setInterval(updateLiveIndicators, 30000);
 })();
 </script>
 </body>
