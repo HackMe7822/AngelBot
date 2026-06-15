@@ -1666,7 +1666,7 @@ async function loadConfig() {
         <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
       </div>`;
     }).join('');
-    el.innerHTML = rows || '<p style="color:var(--muted);font-size:13px">No settings loaded — restart portal to apply latest config.</p>';
+    el.innerHTML = rows || '<div class="cred-note"><span class="icon">&#9432;</span><div>Settings not synced yet. Click <strong>Update &amp; Restart</strong> in the portal header, wait 30 seconds, then hard-refresh (<kbd>Ctrl+Shift+R</kbd>).</div></div>';
   }
 
   renderSection('strategy', _CONFIG_SECTIONS.strategy.keys);
