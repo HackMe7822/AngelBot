@@ -249,6 +249,8 @@ def get_trades(
         'pnl_pct_asc':  'pnl_pct ASC',
         'sym_asc':   'symbol ASC',
         'sym_desc':  'symbol DESC',
+        'mkt_asc':   'source ASC',
+        'mkt_desc':  'source DESC',
     }
     order_clause = _sort_map.get(sort_by or '', 'entry_time DESC')
 
@@ -776,12 +778,14 @@ def restart_service(name: str, user: str = Depends(require_auth)):
     try:
         if name == "AngelBot-Portal":
             # Restarting own process synchronously would kill this response mid-flight.
-            # Spawn a detached cmd.exe that waits 5s then issues the restart.
-            DETACHED_PROCESS      = 0x00000008
-            CREATE_NEW_PROC_GROUP = 0x00000200
+            # CREATE_BREAKAWAY_FROM_JOB lets cmd.exe escape NSSM's Job Object so it
+            # survives after the portal service is stopped.
+            DETACHED_PROCESS        = 0x00000008
+            CREATE_NEW_PROC_GROUP   = 0x00000200
+            CREATE_BREAKAWAY_FROM_JOB = 0x01000000
             subprocess.Popen(
-                ['cmd', '/c', f'timeout /t 5 /nobreak >nul & nssm restart {name}'],
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP,
+                ['cmd', '/c', f'timeout /t 5 /nobreak >nul & C:\\Windows\\nssm.exe restart {name}'],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP | CREATE_BREAKAWAY_FROM_JOB,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -886,16 +890,17 @@ def apply_update(user: str = Depends(require_auth)):
             except Exception as e:
                 yield from emit(f"restart {svc}", False, str(e))
 
-        # 3. Portal restarts via detached cmd.exe — 30s delay lets this response fully reach browser
-        # DETACHED_PROCESS=0x8, CREATE_NEW_PROCESS_GROUP=0x200 (NOT 0x10 which is CREATE_NEW_CONSOLE
-        # and conflicts with DETACHED_PROCESS causing WinError 87)
+        # 3. Portal restarts via detached cmd.exe — 30s delay lets this response fully reach browser.
+        # CREATE_BREAKAWAY_FROM_JOB (0x01000000) escapes NSSM's Job Object so cmd.exe survives
+        # after the portal service is stopped (without it, NSSM kills all child processes).
         try:
-            DETACHED_PROCESS      = 0x00000008
-            CREATE_NEW_PROC_GROUP = 0x00000200
+            DETACHED_PROCESS          = 0x00000008
+            CREATE_NEW_PROC_GROUP     = 0x00000200
+            CREATE_BREAKAWAY_FROM_JOB = 0x01000000
             subprocess.Popen(
                 ['cmd', '/c',
-                 'timeout /t 30 /nobreak >nul & nssm restart AngelBot-Portal'],
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP,
+                 'timeout /t 30 /nobreak >nul & C:\\Windows\\nssm.exe restart AngelBot-Portal'],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP | CREATE_BREAKAWAY_FROM_JOB,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

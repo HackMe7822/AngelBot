@@ -291,7 +291,7 @@
           <option value="us">US</option>
           <option value="crypto">Crypto</option>
         </select>
-        <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 15s</span>
+        <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 30s</span>
         <button class="btn" style="font-size:12px;" onclick="saveDefault('pos')" title="Save current filter as default">&#9733; Save Default</button>
         <button class="btn" onclick="loadPositions()">&#8635; Refresh</button>
         <button class="btn btn-danger" onclick="forceSellAll()">Force Sell All</button>
@@ -1211,7 +1211,7 @@ function _refreshPositionPrices(positions) {
       var pnlPct  = totalCapital > 0 ? (totalUpnl / totalCapital * 100) : 0;
       sumEl.innerHTML =
         '<div class="card" style="padding:10px 16px; display:flex; gap:24px; flex-wrap:wrap; align-items:center; flex:1;">' +
-        '<span style="color:var(--muted);font-size:12px">Open Positions: <strong style="color:var(--text)">' + d.positions.length + '</strong></span>' +
+        '<span style="color:var(--muted);font-size:12px">Open Positions: <strong style="color:var(--text)">' + positions.length + '</strong></span>' +
         '<span style="color:var(--muted);font-size:12px">Capital Deployed: <strong style="color:var(--text)">&#8377;' + totalCapital.toFixed(2) + '</strong></span>' +
         '<span style="font-size:13px;font-weight:600">P&amp;L Total: <span class="' + pnlCls + '">' +
           pnlSign + '&#8377;' + Math.abs(totalUpnl).toFixed(2) + ' (' + pnlSign + pnlPct.toFixed(2) + '%)</span></span>' +
