@@ -1111,41 +1111,38 @@ async function svcAction(name, action) {
 async function restartService(name) { return svcAction(name, 'restart'); }
 
 // ── Positions ─────────────────────────────────────────────────────────────
-async function loadPositions() {
-  const market = document.getElementById('pos-market-filter').value;
-  const s      = _sort.pos;
-  const col    = s.col || 'time';
-  const dir    = s.dir || 'desc';
-  const mul    = dir === 'asc' ? 1 : -1;
-  const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
-  if (!r) return;
-  const d = await r.json();
-  const el = document.getElementById('positions-table');
-  if (!d.positions.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
-  d.positions.sort(function(a, b) {
+var _posCache = null; // {positions, market, sortKey}
+
+function _buildPositionsTable(positions) {
+  const s   = _sort.pos;
+  const col = s.col || 'time';
+  const dir = s.dir || 'desc';
+  const mul = dir === 'asc' ? 1 : -1;
+  positions.sort(function(a, b) {
     if (col === 'sym')  return mul * (a.symbol||'').localeCompare(b.symbol||'');
     if (col === 'mkt')  return mul * (a.source||'').localeCompare(b.source||'');
     if (col === 'cap')  return mul * ((a.capital_used||0) - (b.capital_used||0));
     if (col === 'qty')  return mul * ((a.quantity||0) - (b.quantity||0));
     return mul * (a.entry_time||'').localeCompare(b.entry_time||'');
   });
+  const el = document.getElementById('positions-table');
   el.innerHTML = '<table><thead><tr>' +
     thSort('pos','sym','Symbol') + thSort('pos','mkt','Market') +
     thSort('pos','time','Entry Time') + '<th>Entry Price</th>' +
-    '<th>Live Price</th><th>Gain/Share</th><th>Unrealized P&L</th>' +
+    '<th>Live Price</th><th>P&amp;L/Share</th><th>P&amp;L Total</th>' +
     thSort('pos','qty','Qty') + thSort('pos','cap','Capital') +
     '<th>SL</th><th>Target</th><th>Action</th>' +
     '</tr></thead><tbody>' +
-    d.positions.map(function(p) {
+    positions.map(function(p) {
       var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       return '<tr id="pos-row-' + p.id + '">' +
         '<td><strong>' + fmtSym(p.symbol, p.source) + '</strong></td>' +
         '<td>' + mktBadge(p.source) + '</td>' +
         '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
-        '<td id="lp-' + p.id + '" style="color:var(--muted)">...</td>' +
-        '<td id="gain-' + p.id + '" style="color:var(--muted)">...</td>' +
-        '<td id="upnl-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '<td id="lp-' + p.id + '" style="color:var(--muted)">—</td>' +
+        '<td id="gain-' + p.id + '" style="color:var(--muted)">—</td>' +
+        '<td id="upnl-' + p.id + '" style="color:var(--muted)">—</td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
         '<td class="pnl-neg">' + cur + (p.stop_loss||0).toFixed(4) + '</td>' +
@@ -1154,7 +1151,10 @@ async function loadPositions() {
         '</tr>';
     }).join('') + '</tbody></table>';
   updateSortIcons('pos');
-  fetchLivePrices(d.positions, function(prices, normed) {
+}
+
+function _refreshPositionPrices(positions) {
+  fetchLivePrices(positions, function(prices, normed) {
     var totalUpnl = 0, totalCapital = 0, priced = 0;
     (normed || d.positions).forEach(function(p) {
       const key    = p.symbol + '|' + (p.source || 'paper');
@@ -1213,12 +1213,39 @@ async function loadPositions() {
         '<div class="card" style="padding:10px 16px; display:flex; gap:24px; flex-wrap:wrap; align-items:center; flex:1;">' +
         '<span style="color:var(--muted);font-size:12px">Open Positions: <strong style="color:var(--text)">' + d.positions.length + '</strong></span>' +
         '<span style="color:var(--muted);font-size:12px">Capital Deployed: <strong style="color:var(--text)">&#8377;' + totalCapital.toFixed(2) + '</strong></span>' +
-        '<span style="font-size:13px;font-weight:600">Total Unrealized P&amp;L: <span class="' + pnlCls + '">' +
+        '<span style="font-size:13px;font-weight:600">P&amp;L Total: <span class="' + pnlCls + '">' +
           pnlSign + '&#8377;' + Math.abs(totalUpnl).toFixed(2) + ' (' + pnlSign + pnlPct.toFixed(2) + '%)</span></span>' +
-        '<span style="color:var(--muted);font-size:11px">(' + priced + '/' + d.positions.length + ' priced)</span>' +
+        '<span style="color:var(--muted);font-size:11px">(' + priced + '/' + positions.length + ' priced)</span>' +
         '</div>';
     }
   });
+}
+
+async function loadPositions() {
+  const market = document.getElementById('pos-market-filter').value;
+  const sortKey = (_sort.pos.col || '') + (_sort.pos.dir || '');
+  const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
+  if (!r) return;
+  const d = await r.json();
+  const el = document.getElementById('positions-table');
+  if (!d.positions.length) {
+    _posCache = null;
+    el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>';
+    document.getElementById('pos-summary').innerHTML = '';
+    return;
+  }
+  // Only rebuild the table if positions changed or sort changed
+  const newIds = d.positions.map(function(p){ return p.id; }).sort().join(',');
+  const cacheIds = _posCache ? _posCache.ids : '';
+  const cacheSortKey = _posCache ? _posCache.sortKey : '';
+  if (!_posCache || newIds !== cacheIds || sortKey !== cacheSortKey) {
+    _buildPositionsTable(d.positions);
+    _posCache = {positions: d.positions, ids: newIds, sortKey: sortKey};
+  } else {
+    // Positions unchanged — update our cached copy in case prices changed (no table rebuild)
+    _posCache.positions = d.positions;
+  }
+  _refreshPositionPrices(_posCache.positions);
 }
 
 async function forceSell(id, symbol) {
