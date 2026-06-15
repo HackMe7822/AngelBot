@@ -808,10 +808,17 @@ function setTradeFilter(el, val) {
   loadTrades();
 }
 
+function fmtDt(s) {
+  if (!s) return '—';
+  // "2026-06-15 14:32:05" → "15/06 14:32"
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : s.slice(0,16);
+}
+
 function buildTradeTable(trades) {
   if (!trades.length) return '<p style="color:var(--muted);padding:16px">No trades found.</p>';
   return `<table>
-    <thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Entry</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th><th>Status</th></tr></thead>
+    <thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Buy Time</th><th>Entry</th><th>Sell Time</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th><th>Status</th></tr></thead>
     <tbody>${trades.map(t => {
       const cur   = t.source === 'us_paper' ? '$' : (t.source === 'crypto_paper' ? '$' : '₹');
       const mkt   = t.source === 'us_paper' ? '🇺🇸' : (t.source === 'crypto_paper' ? '🪙' : '🇮🇳');
@@ -822,11 +829,13 @@ function buildTradeTable(trades) {
         <td style="color:var(--muted)">${t.id}</td>
         <td><strong>${t.symbol}</strong></td>
         <td>${mkt}</td>
+        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.entry_time)}</td>
         <td>${cur}${(t.entry_price||0).toFixed(2)}</td>
+        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.exit_time)}</td>
         <td>${t.exit_price ? cur + (t.exit_price).toFixed(2) : '—'}</td>
         <td class="${cls}">${t.status==='closed' ? sign+cur+Math.abs(pnl).toFixed(2) : '—'}</td>
         <td class="${cls}">${t.status==='closed' && t.pnl_pct != null ? sign+(t.pnl_pct).toFixed(1)+'%' : '—'}</td>
-        <td style="color:var(--muted); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.exit_reason||'—'}</td>
+        <td style="color:var(--muted); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.exit_reason||'—'}</td>
         <td><span class="badge ${t.status==='open'?'blue':'green'}">${t.status}</span></td>
       </tr>`;
     }).join('')}</tbody>

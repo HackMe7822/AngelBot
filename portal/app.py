@@ -851,8 +851,8 @@ def hourly_pnl(market: Optional[str] = None, user: str = Depends(require_auth)):
                SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) as wins
         FROM trades
         WHERE status='closed' AND exit_time IS NOT NULL {where}
-        GROUP BY hour
-        ORDER BY hour
+        GROUP BY DATEPART(hour, TRY_CAST(exit_time AS DATETIME2))
+        ORDER BY DATEPART(hour, TRY_CAST(exit_time AS DATETIME2))
     """)
     cols = ['hour','trades','total_pnl','wins']
     rows = [dict(zip(cols, r)) for r in c.fetchall()]
