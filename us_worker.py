@@ -267,7 +267,7 @@ def run_us_scan():
     from analysis.sentiment import get_news_sentiment
     from learning.self_learner import get_weighted_score
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from trading.scanner import MIN_SCORE, MIN_VOL_RATIO
+    from trading.scanner import MIN_SCORE
 
     us_syms    = get_us_stocks()
     open_syms  = [p['symbol'] for p in us_trader.open_positions]
@@ -285,9 +285,6 @@ def run_us_scan():
             df   = compute_indicators_intraday(df)
             tech = generate_signals_intraday(df)
             if tech is None or tech['score'] < MIN_SCORE - 1:
-                return None
-            vol_ratio = tech.get('vol_ratio', 0)
-            if vol_ratio > 0 and vol_ratio < MIN_VOL_RATIO:
                 return None
             sent       = get_news_sentiment(sym, sym)
             boost      = 1 if sent['label'] == 'positive' else (-1 if sent['label'] == 'negative' else 0)

@@ -212,7 +212,7 @@ def run_crypto_scan():
     from analysis.sentiment import get_news_sentiment
     from learning.self_learner import get_weighted_score
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from trading.scanner import MIN_SCORE, MIN_VOL_RATIO
+    from trading.scanner import MIN_SCORE
 
     symbols    = get_crypto_symbols()
     open_syms  = [p['symbol'] for p in crypto_trader.open_positions]
@@ -233,9 +233,6 @@ def run_crypto_scan():
             df   = compute_indicators_intraday(df)
             tech = generate_signals_intraday(df)
             if tech is None or tech['score'] < MIN_SCORE - 1:
-                return None
-            vol_ratio = tech.get('vol_ratio', 0)
-            if vol_ratio > 0 and vol_ratio < MIN_VOL_RATIO:
                 return None
             coin       = sym.replace('USDT', '').replace('BUSD', '')
             sent       = get_news_sentiment(coin, coin)
