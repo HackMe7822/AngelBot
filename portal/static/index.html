@@ -1020,7 +1020,7 @@ async function loadRecentBuys() {
   if (!rows.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
   el.innerHTML = '<table><thead><tr>' +
     '<th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th>' +
-    '<th>Qty</th><th>Capital</th><th>Live Price</th><th>Unrealized P&L</th>' +
+    '<th>Qty</th><th>Capital</th><th>Live Price</th><th>P&amp;L/Share</th><th>P&amp;L Total</th>' +
     '</tr></thead><tbody>' +
     rows.map(function(p) {
       var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
@@ -1031,8 +1031,9 @@ async function loadRecentBuys() {
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
-        '<td id="rb-lp-' + p.id + '" style="color:var(--muted)">...</td>' +
-        '<td id="rb-upnl-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '<td id="rb-lp-'   + p.id + '" style="color:var(--muted)">&#8212;</td>' +
+        '<td id="rb-gain-' + p.id + '" style="color:var(--muted)">&#8212;</td>' +
+        '<td id="rb-upnl-' + p.id + '" style="color:var(--muted)">&#8212;</td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
   fetchLivePrices(rows, function(prices, normed) {
@@ -1041,24 +1042,44 @@ async function loadRecentBuys() {
       var lp     = prices[key];
       var cur    = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       var lpEl   = document.getElementById('rb-lp-'   + p.id);
+      var gainEl = document.getElementById('rb-gain-' + p.id);
       var upnlEl = document.getElementById('rb-upnl-' + p.id);
       if (!lpEl || !upnlEl) return;
-      if (lp == null) { lpEl.innerHTML = '<span style="color:var(--muted)">N/A</span>'; upnlEl.innerHTML = '&#8212;'; return; }
-      var dp    = lp < 1 ? 6 : 2;
-      var prev  = parseFloat(lpEl.dataset.price || '0');
+      if (lp == null) {
+        lpEl.innerHTML = '<span style="color:var(--muted)">N/A</span>';
+        if (gainEl) gainEl.innerHTML = '&#8212;';
+        upnlEl.innerHTML = '&#8212;';
+        return;
+      }
+      var dp      = lp < 1 ? 6 : 2;
+      var prev    = parseFloat(lpEl.dataset.price || '0');
       lpEl.dataset.price = lp;
-      var entry = p.entry_price || 0;
+      var entry   = p.entry_price || 0;
       var lpColor = lp > entry ? '#00c853' : lp < entry ? '#cf222e' : 'var(--muted)';
       var tickDir = prev > 0 ? (lp > prev ? 'up' : lp < prev ? 'down' : '') : '';
       var arrow   = tickDir === 'up'   ? ' <span style="color:#00c853;font-size:10px;">&#9650;</span>'
                   : tickDir === 'down' ? ' <span style="color:#cf222e;font-size:10px;">&#9660;</span>' : '';
       lpEl.innerHTML = '<span style="color:' + lpColor + ';font-weight:600">' + cur + lp.toFixed(dp) + '</span>' + arrow;
-      var upnl    = (lp - entry) * (p.quantity||0);
-      var invested = entry * (p.quantity||0);
+      if (tickDir) { lpEl.classList.add('price-flash-' + tickDir); setTimeout(function(){ lpEl.classList.remove('price-flash-up','price-flash-down'); }, 800); }
+      // P&L/Share badge
+      var gainPS  = lp - entry;
+      var gainPct = entry > 0 ? (gainPS / entry * 100) : 0;
+      if (gainEl) {
+        var gCls = gainPS > 0 ? 'pos' : gainPS < 0 ? 'neg' : 'flat';
+        gainEl.className = '';
+        gainEl.innerHTML = '<span class="pnl-badge ' + gCls + '">' +
+          (gainPS >= 0 ? '+' : '') + cur + Math.abs(gainPS).toFixed(dp) +
+          ' <span style="opacity:.75">(' + (gainPct >= 0 ? '+' : '') + gainPct.toFixed(2) + '%)</span></span>';
+      }
+      // P&L Total badge
+      var upnl    = gainPS * (p.quantity || 0);
+      var invested = entry * (p.quantity || 0);
       var upnlPct  = invested > 0 ? (upnl / invested * 100) : 0;
-      upnlEl.className  = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-      upnlEl.innerHTML  = (upnl >= 0 ? '+' : '') + cur + Math.abs(upnl).toFixed(2) +
-                          ' (' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)';
+      var uCls = upnl > 0 ? 'pos' : upnl < 0 ? 'neg' : 'flat';
+      upnlEl.className = '';
+      upnlEl.innerHTML = '<span class="pnl-badge ' + uCls + '" style="font-size:13px;padding:4px 10px;">' +
+        (upnl >= 0 ? '&#9650; +' : '&#9660; ') + cur + Math.abs(upnl).toFixed(2) +
+        ' <span style="opacity:.75">(' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)</span></span>';
     });
   });
 }
