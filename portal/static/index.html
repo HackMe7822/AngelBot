@@ -369,7 +369,17 @@
         </div>
         <div id="sym-india-chips" style="min-height:44px; margin-bottom:14px;"></div>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="sym-india-input" placeholder="Symbol e.g. RELIANCE" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('india')" oninput="this.value=this.value.toUpperCase()">
+          <input type="text" id="sym-india-input" list="dl-india" placeholder="Type or pick a symbol…" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('india')" oninput="this.value=this.value.toUpperCase()">
+          <datalist id="dl-india">
+            <option value="RELIANCE"><option value="TCS"><option value="INFY"><option value="HDFCBANK">
+            <option value="ICICIBANK"><option value="WIPRO"><option value="HCLTECH"><option value="BAJFINANCE">
+            <option value="SBIN"><option value="AXISBANK"><option value="KOTAKBANK"><option value="LTIM">
+            <option value="MARUTI"><option value="SUNPHARMA"><option value="TATAMOTORS"><option value="TATASTEEL">
+            <option value="ADANIENT"><option value="HINDUNILVR"><option value="ASIANPAINT"><option value="TITAN">
+            <option value="ULTRACEMCO"><option value="NESTLEIND"><option value="POWERGRID"><option value="NTPC">
+            <option value="ONGC"><option value="M&M"><option value="BAJAJ-AUTO"><option value="HEROMOTOCO">
+            <option value="TECHM"><option value="DRREDDY"><option value="CIPLA"><option value="DIVISLAB">
+          </datalist>
           <button class="btn primary sm" onclick="addSymbol('india')">+ Add</button>
         </div>
       </div>
@@ -380,7 +390,16 @@
         </div>
         <div id="sym-us-chips" style="min-height:44px; margin-bottom:14px;"></div>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="sym-us-input" placeholder="Symbol e.g. AAPL" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('us')" oninput="this.value=this.value.toUpperCase()">
+          <input type="text" id="sym-us-input" list="dl-us" placeholder="Type or pick a symbol…" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('us')" oninput="this.value=this.value.toUpperCase()">
+          <datalist id="dl-us">
+            <option value="AAPL"><option value="TSLA"><option value="NVDA"><option value="MSFT">
+            <option value="AMZN"><option value="GOOGL"><option value="META"><option value="AMD">
+            <option value="NFLX"><option value="BABA"><option value="UBER"><option value="COIN">
+            <option value="PLTR"><option value="SOFI"><option value="RIVN"><option value="NIO">
+            <option value="INTC"><option value="PYPL"><option value="DIS"><option value="BA">
+            <option value="JPM"><option value="GS"><option value="BAC"><option value="V">
+            <option value="SPY"><option value="QQQ"><option value="IWM"><option value="ARKK">
+          </datalist>
           <button class="btn primary sm" onclick="addSymbol('us')">+ Add</button>
         </div>
       </div>
@@ -391,7 +410,15 @@
         </div>
         <div id="sym-crypto-chips" style="min-height:44px; margin-bottom:14px;"></div>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="sym-crypto-input" placeholder="Symbol e.g. BTC" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('crypto')" oninput="this.value=this.value.toUpperCase()">
+          <input type="text" id="sym-crypto-input" list="dl-crypto" placeholder="Type or pick a symbol…" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('crypto')" oninput="this.value=this.value.toUpperCase()">
+          <datalist id="dl-crypto">
+            <option value="BTC"><option value="ETH"><option value="BNB"><option value="SOL">
+            <option value="ADA"><option value="DOGE"><option value="XRP"><option value="DOT">
+            <option value="AVAX"><option value="MATIC"><option value="LINK"><option value="LTC">
+            <option value="UNI"><option value="ATOM"><option value="FIL"><option value="APT">
+            <option value="ARB"><option value="OP"><option value="INJ"><option value="TIA">
+            <option value="SUI"><option value="SEI"><option value="NEAR"><option value="FTM">
+          </datalist>
           <button class="btn primary sm" onclick="addSymbol('crypto')">+ Add</button>
         </div>
       </div>
@@ -783,9 +810,9 @@ function toast(msg, dur = 3000) {
 
 // ── Column sort system (3-state: default -> asc -> desc -> default) ────────
 var _sort = {
-  pos:    {col: 'time', dir: 'desc'},
-  trades: {col: 'date', dir: 'desc'},
-  lb:     {col: 'pnl',  dir: 'desc'}
+  pos:    {col: 'time',  dir: 'desc'},
+  trades: {col: 'entry', dir: 'desc'},
+  lb:     {col: 'pnl',   dir: 'desc'}
 };
 function setSort(table, col) {
   var s = _sort[table];
@@ -817,9 +844,9 @@ function thSort(table, col, label) {
 }
 function getTradeSort() {
   var s = _sort.trades;
-  if (!s.col || !s.dir) return 'date_desc';
-  var colMap = {date: 'date', pnl: 'pnl', pct: 'pnl', sym: 'sym', mkt: 'mkt'};
-  return (colMap[s.col] || 'date') + '_' + s.dir;
+  if (!s.col || !s.dir) return 'entry_desc';
+  var colMap = {date: 'date', pnl: 'pnl', pct: 'pnl', sym: 'sym', mkt: 'mkt', entry: 'entry', qty: 'qty'};
+  return (colMap[s.col] || 'entry') + '_' + s.dir;
 }
 
 // ── Page auto-refresh timer ─────────────────────────────────────────────────
@@ -878,7 +905,7 @@ function showPage(name) {
   _stopPageTimer();
   if (name === 'dashboard')   refreshDashboard();
   if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 30000); }
-  if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
+  if (name === 'trades')      { document.getElementById('trade-status').value = 'open'; applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
   if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
   if (name === 'config')      loadConfig();
   if (name === 'apikeys')     loadCredentials();
@@ -1368,8 +1395,8 @@ function buildTradeTable(trades, sortable) {
   return '<table><thead><tr>' +
     '<th style="color:var(--muted)">#</th>' +
     th('sym', 'Symbol') + th('mkt', 'Market') +
-    th('date', 'Buy Time') + '<th>Entry</th>' +
-    '<th>Sell Time</th><th>Exit</th>' +
+    th('date', 'Buy Time') + th('entry', 'Entry Price') +
+    '<th>Sell Time</th><th>Exit Price</th>' +
     th('pnl', 'P&amp;L') + th('pct', '%') +
     '<th>Reason</th><th>Status</th>' +
     '</tr></thead><tbody>' +

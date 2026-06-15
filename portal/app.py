@@ -241,16 +241,20 @@ def get_trades(
         params.extend(date_params)
 
     _sort_map = {
-        'date_desc': 'entry_time DESC',
-        'date_asc':  'entry_time ASC',
-        'pnl_desc':  'pnl DESC',
-        'pnl_asc':   'pnl ASC',
+        'date_desc':  'entry_time DESC',
+        'date_asc':   'entry_time ASC',
+        'pnl_desc':   'pnl DESC',
+        'pnl_asc':    'pnl ASC',
         'pnl_pct_desc': 'pnl_pct DESC',
         'pnl_pct_asc':  'pnl_pct ASC',
-        'sym_asc':   'symbol ASC',
-        'sym_desc':  'symbol DESC',
-        'mkt_asc':   'source ASC',
-        'mkt_desc':  'source DESC',
+        'sym_asc':    'symbol ASC',
+        'sym_desc':   'symbol DESC',
+        'mkt_asc':    'source ASC',
+        'mkt_desc':   'source DESC',
+        'entry_desc': 'entry_price DESC',
+        'entry_asc':  'entry_price ASC',
+        'qty_desc':   'quantity DESC',
+        'qty_asc':    'quantity ASC',
     }
     order_clause = _sort_map.get(sort_by or '', 'entry_time DESC')
 
