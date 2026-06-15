@@ -492,6 +492,11 @@ $pyCmd = Get-Command python -ErrorAction SilentlyContinue
 if ($pyCmd) { $pyExe = $pyCmd.Source } else { $pyExe = $null }
 if (-not $pyExe) { Err "python.exe not found in PATH"; exit 1 }
 
+# Force UTF-8 I/O for all Python processes on this machine (fixes UnicodeEncodeError
+# when workers write box-drawing chars to the NSSM-captured stdout pipe)
+[System.Environment]::SetEnvironmentVariable("PYTHONUTF8", "1", "Machine")
+OK "PYTHONUTF8=1 set machine-wide"
+
 $services = @(
     @{ Name="AngelBot-India";  Script="india_worker.py"  },
     @{ Name="AngelBot-US";     Script="us_worker.py"     },
@@ -526,8 +531,7 @@ foreach ($svc in $services) {
     & $nssmDest set $name AppRotateBytes        10485760            2>&1 | Out-Null
     & $nssmDest set $name Start                 SERVICE_AUTO_START   2>&1 | Out-Null
     & $nssmDest set $name AppThrottle           5000                2>&1 | Out-Null
-    & $nssmDest set $name AppEnvironmentExtra   "PYTHONPATH=$BOT_DIR" 2>&1 | Out-Null
-    & $nssmDest set $name AppEnvironmentExtra + "PYTHONUTF8=1"        2>&1 | Out-Null
+    & $nssmDest set $name AppEnvironmentExtra "PYTHONPATH=$BOT_DIR" "PYTHONUTF8=1" 2>&1 | Out-Null
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
     if (Wait-ServiceRunning $name 60) {
