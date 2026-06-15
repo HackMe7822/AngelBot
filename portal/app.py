@@ -786,13 +786,17 @@ def apply_update(user: str = Depends(require_auth)):
                 yield from emit(f"restart {svc}", False, str(e))
 
         # 3. Portal restarts via detached cmd.exe — 30s delay lets this response fully reach browser
+        # shell=True + DETACHED_PROCESS causes [WinError 87] on Windows — pass cmd.exe explicitly instead
         try:
             DETACHED_PROCESS      = 0x00000008
             CREATE_NEW_PROC_GROUP = 0x00000010
             subprocess.Popen(
-                'cmd /c "timeout /t 30 /nobreak >nul & net stop AngelBot-Portal & timeout /t 3 /nobreak >nul & net start AngelBot-Portal"',
-                shell=True,
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP
+                ['cmd', '/c',
+                 'timeout /t 30 /nobreak >nul & nssm restart AngelBot-Portal'],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             yield from emit("restart portal", True, "portal restarts in ~30s — page will auto-reconnect")
         except Exception as e:
