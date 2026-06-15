@@ -3,7 +3,7 @@ Binance Client — price data ONLY.
 ==================================
 BINANCE_PAPER=true is enforced: this module NEVER places real orders.
 Binance is used solely as a price/OHLCV data source.
-All trade simulation happens internally in SQLite (source='crypto_paper').
+All trade simulation happens internally in SQL Server (source='crypto_paper').
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
