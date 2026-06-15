@@ -738,7 +738,7 @@ async function loadPositions() {
       return `<tr id="pos-row-${p.id}">
         <td><strong>${fmtSym(p.symbol, p.source)}</strong></td>
         <td>${mktBadge(p.source)}</td>
-        <td>${p.entry_time}</td>
+        <td style="color:var(--muted);white-space:nowrap">${fmtDt(p.entry_time, p.source)}</td>
         <td>${cur}${(p.entry_price||0).toFixed(4)}</td>
         <td>${p.quantity}</td>
         <td>${cur}${(p.capital_used||0).toFixed(2)}</td>
@@ -807,10 +807,23 @@ function setTradeFilter(el, val) {
   loadTrades();
 }
 
-function fmtDt(s) {
+function fmtDt(s, source) {
   if (!s) return '—';
-  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-  return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : s.slice(0,16);
+  // All times stored as IST — parse with explicit +05:30 offset then reformat in market timezone
+  const d = new Date(s.replace(' ', 'T') + '+05:30');
+  if (isNaN(d)) { const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : s.slice(0,16); }
+  let tz, tzLabel;
+  if (source === 'us_paper') {
+    tz = 'America/New_York';
+    tzLabel = new Intl.DateTimeFormat('en-US', {timeZone: tz, timeZoneName: 'short'}).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || 'ET';
+  } else if (source === 'crypto_paper') {
+    tz = 'UTC'; tzLabel = 'UTC';
+  } else {
+    tz = 'Asia/Kolkata'; tzLabel = 'IST';
+  }
+  const parts = new Intl.DateTimeFormat('en-GB', {timeZone: tz, day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', hour12: false}).formatToParts(d);
+  const g = t => parts.find(p => p.type === t)?.value || '00';
+  return `${g('day')}/${g('month')} ${g('hour')}:${g('minute')} ${tzLabel}`;
 }
 
 function fmtSym(sym, source) {
@@ -840,9 +853,9 @@ function buildTradeTable(trades) {
         <td style="color:var(--muted)">${t.id}</td>
         <td><strong>${fmtSym(t.symbol, t.source)}</strong></td>
         <td>${mktBadge(t.source)}</td>
-        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.entry_time)}</td>
+        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.entry_time, t.source)}</td>
         <td>${cur}${(t.entry_price||0).toFixed(2)}</td>
-        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.exit_time)}</td>
+        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.exit_time, t.source)}</td>
         <td>${t.exit_price ? cur + (t.exit_price).toFixed(2) : '—'}</td>
         <td class="${cls}">${t.status==='closed' ? sign+cur+Math.abs(pnl).toFixed(2) : '—'}</td>
         <td class="${cls}">${t.status==='closed' && t.pnl_pct != null ? sign+(t.pnl_pct).toFixed(1)+'%' : '—'}</td>
