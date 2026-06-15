@@ -7,7 +7,7 @@ $LOG_FILE = "C:\angelbot_install.log"
 $tmp      = "C:\angelbot_tmp"
 $STEPS    = 9
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# -- Helpers -------------------------------------------------------------------
 function Log($msg) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Add-Content -Path $LOG_FILE -Value "$ts  $msg" -ErrorAction SilentlyContinue
@@ -77,7 +77,7 @@ function Enable-SqlTcp($instanceName = "ANGELBOT") {
         }
 }
 
-# ── Banner ────────────────────────────────────────────────────────────────────
+# -- Banner --------------------------------------------------------------------
 Clear-Host
 Write-Host ""
 Write-Host "  ============================================================" -ForegroundColor Cyan
@@ -89,9 +89,9 @@ Write-Host ""
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 Log "=== Installer started ==="
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 1 — Python 3.11
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 1 -- Python 3.11
+# -----------------------------------------------------------------------------
 Step 1 "Python 3.11"
 $pyOK = $false
 try { $pyOK = ((python --version 2>&1) -match "Python 3\.(9|10|11|12)") } catch {}
@@ -99,20 +99,20 @@ try { $pyOK = ((python --version 2>&1) -match "Python 3\.(9|10|11|12)") } catch 
 if (-not $pyOK) {
     $exe = "$tmp\python-3.11.9-amd64.exe"
     Download "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe" $exe
-    if (-not (Test-Path $exe)) { Err "Python installer not downloaded — check internet."; exit 1 }
-    Info "Installing Python 3.11 (1-2 min) ..."
+    if (-not (Test-Path $exe)) { Err "Python installer not downloaded -- check internet."; exit 1 }
+    Info "Installing Python 3.11 ..."
     Start-Process $exe -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_test=0" -Wait -NoNewWindow
     Update-EnvPath
     try { $pyOK = ((python --version 2>&1) -match "Python 3") } catch {}
-    if (-not $pyOK) { Err "Python install failed — re-run as Administrator."; exit 1 }
+    if (-not $pyOK) { Err "Python install failed -- re-run as Administrator."; exit 1 }
     OK "Python 3.11 installed"
 } else {
-    OK "Python already installed — $((python --version 2>&1))"
+    OK "Python already installed -- $((python --version 2>&1))"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 2 — Git
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 2 -- Git
+# -----------------------------------------------------------------------------
 Step 2 "Git"
 $gitOK = $null
 try { $gitOK = Get-Command git -ErrorAction SilentlyContinue } catch {}
@@ -131,9 +131,9 @@ if (-not $gitOK) {
     OK "Git already installed"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 3 — Clone / update AngelBot code
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 3 -- Clone / update AngelBot code
+# -----------------------------------------------------------------------------
 Step 3 "AngelBot code"
 
 # Back up .env before any git operation so it survives reset/re-clone
@@ -151,25 +151,25 @@ if (Test-Path "$BOT_DIR\.git") {
     Info "Pulling latest code from GitHub ..."
     git -C $BOT_DIR fetch --all 2>&1 | Out-Null
     git -C $BOT_DIR reset --hard origin/main 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Warn "git reset had errors — code may be partially updated." }
+    if ($LASTEXITCODE -ne 0) { Warn "git reset had errors -- code may be partially updated." }
     else { OK "Code updated to latest" }
 } elseif (Test-Path $BOT_DIR) {
-    Info "Folder exists but no git repo — removing and cloning fresh ..."
+    Info "Folder exists but no git repo -- removing and cloning fresh ..."
     Remove-Item $BOT_DIR -Recurse -Force -ErrorAction SilentlyContinue
     git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Err "git clone failed — check internet."; exit 1 }
+    if ($LASTEXITCODE -ne 0) { Err "git clone failed -- check internet."; exit 1 }
     OK "Cloned to $BOT_DIR"
 } else {
     Info "Cloning from GitHub ..."
     git clone https://github.com/HackMe7822/AngelBot.git $BOT_DIR 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Err "git clone failed — check internet."; exit 1 }
+    if ($LASTEXITCODE -ne 0) { Err "git clone failed -- check internet."; exit 1 }
     OK "Downloaded to $BOT_DIR"
 }
 
 $ErrorActionPreference = $oldPref
 
-# Restore .env — git never touches .gitignore'd files on reset,
-# but a fresh re-clone wipes the folder first, so we always restore from backup
+# Restore .env -- git never touches .gitignore'd files on reset,
+# but a fresh re-clone wipes the folder first, so always restore from backup
 if ((Test-Path $envBackup) -and -not (Test-Path $envPath)) {
     Copy-Item $envBackup $envPath -Force
     Info ".env restored from backup"
@@ -179,9 +179,9 @@ if (Test-Path $envBackup) { Remove-Item $envBackup -Force -ErrorAction SilentlyC
 New-Item -ItemType Directory -Force -Path "$BOT_DIR\learning" | Out-Null
 New-Item -ItemType Directory -Force -Path "$BOT_DIR\logs"     | Out-Null
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 4 — SQL Server 2019 Express (instance: ANGELBOT)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 4 -- SQL Server 2019 Express (instance: ANGELBOT)
+# -----------------------------------------------------------------------------
 Step 4 "SQL Server 2019 Express"
 $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
 
@@ -191,7 +191,7 @@ if ($sqlSvc) {
         Info "Starting SQL Server ..."
         Start-Service "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
         if (-not (Wait-ServiceRunning "MSSQL`$ANGELBOT" 60)) {
-            Warn "SQL Server did not reach Running state — DB init may fail"
+            Warn "SQL Server did not reach Running state -- DB init may fail"
         }
     }
     $browser = Get-Service -Name "SQLBrowser" -ErrorAction SilentlyContinue
@@ -216,15 +216,15 @@ if ($sqlSvc) {
     New-Item -ItemType Directory -Force -Path $sqlMedia | Out-Null
     $fullExe = Get-ChildItem $sqlMedia -Filter "SQLEXPR*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $fullExe) {
-        Info "Downloading SQL Server 2019 Express (~280 MB) ..."
+        Info "Downloading SQL Server 2019 Express (approx 280 MB) ..."
         Start-Process $ssei -ArgumentList "/Action=Download /MediaPath=`"$sqlMedia`" /MediaType=Advanced /Quiet" -Wait -NoNewWindow
         $fullExe = Get-ChildItem $sqlMedia -Filter "SQLEXPR*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
     }
 
     if (-not $fullExe) {
-        Warn "SQL Server download failed — install manually then re-run."
+        Warn "SQL Server download failed -- install manually then re-run."
     } else {
-        Info "Installing SQL Server 2019 Express (3-5 min) ..."
+        Info "Installing SQL Server 2019 Express ..."
         $sqlArgs = "/Q /IACCEPTSQLSERVERLICENSETERMS /ACTION=Install /FEATURES=SQLEngine" +
                    " /INSTANCENAME=ANGELBOT" +
                    " /SQLSYSADMINACCOUNTS=`"$env:USERDOMAIN\$env:USERNAME`"" +
@@ -242,14 +242,14 @@ if ($sqlSvc) {
             OK "SQL Server Browser started"
         }
 
-        Info "Waiting for SQL Server to reach Running state (up to 90s) ..."
+        Info "Waiting for SQL Server to reach Running state ..."
         $sqlSvc = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
         if ($sqlSvc) {
             Start-Service "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
             if (Wait-ServiceRunning "MSSQL`$ANGELBOT" 90) { OK "SQL Server ANGELBOT running" }
-            else { Warn "SQL Server not yet running — may need a reboot" }
+            else { Warn "SQL Server not yet running -- may need a reboot" }
         } else {
-            Warn "SQL Server service not found — may need a reboot to finish install"
+            Warn "SQL Server service not found -- may need a reboot to finish install"
         }
     }
 
@@ -258,27 +258,27 @@ if ($sqlSvc) {
     OK "Firewall: SQL Server port 1433 opened"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 5 — ODBC Driver 17 + Python packages
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 5 -- ODBC Driver 17 + Python packages
+# -----------------------------------------------------------------------------
 Step 5 "ODBC Driver 17 + Python packages"
 
 $odbcKey = "HKLM:\SOFTWARE\ODBC\ODBCINST.INI\ODBC Driver 17 for SQL Server"
 if (Test-Path $odbcKey) {
     OK "ODBC Driver 17 already installed"
 } else {
-    Info "Downloading ODBC Driver 17 (~6 MB) ..."
+    Info "Downloading ODBC Driver 17 ..."
     $odbcMsi = "$tmp\msodbcsql17.msi"
     Download "https://go.microsoft.com/fwlink/?linkid=2168524" $odbcMsi
     if (Test-Path $odbcMsi) {
         Start-Process msiexec -ArgumentList "/i `"$odbcMsi`" /qn IACCEPTMSODBCSQLLICENSETERMS=YES" -Wait -NoNewWindow
         OK "ODBC Driver 17 installed"
     } else {
-        Warn "ODBC Driver 17 download failed — pyodbc may not connect"
+        Warn "ODBC Driver 17 download failed -- pyodbc may not connect"
     }
 }
 
-Info "Installing Python packages (2-4 min) ..."
+Info "Installing Python packages ..."
 $oldPref = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 python -m pip install --upgrade pip --quiet 2>&1 | Out-Null
@@ -290,19 +290,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 $ErrorActionPreference = $oldPref
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 6 — API Keys (.env)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 6 -- API Keys (.env)
+# -----------------------------------------------------------------------------
 Step 6 "API Keys (.env)"
 
-$saForEnv = if ($script:saPass) { $script:saPass } else { "" }
+if ($script:saPass) { $saForEnv = $script:saPass } else { $saForEnv = "" }
 
 if (Test-Path $envPath) {
     if ($saForEnv) {
         Set-EnvKey $envPath "SQL_SA_PASS" $saForEnv
         OK "SQL_SA_PASS updated in .env"
     }
-    OK ".env exists — configure API keys via the portal (API Keys tab)"
+    OK ".env exists -- configure API keys via the portal (API Keys tab)"
 } else {
     $envLines = @(
         "# Angel One (India NSE)",
@@ -317,7 +317,7 @@ if (Test-Path $envPath) {
         "ALPACA_SECRET=",
         "ALPACA_PAPER=true",
         "",
-        "# Binance (Crypto — paper only)",
+        "# Binance (Crypto -- paper only)",
         "BINANCE_KEY=",
         "BINANCE_SECRET=",
         "BINANCE_PAPER=true",
@@ -331,7 +331,7 @@ if (Test-Path $envPath) {
         "US_CAPITAL=10000",
         "CRYPTO_CAPITAL=1000",
         "",
-        "# Safety flags — never set false via portal",
+        "# Safety flags -- never set false via portal",
         "PAPER_MODE=true",
         "",
         "# Portal admin password",
@@ -341,27 +341,24 @@ if (Test-Path $envPath) {
         "SQL_SA_PASS=$saForEnv"
     )
     $envLines -join "`r`n" | Out-File $envPath -Encoding ASCII -Force
-    OK ".env template created — enter API keys via the portal after startup"
+    OK ".env template created -- enter API keys via the portal after startup"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 7 — Database initialisation
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 7 -- Database initialisation
+# -----------------------------------------------------------------------------
 Step 7 "Database initialisation"
 $sqlSvcCheck = Get-Service -Name "MSSQL`$ANGELBOT" -ErrorAction SilentlyContinue
 if ($sqlSvcCheck -and $sqlSvcCheck.Status -eq "Running") {
     Info "Creating database and tables ..."
 
-    # Write a temp Python script — avoids PowerShell -c argument quoting issues
+    # Write a temp Python script -- avoids PowerShell -c argument quoting issues
     $initPy = "$tmp\angelbot_init_db.py"
-    # Use double-quoted here-string so $BOT_DIR and $envPath expand correctly
     @"
 import sys, os
 
-# Add bot directory to path
 sys.path.insert(0, r'$BOT_DIR')
 
-# Load .env manually before importing database module
 env_path = r'$envPath'
 if os.path.exists(env_path):
     for line in open(env_path, encoding='utf-8').read().splitlines():
@@ -372,7 +369,7 @@ if os.path.exists(env_path):
 
 from data.database import init_db
 init_db()
-"@ | Out-File $initPy -Encoding UTF8 -Force
+"@ | Out-File $initPy -Encoding ASCII -Force
 
     $oldPref = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
@@ -388,12 +385,12 @@ init_db()
         Warn "DB init had errors (workers will retry on start):`n$($result | Out-String)"
     }
 } else {
-    Warn "SQL Server not running — database will be created when services first start"
+    Warn "SQL Server not running -- database will be created when services first start"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 8 — IIS + URL Rewrite + ARR (reverse proxy 80 → 8080)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 8 -- IIS + URL Rewrite + ARR (reverse proxy 80 -> 8080)
+# -----------------------------------------------------------------------------
 Step 8 "IIS + URL Rewrite + ARR"
 
 $iisSvc = Get-Service -Name "W3SVC" -ErrorAction SilentlyContinue
@@ -432,7 +429,7 @@ if (-not (Test-Path $arrKey)) {
         try {
             Invoke-WebRequest -Uri "https://download.microsoft.com/download/E/9/8/E9849D6A-020E-47E4-9FD0-A023E99B54EB/ARRv3_setup_amd64_en-us.exe" `
                 -OutFile $arrExe -UseBasicParsing -ErrorAction Stop
-        } catch { Warn "ARR download failed — portal still reachable at http://<ip>:8080" }
+        } catch { Warn "ARR download failed -- portal still reachable at http://<ip>:8080" }
     }
     if ((Test-Path $arrExe) -and (Get-Item $arrExe).Length -gt 100000) {
         Info "Installing ARR ..."
@@ -440,7 +437,7 @@ if (-not (Test-Path $arrKey)) {
         OK "ARR installed"
     } else {
         Remove-Item $arrExe -ErrorAction SilentlyContinue
-        Warn "ARR not installed — portal available on port 8080 directly"
+        Warn "ARR not installed -- portal available on port 8080 directly"
     }
 } else { OK "ARR already installed" }
 
@@ -463,9 +460,9 @@ New-Item -ItemType Directory -Force -Path "C:\inetpub\wwwroot" | Out-Null
 Start-Service W3SVC -ErrorAction SilentlyContinue
 OK "IIS reverse proxy configured (port 80 -> 8080)"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STEP 9 — NSSM + Windows Services
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# STEP 9 -- NSSM + Windows Services
+# -----------------------------------------------------------------------------
 Step 9 "NSSM + Windows Services"
 
 $nssmDest = "C:\Windows\nssm.exe"
@@ -486,12 +483,13 @@ if (-not (Test-Path $nssmDest)) {
             }
             if ($found) { Copy-Item $found.FullName $nssmDest -Force; OK "NSSM installed from download" }
             else { Err "nssm.exe not found in archive"; exit 1 }
-        } else { Err "NSSM download failed — cannot register services"; exit 1 }
+        } else { Err "NSSM download failed -- cannot register services"; exit 1 }
     }
 } else { OK "NSSM already present" }
 
 Update-EnvPath
-$pyExe = (Get-Command python -ErrorAction SilentlyContinue)?.Source
+$pyCmd = Get-Command python -ErrorAction SilentlyContinue
+if ($pyCmd) { $pyExe = $pyCmd.Source } else { $pyExe = $null }
 if (-not $pyExe) { Err "python.exe not found in PATH"; exit 1 }
 
 $services = @(
@@ -520,21 +518,21 @@ foreach ($svc in $services) {
     }
 
     # Register service
-    & $nssmDest install             $name $pyExe $script           2>&1 | Out-Null
-    & $nssmDest set $name AppDirectory          $BOT_DIR           2>&1 | Out-Null
-    & $nssmDest set $name AppStdout             $log               2>&1 | Out-Null
-    & $nssmDest set $name AppStderr             $log               2>&1 | Out-Null
-    & $nssmDest set $name AppRotateFiles        1                  2>&1 | Out-Null
-    & $nssmDest set $name AppRotateBytes        10485760           2>&1 | Out-Null
-    & $nssmDest set $name Start                 SERVICE_AUTO_START  2>&1 | Out-Null
-    & $nssmDest set $name AppThrottle           5000               2>&1 | Out-Null
+    & $nssmDest install             $name $pyExe $script            2>&1 | Out-Null
+    & $nssmDest set $name AppDirectory          $BOT_DIR            2>&1 | Out-Null
+    & $nssmDest set $name AppStdout             $log                2>&1 | Out-Null
+    & $nssmDest set $name AppStderr             $log                2>&1 | Out-Null
+    & $nssmDest set $name AppRotateFiles        1                   2>&1 | Out-Null
+    & $nssmDest set $name AppRotateBytes        10485760            2>&1 | Out-Null
+    & $nssmDest set $name Start                 SERVICE_AUTO_START   2>&1 | Out-Null
+    & $nssmDest set $name AppThrottle           5000                2>&1 | Out-Null
     & $nssmDest set $name AppEnvironmentExtra   "PYTHONPATH=$BOT_DIR" 2>&1 | Out-Null
 
     Start-Service -Name $name -ErrorAction SilentlyContinue
     if (Wait-ServiceRunning $name 60) {
-        OK "$name — running"
+        OK "$name -- running"
     } else {
-        Warn "$name — installed but not yet running (check logs\$name.log)"
+        Warn "$name -- installed but not yet running (check logs\$name.log)"
     }
 }
 
@@ -553,11 +551,11 @@ if (-not (Test-Path $cfDest)) {
     Download "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" $cfExe
     if (Test-Path $cfExe) {
         Copy-Item $cfExe $cfDest -Force
-        OK "cloudflared installed  (usage: cloudflared tunnel --url http://localhost:8080)"
-    } else { Warn "cloudflared download failed — skipping (optional)" }
+        OK "cloudflared installed  (run: cloudflared tunnel --url http://localhost:8080)"
+    } else { Warn "cloudflared download failed -- skipping (optional)" }
 } else { OK "cloudflared already present" }
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# -- Done ----------------------------------------------------------------------
 Write-Host ""
 Write-Host "  ============================================================" -ForegroundColor Green
 Write-Host "    AngelBot installed and running!" -ForegroundColor Green
@@ -574,7 +572,7 @@ Write-Host ""
 Write-Host "  NEXT: Open the portal and go to API Keys to enter your" -ForegroundColor Yellow
 Write-Host "  Angel One / Alpaca / Binance / Telegram credentials." -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  If a service shows yellow, check $BOT_DIR\logs\ for errors." -ForegroundColor DarkGray
+Write-Host "  If a service shows yellow, check $BOT_DIR\logs\" -ForegroundColor DarkGray
 Write-Host ""
 Log "=== Installation complete ==="
 
