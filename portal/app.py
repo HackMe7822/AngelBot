@@ -485,6 +485,8 @@ def get_config(user: str = Depends(require_auth)):
         'CRYPTO_CAPITAL', 'CRYPTO_MAX_DAILY_TRADES', 'CRYPTO_TARGET_PCT', 'CRYPTO_SL_PCT',
         'CRYPTO_BTC_MIN_CHANGE', 'SLIPPAGE_PCT',
         'PAPER_MODE', 'ALPACA_PAPER', 'BINANCE_PAPER',
+        # Strategy quality controls
+        'MIN_SIGNAL_SCORE', 'MAX_CONCURRENT_POSITIONS', 'USE_TIME_EXIT', 'MAX_HOLD_MINUTES',
     ]
     result = {}
     for key in editable:

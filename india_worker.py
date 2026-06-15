@@ -199,6 +199,12 @@ def run_scan():
         sep()
         return
 
+    from config import MAX_CONCURRENT_POSITIONS
+    if len(trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
+        cprint(f"  [{ist_str}]  Max concurrent positions ({MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
+        sep()
+        return
+
     if not india_market_mood_ok():
         cprint(f"  [{ist_str}]  NIFTY mood bearish — skipping India buy scan", YL)
         sep()

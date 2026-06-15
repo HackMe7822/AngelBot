@@ -7,7 +7,7 @@ from analysis.technical import compute_indicators_intraday, generate_signals_int
 from analysis.sentiment import get_news_sentiment, prefetch_rss
 from learning.self_learner import get_weighted_score
 
-MIN_SCORE       = 3      # minimum signal quality — below this is noise
+from config import MIN_SIGNAL_SCORE as MIN_SCORE
 SCAN_WORKERS    = 20     # parallel threads for fetching data
 
 COMPANY_NAMES = {

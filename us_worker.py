@@ -252,6 +252,11 @@ def run_us_scan():
         cprint(f"[US] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
         return
 
+    from config import MAX_CONCURRENT_POSITIONS
+    if len(us_trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
+        cprint(f"[US] Max concurrent positions ({MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
+        return
+
     if not us_market_mood_ok():
         cprint("[US] S&P 500 mood bearish — skipping US buy scan", YL)
         return

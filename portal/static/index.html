@@ -56,6 +56,11 @@
   .pnl-badge.neg { background: rgba(207,34,46,.10); color: #cf222e; border: 1px solid rgba(207,34,46,.25); }
   .pnl-badge.flat { background: rgba(100,100,100,.08); color: var(--muted); border: 1px solid var(--border); }
   .info-box { background: rgba(9,105,218,.07); border: 1px solid rgba(9,105,218,.2); border-radius: 7px; padding: 10px 14px; margin: 6px 0 12px; font-size: 12px; color: var(--text); line-height: 1.65; }
+  .toggle-wrap { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .toggle-track { width: 42px; height: 22px; border-radius: 11px; background: var(--border); position: relative; transition: background .2s; flex-shrink: 0; }
+  .toggle-track.on { background: #00c853; }
+  .toggle-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 2px; transition: left .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .toggle-track.on .toggle-thumb { left: 22px; }
   .info-box code { background: rgba(9,105,218,.12); color: var(--blue); border-radius: 3px; padding: 1px 5px; font-size: 11px; }
   .cred-note { display: flex; align-items: flex-start; gap: 8px; background: rgba(255,170,0,.07); border: 1px solid rgba(255,170,0,.25); border-radius: 6px; padding: 9px 13px; margin-bottom: 14px; font-size: 12px; color: #c9a227; line-height: 1.6; }
   .cred-note .icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
@@ -437,6 +442,18 @@
   <div id="page-config" class="page">
     <h2>Configuration</h2>
     <p style="color:var(--muted); margin-bottom:20px; font-size:13px;">Changes are written to .env. Restart bot workers to apply.</p>
+
+    <!-- Strategy Quality — shown first, most impactful -->
+    <div class="config-section">
+      <div class="card" style="border-left:3px solid #0969da;">
+        <div style="font-size:15px; font-weight:600; margin-bottom:4px;">&#127919; Strategy Quality Controls</div>
+        <div class="cred-note" style="margin-bottom:14px;">
+          <span class="icon">&#9432;</span>
+          <div>These settings have the biggest impact on profit vs loss. <strong>MIN_SIGNAL_SCORE=4</strong> and <strong>MAX_CONCURRENT_POSITIONS=5</strong> match the settings that produced the $300/4hr profitable session. <strong>Time Exit OFF</strong> lets good trades reach their full target instead of closing early.</div>
+        </div>
+        <div id="config-strategy"></div>
+      </div>
+    </div>
 
     <div class="config-section">
       <div class="config-section-title">
@@ -1516,6 +1533,10 @@ function renderLeaderboard() {
 
 // ── Config ────────────────────────────────────────────────────────────────
 const _CONFIG_SECTIONS = {
+  strategy: {
+    label: '&#127919; Strategy Quality',
+    keys: ['MIN_SIGNAL_SCORE','MAX_CONCURRENT_POSITIONS','USE_TIME_EXIT','MAX_HOLD_MINUTES']
+  },
   india: {
     label: 'India Settings',
     keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
@@ -1533,9 +1554,20 @@ const _CONFIG_SECTIONS = {
     keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
   },
   general: {
-    label: '⚙️ General',
+    label: '&#9881;&#65039; General',
     keys: ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','SLIPPAGE_PCT']
   }
+};
+
+// Keys that render as ON/OFF toggle switches instead of text inputs
+const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT']);
+
+// Human-readable descriptions for strategy keys
+const _CONFIG_HINTS = {
+  MIN_SIGNAL_SCORE:          'Signal quality threshold (4=strict/profitable, 3=more trades/lower quality). Higher = fewer but stronger setups.',
+  MAX_CONCURRENT_POSITIONS:  'Hard cap on parallel open positions (e.g. 5). Prevents too many stocks losing at once on a bad day.',
+  USE_TIME_EXIT:             'Close stagnating positions after MAX_HOLD_MINUTES. OFF recommended — good trades need time to develop.',
+  MAX_HOLD_MINUTES:          'Only used when Time Exit is ON. Minutes before a stuck position is force-closed (default 90).',
 };
 
 async function loadConfig() {
@@ -1545,19 +1577,54 @@ async function loadConfig() {
 
   function renderSection(containerId, keys) {
     const el = document.getElementById('config-' + containerId);
-    const rows = keys.filter(k => d[k] !== undefined).map(k => `
-      <div class="config-row">
+    if (!el) return;
+    const rows = keys.filter(k => d[k] !== undefined).map(k => {
+      const hint = _CONFIG_HINTS[k] ? `<div style="color:var(--muted);font-size:11px;margin-top:3px;line-height:1.5">${_CONFIG_HINTS[k]}</div>` : '';
+      if (_CONFIG_TOGGLES.has(k)) {
+        const isOn = String(d[k]).toLowerCase() === 'true';
+        return `<div class="config-row" style="flex-wrap:wrap">
+          <span class="config-key">${k}</span>
+          <div style="flex:1">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <div class="toggle-wrap" onclick="toggleConfig('${k}',this)" data-val="${isOn}">
+                <div class="toggle-track ${isOn?'on':''}"><div class="toggle-thumb"></div></div>
+                <span id="cfg-lbl-${k}" style="font-size:12px;color:${isOn?'#00c853':'var(--muted)'}">${isOn?'ON':'OFF'}</span>
+              </div>
+              <input type="hidden" id="cfg-${k}" value="${isOn}" />
+            </label>
+            ${hint}
+          </div>
+          <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
+        </div>`;
+      }
+      return `<div class="config-row" style="flex-wrap:wrap">
         <span class="config-key">${k}</span>
-        <input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" />
+        <div style="flex:1"><input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" style="width:100%"/>
+        ${hint}</div>
         <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     el.innerHTML = rows || '<p style="color:var(--muted);font-size:13px">No settings available.</p>';
   }
 
-  renderSection('india',   _CONFIG_SECTIONS.india.keys);
-  renderSection('us',      _CONFIG_SECTIONS.us.keys);
-  renderSection('crypto',  _CONFIG_SECTIONS.crypto.keys);
-  renderSection('general', _CONFIG_SECTIONS.general.keys);
+  renderSection('strategy', _CONFIG_SECTIONS.strategy.keys);
+  renderSection('india',    _CONFIG_SECTIONS.india.keys);
+  renderSection('us',       _CONFIG_SECTIONS.us.keys);
+  renderSection('crypto',   _CONFIG_SECTIONS.crypto.keys);
+  renderSection('general',  _CONFIG_SECTIONS.general.keys);
+}
+
+function toggleConfig(key, wrap) {
+  var cur = wrap.dataset.val === 'true';
+  var nxt = !cur;
+  wrap.dataset.val = nxt;
+  var track = wrap.querySelector('.toggle-track');
+  var lbl   = document.getElementById('cfg-lbl-' + key);
+  var inp   = document.getElementById('cfg-' + key);
+  track.className = 'toggle-track' + (nxt ? ' on' : '');
+  lbl.textContent = nxt ? 'ON' : 'OFF';
+  lbl.style.color = nxt ? '#00c853' : 'var(--muted)';
+  inp.value = nxt;
 }
 
 async function saveConfig(key) {

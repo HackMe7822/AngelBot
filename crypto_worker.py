@@ -201,6 +201,11 @@ def run_crypto_scan():
         cprint(f"[Crypto] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
         return
 
+    from config import MAX_CONCURRENT_POSITIONS
+    if len(crypto_trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
+        cprint(f"[Crypto] Max concurrent positions ({MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
+        return
+
     if not crypto_trader.can_buy():
         return
 

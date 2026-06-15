@@ -26,6 +26,9 @@ SCALP_TARGET_PCT = 0.015   # exit on 1.5% profit
 SCALP_SL_PCT     = 0.006   # exit on 0.6% loss
 SL_CONFIRM_POLLS = 2       # consecutive 15s polls below SL before exit (2 × 15s = 30s)
 
+# Signal quality — higher = fewer but stronger trades (4 = original profitable setting, 3 = more trades/lower quality)
+MIN_SIGNAL_SCORE = int(os.getenv("MIN_SIGNAL_SCORE", "4"))
+
 # Risk controls
 MAX_DAILY_LOSS_PCT  = 0.02   # stop all buys if day loss exceeds 2% of capital
 MAX_DAILY_TRADES    = 30     # circuit breaker — stop new buys after N closed trades per day
@@ -33,9 +36,15 @@ MAX_DEPLOYED_PCT    = 0.70   # never deploy more than 70% of balance at once
 PEAK_DRAWDOWN_PCT   = 0.03   # pause new buys if account drops 3% from today's session high
 SLIPPAGE_PCT        = 0.0005 # 0.05% simulated slippage on paper entries (realistic fill cost)
 ENTRY_START_MIN     = (9, 45)  # no buys before 9:45 AM IST
-MAX_HOLD_MINUTES    = 90       # exit stagnating positions after 90 min to free capital
 ENTRY_END_MIN       = (15, 0)  # no buys after 3:00 PM (approaching force-close)
 MIN_STOCK_PRICE     = 150.0    # skip stocks under ₹150 — SL gap too small vs bid-ask spread
+
+# Parallel position cap — hard limit on how many stocks open at once across all buys
+MAX_CONCURRENT_POSITIONS = int(os.getenv("MAX_CONCURRENT_POSITIONS", "5"))
+
+# Time-based stagnation exit — if enabled, close positions open >MAX_HOLD_MINUTES with <50% of target move
+USE_TIME_EXIT    = os.getenv("USE_TIME_EXIT", "false").lower() == "true"
+MAX_HOLD_MINUTES = int(os.getenv("MAX_HOLD_MINUTES", "90"))
 
 # ── Alpaca / US market config ─────────────────────────────────────────────────
 ALPACA_KEY    = os.getenv("ALPACA_KEY",    "")
