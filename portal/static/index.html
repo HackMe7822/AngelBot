@@ -249,16 +249,25 @@
   <div id="page-positions" class="page">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <h2>Open Positions</h2>
-      <div class="toolbar" style="margin-bottom:0">
+      <div class="toolbar" style="margin-bottom:0; flex-wrap:wrap; gap:8px;">
         <select id="pos-market-filter" onchange="loadPositions()">
           <option value="">All Markets</option>
           <option value="india">India</option>
           <option value="us">US</option>
           <option value="crypto">Crypto</option>
         </select>
-        <button class="btn" onclick="loadPositions()">↻ Refresh</button>
-        <button class="btn btn-danger" onclick="forceSellAll()">⚡ Force Sell All</button>
-        <button class="btn btn-danger" style="background:#3a1a1a; border-color:#666;" onclick="cancelAll()">🗑 Cancel All (no price)</button>
+        <select id="pos-sort" onchange="loadPositions()">
+          <option value="time_desc">Entry Time (newest)</option>
+          <option value="time_asc">Entry Time (oldest)</option>
+          <option value="sym_asc">Symbol A-Z</option>
+          <option value="sym_desc">Symbol Z-A</option>
+          <option value="cap_desc">Capital (highest)</option>
+          <option value="cap_asc">Capital (lowest)</option>
+        </select>
+        <button class="btn" style="font-size:12px;" onclick="saveDefault('pos')" title="Save current filter as default">&#9733; Save Default</button>
+        <button class="btn" onclick="loadPositions()">&#8635; Refresh</button>
+        <button class="btn btn-danger" onclick="forceSellAll()">Force Sell All</button>
+        <button class="btn btn-danger" style="background:#3a1a1a; border-color:#666;" onclick="cancelAll()">Cancel All (no price)</button>
       </div>
     </div>
     <div class="table-wrap" id="positions-table">Loading...</div>
@@ -273,15 +282,23 @@
     <div class="toolbar" style="flex-wrap:wrap; gap:8px;">
       <select id="trade-market" onchange="_tradeOffset=0;loadTrades()">
         <option value="">All Markets</option>
-        <option value="india">🇮🇳 India</option>
-        <option value="us">🇺🇸 US</option>
-        <option value="crypto">🪙 Crypto</option>
+        <option value="india">India</option>
+        <option value="us">US</option>
+        <option value="crypto">Crypto</option>
       </select>
       <select id="trade-status" onchange="_tradeOffset=0;loadTrades()">
         <option value="">All Status</option>
         <option value="closed">Closed</option>
         <option value="open">Open</option>
       </select>
+      <select id="trade-sort" onchange="_tradeOffset=0;loadTrades()">
+        <option value="date_desc">Date (newest)</option>
+        <option value="date_asc">Date (oldest)</option>
+        <option value="pnl_desc">P&amp;L (best first)</option>
+        <option value="pnl_asc">P&amp;L (worst first)</option>
+        <option value="sym_asc">Symbol A-Z</option>
+      </select>
+      <button class="btn" style="font-size:12px;" onclick="saveDefault('trades')" title="Save current filter as default">&#9733; Save Default</button>
       <div class="pill-group" id="trade-date-pills">
         <span class="pill active" data-val="" onclick="setTradeFilter(this,'')">All</span>
         <span class="pill" data-val="today" onclick="setTradeFilter(this,'today')">Today</span>
@@ -298,7 +315,20 @@
 
   <!-- LEADERBOARD -->
   <div id="page-leaderboard" class="page">
-    <h2>Symbol Leaderboard</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+      <h2 style="margin-bottom:0;">Symbol Leaderboard</h2>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <select id="lb-sort" onchange="resortLeaderboard()" style="font-size:13px;">
+          <option value="pnl_desc">Total P&amp;L (best)</option>
+          <option value="pnl_asc">Total P&amp;L (worst)</option>
+          <option value="wr_desc">Win Rate (highest)</option>
+          <option value="wr_asc">Win Rate (lowest)</option>
+          <option value="trades_desc">Most Trades</option>
+          <option value="sym_asc">Symbol A-Z</option>
+        </select>
+        <button class="btn" style="font-size:12px;" onclick="saveDefault('lb')" title="Save sort as default">&#9733; Save Default</button>
+      </div>
+    </div>
     <div class="tabs">
       <div class="tab active" onclick="loadLeaderboard('')">All</div>
       <div class="tab" onclick="loadLeaderboard('india')">India</div>
@@ -381,9 +411,9 @@
     <h2>Logs</h2>
     <div class="toolbar">
       <select id="log-market" onchange="loadLog()">
-        <option value="india">🇮🇳 India</option>
-        <option value="us">🇺🇸 US</option>
-        <option value="crypto">🪙 Crypto</option>
+        <option value="india">India</option>
+        <option value="us">US</option>
+        <option value="crypto">Crypto</option>
         <option value="watchdog">Watchdog</option>
         <option value="portal">Portal</option>
       </select>
@@ -612,6 +642,48 @@ function toast(msg, dur = 3000) {
   setTimeout(() => el.classList.remove('show'), dur);
 }
 
+// ── Default filter persistence ──────────────────────────────────────────────
+function saveDefault(page) {
+  var state = {};
+  if (page === 'pos') {
+    var sortEl = document.getElementById('pos-sort');
+    if (sortEl) state.sort = sortEl.value;
+  } else if (page === 'trades') {
+    var mktEl    = document.getElementById('trade-market');
+    var statusEl = document.getElementById('trade-status');
+    var sortEl2  = document.getElementById('trade-sort');
+    if (mktEl)    state.market = mktEl.value;
+    if (statusEl) state.status = statusEl.value;
+    if (sortEl2)  state.sort   = sortEl2.value;
+  } else if (page === 'lb') {
+    var lbSortEl = document.getElementById('lb-sort');
+    if (lbSortEl) state.sort = lbSortEl.value;
+  }
+  try { localStorage.setItem('angelbot_default_' + page, JSON.stringify(state)); } catch(e) {}
+  toast('Default saved');
+}
+function applyDefault(page) {
+  var raw;
+  try { raw = localStorage.getItem('angelbot_default_' + page); } catch(e) {}
+  if (!raw) return;
+  var state;
+  try { state = JSON.parse(raw); } catch(e) { return; }
+  if (page === 'pos') {
+    var sortEl = document.getElementById('pos-sort');
+    if (sortEl && state.sort) sortEl.value = state.sort;
+  } else if (page === 'trades') {
+    var mktEl    = document.getElementById('trade-market');
+    var statusEl = document.getElementById('trade-status');
+    var sortEl2  = document.getElementById('trade-sort');
+    if (mktEl    && state.market) mktEl.value    = state.market;
+    if (statusEl && state.status) statusEl.value  = state.status;
+    if (sortEl2  && state.sort)   sortEl2.value   = state.sort;
+  } else if (page === 'lb') {
+    var lbSortEl = document.getElementById('lb-sort');
+    if (lbSortEl && state.sort) lbSortEl.value = state.sort;
+  }
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────────
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -619,9 +691,9 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
   if (name === 'dashboard')   refreshDashboard();
-  if (name === 'positions')   loadPositions();
-  if (name === 'trades')      { _tradeOffset = 0; loadTrades(); }
-  if (name === 'leaderboard') loadLeaderboard('');
+  if (name === 'positions')   { applyDefault('pos');    loadPositions(); }
+  if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
+  if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(''); }
   if (name === 'config')      loadConfig();
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
@@ -766,11 +838,21 @@ async function restartService(name) { return svcAction(name, 'restart'); }
 // ── Positions ─────────────────────────────────────────────────────────────
 async function loadPositions() {
   const market = document.getElementById('pos-market-filter').value;
+  const sort   = document.getElementById('pos-sort') ? document.getElementById('pos-sort').value : 'time_desc';
   const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
   if (!r) return;
   const d = await r.json();
   const el = document.getElementById('positions-table');
   if (!d.positions.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
+  d.positions.sort(function(a, b) {
+    if (sort === 'time_asc')  return (a.entry_time||'').localeCompare(b.entry_time||'');
+    if (sort === 'time_desc') return (b.entry_time||'').localeCompare(a.entry_time||'');
+    if (sort === 'sym_asc')   return (a.symbol||'').localeCompare(b.symbol||'');
+    if (sort === 'sym_desc')  return (b.symbol||'').localeCompare(a.symbol||'');
+    if (sort === 'cap_desc')  return (b.capital_used||0) - (a.capital_used||0);
+    if (sort === 'cap_asc')   return (a.capital_used||0) - (b.capital_used||0);
+    return 0;
+  });
   el.innerHTML = `<table>
     <thead><tr><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th><th>Qty</th><th>Capital</th><th>SL</th><th>Target</th><th>Action</th></tr></thead>
     <tbody>${d.positions.map(p => {
@@ -909,10 +991,12 @@ function buildTradeTable(trades) {
 async function loadTrades() {
   const market = document.getElementById('trade-market').value;
   const status = document.getElementById('trade-status').value;
+  const sort   = document.getElementById('trade-sort') ? document.getElementById('trade-sort').value : 'date_desc';
   let url = `/api/trades?limit=${_tradeLimit}&offset=${_tradeOffset}`;
   if (market) url += '&market=' + market;
   if (status) url += '&status_filter=' + status;
   if (_tradeDateFilter) url += '&date_filter=' + _tradeDateFilter;
+  if (sort) url += '&sort_by=' + sort;
   const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
@@ -940,6 +1024,7 @@ async function loadTrades() {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────
+var _lbData = [];
 async function loadLeaderboard(market) {
   document.querySelectorAll('#page-leaderboard .tab').forEach((t,i) => {
     t.classList.toggle('active', ['','india','us','crypto'][i] === market);
@@ -948,15 +1033,31 @@ async function loadLeaderboard(market) {
   const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
+  _lbData = d.leaderboard || [];
+  renderLeaderboard();
+}
+function resortLeaderboard() { renderLeaderboard(); }
+function renderLeaderboard() {
   const el = document.getElementById('leaderboard-table');
-  if (!d.leaderboard.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No trade data yet.</p>'; return; }
+  if (!_lbData.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No trade data yet.</p>'; return; }
+  const sortEl = document.getElementById('lb-sort');
+  const sort = sortEl ? sortEl.value : 'pnl_desc';
+  const rows = _lbData.slice().sort(function(a,b) {
+    if (sort === 'pnl_desc')    return b.total_pnl - a.total_pnl;
+    if (sort === 'pnl_asc')     return a.total_pnl - b.total_pnl;
+    if (sort === 'wr_desc')     return b.win_rate  - a.win_rate;
+    if (sort === 'wr_asc')      return a.win_rate  - b.win_rate;
+    if (sort === 'trades_desc') return b.trades    - a.trades;
+    if (sort === 'sym_asc')     return (a.symbol||'').localeCompare(b.symbol||'');
+    return 0;
+  });
   el.innerHTML = `<table>
     <thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead>
-    <tbody>${d.leaderboard.map(s => {
+    <tbody>${rows.map(s => {
       const wr = s.win_rate;
       return `<tr>
         <td><strong>${s.symbol}</strong></td>
-        <td>${s.trades} <span style="color:var(--muted);font-size:11px">(✅${s.wins} ❌${s.losses})</span></td>
+        <td>${s.trades} <span style="color:var(--muted);font-size:11px">(&#10003;${s.wins} &#10007;${s.losses})</span></td>
         <td>
           <div style="display:flex;align-items:center;gap:8px">
             <span>${wr.toFixed(1)}%</span>

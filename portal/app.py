@@ -189,6 +189,7 @@ def get_trades(
     market: Optional[str] = None,
     status_filter: Optional[str] = None,
     date_filter: Optional[str] = None,
+    sort_by: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
     user: str = Depends(require_auth)
@@ -216,10 +217,19 @@ def get_trades(
         where.append(date_sql.lstrip("AND ").strip())
         params.extend(date_params)
 
+    _sort_map = {
+        'date_desc': 'entry_time DESC',
+        'date_asc':  'entry_time ASC',
+        'pnl_desc':  'pnl DESC',
+        'pnl_asc':   'pnl ASC',
+        'sym_asc':   'symbol ASC',
+    }
+    order_clause = _sort_map.get(sort_by or '', 'id DESC')
+
     sql = "SELECT id,symbol,entry_time,exit_time,entry_price,exit_price,quantity,capital_used,pnl,pnl_pct,exit_reason,status,source FROM trades"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY id DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
+    sql += f" ORDER BY {order_clause} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
     params += [offset, limit]
 
     c.execute(sql, params)
