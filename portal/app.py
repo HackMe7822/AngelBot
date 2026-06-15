@@ -790,7 +790,7 @@ def restart_service(name: str, user: str = Depends(require_auth)):
                 "Unregister-ScheduledTask -TaskName 'ABPortalRestart' -Confirm:$false -ErrorAction SilentlyContinue;"
                 "$a=New-ScheduledTaskAction -Execute 'C:\\Windows\\nssm.exe' -Argument 'restart AngelBot-Portal';"
                 "$t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(10));"
-                "Register-ScheduledTask -TaskName 'ABPortalRestart' -Action $a -Trigger $t -RunLevel Highest -Force | Out-Null"
+                "Register-ScheduledTask -TaskName 'ABPortalRestart' -Action $a -Trigger $t -User 'SYSTEM' -RunLevel Highest -Force | Out-Null"
             )
             r = subprocess.run(['powershell', '-NonInteractive', '-Command', ps],
                                capture_output=True, text=True, timeout=20)
@@ -905,7 +905,7 @@ def apply_update(user: str = Depends(require_auth)):
                 "Unregister-ScheduledTask -TaskName 'ABPortalRestart' -Confirm:$false -ErrorAction SilentlyContinue;"
                 "$a=New-ScheduledTaskAction -Execute 'C:\\Windows\\nssm.exe' -Argument 'restart AngelBot-Portal';"
                 "$t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(30));"
-                "Register-ScheduledTask -TaskName 'ABPortalRestart' -Action $a -Trigger $t -RunLevel Highest -Force | Out-Null"
+                "Register-ScheduledTask -TaskName 'ABPortalRestart' -Action $a -Trigger $t -User 'SYSTEM' -RunLevel Highest -Force | Out-Null"
             )
             r = subprocess.run(['powershell', '-NonInteractive', '-Command', ps],
                                capture_output=True, text=True, timeout=20)
