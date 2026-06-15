@@ -125,6 +125,20 @@
   .live-dot { display:inline-block; width:7px; height:7px; background:#00c853; border-radius:50%; animation:pulse-live 1.4s ease-out infinite; vertical-align:middle; flex-shrink:0; }
   .live-badge { display:inline-flex; align-items:center; gap:4px; font-size:9px; color:#00c853; font-weight:700; letter-spacing:.8px; margin-left:7px; vertical-align:middle; }
 
+  /* Sortable column headers */
+  .sort-th { cursor: pointer; user-select: none; white-space: nowrap; }
+  .sort-th:hover { color: var(--blue); }
+  .sort-icon { display: inline-block; font-size: 10px; color: var(--muted); margin-left: 3px; vertical-align: middle; opacity: .6; }
+  .sort-icon.active { color: var(--blue); opacity: 1; font-weight: 700; }
+
+  /* Symbol chips */
+  .sym-chip { display: inline-flex; align-items: center; background: rgba(9,105,218,.08); color: var(--blue); border: 1px solid rgba(9,105,218,.2); border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; font-family: monospace; margin: 3px 3px 3px 0; letter-spacing: .3px; }
+  .sym-chip button { background: none; border: none; cursor: pointer; color: var(--muted); margin-left: 5px; padding: 0; font-size: 15px; line-height: 1; }
+  .sym-chip button:hover { color: var(--red); }
+
+  /* Live page timer indicator */
+  .auto-refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: #00c853; display: inline-block; animation: pulse-live 2s ease-out infinite; margin-right: 4px; vertical-align: middle; }
+
   /* Toast */
   .toast { position: fixed; bottom: 24px; right: 24px; background: #1f6feb; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none; }
   .toast.show { opacity: 1; }
@@ -170,6 +184,7 @@
     <a href="#" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
     <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Config</a>
     <a href="#" onclick="showPage('apikeys')" id="nav-apikeys">🔑 API Keys</a>
+    <a href="#" onclick="showPage('symbols')" id="nav-symbols">&#128279; Symbols</a>
     <a href="#" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
     <a href="#" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
     <a href="#" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
@@ -262,14 +277,7 @@
           <option value="us">US</option>
           <option value="crypto">Crypto</option>
         </select>
-        <select id="pos-sort" onchange="loadPositions()">
-          <option value="time_desc">Entry Time (newest)</option>
-          <option value="time_asc">Entry Time (oldest)</option>
-          <option value="sym_asc">Symbol A-Z</option>
-          <option value="sym_desc">Symbol Z-A</option>
-          <option value="cap_desc">Capital (highest)</option>
-          <option value="cap_asc">Capital (lowest)</option>
-        </select>
+        <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 15s</span>
         <button class="btn" style="font-size:12px;" onclick="saveDefault('pos')" title="Save current filter as default">&#9733; Save Default</button>
         <button class="btn" onclick="loadPositions()">&#8635; Refresh</button>
         <button class="btn btn-danger" onclick="forceSellAll()">Force Sell All</button>
@@ -297,13 +305,6 @@
         <option value="closed">Closed</option>
         <option value="open">Open</option>
       </select>
-      <select id="trade-sort" onchange="_tradeOffset=0;loadTrades()">
-        <option value="date_desc">Date (newest)</option>
-        <option value="date_asc">Date (oldest)</option>
-        <option value="pnl_desc">P&amp;L (best first)</option>
-        <option value="pnl_asc">P&amp;L (worst first)</option>
-        <option value="sym_asc">Symbol A-Z</option>
-      </select>
       <button class="btn" style="font-size:12px;" onclick="saveDefault('trades')" title="Save current filter as default">&#9733; Save Default</button>
       <div class="pill-group" id="trade-date-pills">
         <span class="pill active" data-val="" onclick="setTradeFilter(this,'')">All</span>
@@ -324,14 +325,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
       <h2 style="margin-bottom:0;">Symbol Leaderboard</h2>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <select id="lb-sort" onchange="resortLeaderboard()" style="font-size:13px;">
-          <option value="pnl_desc">Total P&amp;L (best)</option>
-          <option value="pnl_asc">Total P&amp;L (worst)</option>
-          <option value="wr_desc">Win Rate (highest)</option>
-          <option value="wr_asc">Win Rate (lowest)</option>
-          <option value="trades_desc">Most Trades</option>
-          <option value="sym_asc">Symbol A-Z</option>
-        </select>
+        <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 60s</span>
         <button class="btn" style="font-size:12px;" onclick="saveDefault('lb')" title="Save sort as default">&#9733; Save Default</button>
       </div>
     </div>
@@ -342,6 +336,58 @@
       <div class="tab" onclick="loadLeaderboard('crypto')">Crypto</div>
     </div>
     <div class="table-wrap" id="leaderboard-table">Loading...</div>
+  </div>
+
+  <!-- SYMBOLS -->
+  <div id="page-symbols" class="page">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin-bottom:0">Watchlist Symbols</h2>
+      <button class="btn primary" onclick="saveSymbols()">&#128190; Save All</button>
+    </div>
+    <p style="color:var(--muted); font-size:13px; margin-bottom:20px;">Add or remove symbols per market. Saved to <code>data/watchlist.json</code>. Bot workers pick up changes on next restart.</p>
+    <div class="grid grid-3">
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span style="background:#0a2e18;color:#7ef0a0;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.5px;">IN</span>
+          <div><div style="font-size:15px;font-weight:600;">India NSE</div><div style="font-size:11px;color:var(--muted)">e.g. RELIANCE, TCS, INFY</div></div>
+        </div>
+        <div id="sym-india-chips" style="min-height:44px; margin-bottom:14px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="sym-india-input" placeholder="Symbol e.g. RELIANCE" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('india')" oninput="this.value=this.value.toUpperCase()">
+          <button class="btn primary sm" onclick="addSymbol('india')">+ Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span style="background:#0d2a4a;color:#7eb8f0;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.5px;">US</span>
+          <div><div style="font-size:15px;font-weight:600;">US Markets</div><div style="font-size:11px;color:var(--muted)">e.g. AAPL, TSLA, NVDA</div></div>
+        </div>
+        <div id="sym-us-chips" style="min-height:44px; margin-bottom:14px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="sym-us-input" placeholder="Symbol e.g. AAPL" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('us')" oninput="this.value=this.value.toUpperCase()">
+          <button class="btn primary sm" onclick="addSymbol('us')">+ Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span style="background:#3a2600;color:#f0c07e;padding:4px 10px;border-radius:5px;font-size:12px;font-weight:700;letter-spacing:.5px;">Crypto</span>
+          <div><div style="font-size:15px;font-weight:600;">Crypto 24/7</div><div style="font-size:11px;color:var(--muted)">e.g. BTC, ETH, SOL</div></div>
+        </div>
+        <div id="sym-crypto-chips" style="min-height:44px; margin-bottom:14px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="sym-crypto-input" placeholder="Symbol e.g. BTC" style="flex:1;" onkeydown="if(event.key==='Enter')addSymbol('crypto')" oninput="this.value=this.value.toUpperCase()">
+          <button class="btn primary sm" onclick="addSymbol('crypto')">+ Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div style="font-size:13px;color:var(--muted);line-height:1.7">
+        <strong style="color:var(--text)">How it works:</strong> Symbols are stored in <code>data/watchlist.json</code> on the server.
+        The India worker expects NSE symbols without exchange suffix (e.g. <code>RELIANCE</code>).
+        US symbols should match Alpaca tickers (e.g. <code>AAPL</code>).
+        Crypto base currencies only — no USDT suffix (e.g. <code>BTC</code>, not <code>BTCUSDT</code>). The worker appends USDT automatically.
+      </div>
+    </div>
   </div>
 
   <!-- CONFIG -->
@@ -648,22 +694,68 @@ function toast(msg, dur = 3000) {
   setTimeout(() => el.classList.remove('show'), dur);
 }
 
+// ── Column sort system (3-state: default -> asc -> desc -> default) ────────
+var _sort = {
+  pos:    {col: 'time', dir: 'desc'},
+  trades: {col: 'date', dir: 'desc'},
+  lb:     {col: 'pnl',  dir: 'desc'}
+};
+function setSort(table, col) {
+  var s = _sort[table];
+  if (s.col === col) {
+    if (s.dir === 'asc')  { s.dir = 'desc'; }
+    else if (s.dir === 'desc') { s.col = ''; s.dir = ''; }
+    else { s.col = col; s.dir = 'asc'; }
+  } else {
+    s.col = col; s.dir = 'asc';
+  }
+  updateSortIcons(table);
+  if (table === 'pos')    loadPositions();
+  if (table === 'trades') { _tradeOffset = 0; loadTrades(); }
+  if (table === 'lb')     renderLeaderboard();
+}
+function updateSortIcons(table) {
+  document.querySelectorAll('[id^="si-' + table + '-"]').forEach(function(el) {
+    el.innerHTML = '&#8645;'; el.className = 'sort-icon';
+  });
+  var s = _sort[table];
+  if (s.col && s.dir) {
+    var el = document.getElementById('si-' + table + '-' + s.col);
+    if (el) { el.innerHTML = s.dir === 'asc' ? '&#8593;' : '&#8595;'; el.className = 'sort-icon active'; }
+  }
+}
+function thSort(table, col, label) {
+  return '<th class="sort-th" onclick="setSort(\'' + table + '\',\'' + col + '\')">' +
+    label + ' <span class="sort-icon" id="si-' + table + '-' + col + '">&#8645;</span></th>';
+}
+function getTradeSort() {
+  var s = _sort.trades;
+  if (!s.col || !s.dir) return 'date_desc';
+  var colMap = {date: 'date', pnl: 'pnl', pct: 'pnl', sym: 'sym'};
+  return (colMap[s.col] || 'date') + '_' + s.dir;
+}
+
+// ── Page auto-refresh timer ─────────────────────────────────────────────────
+var _pageTimer = null;
+function _stopPageTimer() {
+  if (_pageTimer) { clearInterval(_pageTimer); _pageTimer = null; }
+}
+
 // ── Default filter persistence ──────────────────────────────────────────────
 function saveDefault(page) {
   var state = {};
   if (page === 'pos') {
-    var sortEl = document.getElementById('pos-sort');
-    if (sortEl) state.sort = sortEl.value;
+    var mktEl = document.getElementById('pos-market-filter');
+    if (mktEl) state.market = mktEl.value;
+    state.sort = {col: _sort.pos.col, dir: _sort.pos.dir};
   } else if (page === 'trades') {
-    var mktEl    = document.getElementById('trade-market');
+    var mktEl2   = document.getElementById('trade-market');
     var statusEl = document.getElementById('trade-status');
-    var sortEl2  = document.getElementById('trade-sort');
-    if (mktEl)    state.market = mktEl.value;
+    if (mktEl2)   state.market = mktEl2.value;
     if (statusEl) state.status = statusEl.value;
-    if (sortEl2)  state.sort   = sortEl2.value;
+    state.sort = {col: _sort.trades.col, dir: _sort.trades.dir};
   } else if (page === 'lb') {
-    var lbSortEl = document.getElementById('lb-sort');
-    if (lbSortEl) state.sort = lbSortEl.value;
+    state.sort = {col: _sort.lb.col, dir: _sort.lb.dir};
   }
   try { localStorage.setItem('angelbot_default_' + page, JSON.stringify(state)); } catch(e) {}
   toast('Default saved');
@@ -675,35 +767,37 @@ function applyDefault(page) {
   var state;
   try { state = JSON.parse(raw); } catch(e) { return; }
   if (page === 'pos') {
-    var sortEl = document.getElementById('pos-sort');
-    if (sortEl && state.sort) sortEl.value = state.sort;
+    var mktEl = document.getElementById('pos-market-filter');
+    if (mktEl && state.market !== undefined) mktEl.value = state.market;
+    if (state.sort) { _sort.pos.col = state.sort.col || 'time'; _sort.pos.dir = state.sort.dir || 'desc'; }
   } else if (page === 'trades') {
-    var mktEl    = document.getElementById('trade-market');
+    var mktEl2   = document.getElementById('trade-market');
     var statusEl = document.getElementById('trade-status');
-    var sortEl2  = document.getElementById('trade-sort');
-    if (mktEl    && state.market) mktEl.value    = state.market;
-    if (statusEl && state.status) statusEl.value  = state.status;
-    if (sortEl2  && state.sort)   sortEl2.value   = state.sort;
+    if (mktEl2   && state.market !== undefined) mktEl2.value   = state.market;
+    if (statusEl && state.status !== undefined) statusEl.value = state.status;
+    if (state.sort) { _sort.trades.col = state.sort.col || 'date'; _sort.trades.dir = state.sort.dir || 'desc'; }
   } else if (page === 'lb') {
-    var lbSortEl = document.getElementById('lb-sort');
-    if (lbSortEl && state.sort) lbSortEl.value = state.sort;
+    if (state.sort) { _sort.lb.col = state.sort.col || 'pnl'; _sort.lb.dir = state.sort.dir || 'desc'; }
   }
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
+var _lbMarket = '';
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
+  _stopPageTimer();
   if (name === 'dashboard')   refreshDashboard();
-  if (name === 'positions')   { applyDefault('pos');    loadPositions(); }
+  if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 15000); }
   if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
-  if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(''); }
+  if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
   if (name === 'config')      loadConfig();
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
   if (name === 'logs')        loadLog();
+  if (name === 'symbols')     loadSymbols();
   if (name === 'monitor')     startMonitor();
   if (name !== 'monitor')     stopMonitor();
 }
@@ -819,7 +913,7 @@ async function loadRecentTrades() {
   const r = await apiFetch('/api/trades?status_filter=closed&limit=10&offset=0');
   if (!r) return;
   const d = await r.json();
-  document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades);
+  document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades, false);
 }
 
 async function loadRecentBuys() {
@@ -917,40 +1011,45 @@ async function restartService(name) { return svcAction(name, 'restart'); }
 // ── Positions ─────────────────────────────────────────────────────────────
 async function loadPositions() {
   const market = document.getElementById('pos-market-filter').value;
-  const sort   = document.getElementById('pos-sort') ? document.getElementById('pos-sort').value : 'time_desc';
+  const s      = _sort.pos;
+  const col    = s.col || 'time';
+  const dir    = s.dir || 'desc';
+  const mul    = dir === 'asc' ? 1 : -1;
   const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
   if (!r) return;
   const d = await r.json();
   const el = document.getElementById('positions-table');
   if (!d.positions.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
   d.positions.sort(function(a, b) {
-    if (sort === 'time_asc')  return (a.entry_time||'').localeCompare(b.entry_time||'');
-    if (sort === 'time_desc') return (b.entry_time||'').localeCompare(a.entry_time||'');
-    if (sort === 'sym_asc')   return (a.symbol||'').localeCompare(b.symbol||'');
-    if (sort === 'sym_desc')  return (b.symbol||'').localeCompare(a.symbol||'');
-    if (sort === 'cap_desc')  return (b.capital_used||0) - (a.capital_used||0);
-    if (sort === 'cap_asc')   return (a.capital_used||0) - (b.capital_used||0);
-    return 0;
+    if (col === 'sym')  return mul * (a.symbol||'').localeCompare(b.symbol||'');
+    if (col === 'cap')  return mul * ((a.capital_used||0) - (b.capital_used||0));
+    if (col === 'qty')  return mul * ((a.quantity||0) - (b.quantity||0));
+    return mul * (a.entry_time||'').localeCompare(b.entry_time||'');
   });
-  el.innerHTML = `<table>
-    <thead><tr><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th><th>Live Price</th><th>Unrealized P&L</th><th>Qty</th><th>Capital</th><th>SL</th><th>Target</th><th>Action</th></tr></thead>
-    <tbody>${d.positions.map(p => {
-      const cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '₹');
-      return `<tr id="pos-row-${p.id}">
-        <td><strong>${fmtSym(p.symbol, p.source)}</strong></td>
-        <td>${mktBadge(p.source)}</td>
-        <td style="color:var(--muted);white-space:nowrap">${fmtDt(p.entry_time, p.source)}</td>
-        <td>${cur}${(p.entry_price||0).toFixed(4)}</td>
-        <td id="lp-${p.id}" style="color:var(--muted)">...</td>
-        <td id="upnl-${p.id}" style="color:var(--muted)">...</td>
-        <td>${p.quantity}</td>
-        <td>${cur}${(p.capital_used||0).toFixed(2)}</td>
-        <td class="pnl-neg">${cur}${(p.stop_loss||0).toFixed(4)}</td>
-        <td class="pnl-pos">${cur}${(p.target||0).toFixed(4)}</td>
-        <td><button class="btn btn-danger" style="padding:3px 10px; font-size:12px;" onclick="forceSell(${p.id},'${p.symbol}')">&#9889; Sell</button></td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`;
+  el.innerHTML = '<table><thead><tr>' +
+    thSort('pos','sym','Symbol') + '<th>Market</th>' +
+    thSort('pos','time','Entry Time') + '<th>Entry Price</th>' +
+    '<th>Live Price</th><th>Unrealized P&L</th>' +
+    thSort('pos','qty','Qty') + thSort('pos','cap','Capital') +
+    '<th>SL</th><th>Target</th><th>Action</th>' +
+    '</tr></thead><tbody>' +
+    d.positions.map(function(p) {
+      var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      return '<tr id="pos-row-' + p.id + '">' +
+        '<td><strong>' + fmtSym(p.symbol, p.source) + '</strong></td>' +
+        '<td>' + mktBadge(p.source) + '</td>' +
+        '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
+        '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
+        '<td id="lp-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '<td id="upnl-' + p.id + '" style="color:var(--muted)">...</td>' +
+        '<td>' + p.quantity + '</td>' +
+        '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
+        '<td class="pnl-neg">' + cur + (p.stop_loss||0).toFixed(4) + '</td>' +
+        '<td class="pnl-pos">' + cur + (p.target||0).toFixed(4) + '</td>' +
+        '<td><button class="btn btn-danger" style="padding:3px 10px;font-size:12px;" onclick="forceSell(' + p.id + ',\'' + p.symbol + '\')">&#9889; Sell</button></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+  updateSortIcons('pos');
   fetchLivePrices(d.positions, function(prices) {
     d.positions.forEach(function(p) {
       const key    = p.symbol + '|' + p.source;
@@ -1062,36 +1161,44 @@ function mktBadge(source) {
   return '<span style="background:#0a2e18;color:#7ef0a0;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">IN</span>';
 }
 
-function buildTradeTable(trades) {
+function buildTradeTable(trades, sortable) {
   if (!trades.length) return '<p style="color:var(--muted);padding:16px">No trades found.</p>';
-  return `<table>
-    <thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Buy Time</th><th>Entry</th><th>Sell Time</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th><th>Status</th></tr></thead>
-    <tbody>${trades.map(t => {
-      const cur   = t.source === 'us_paper' ? '$' : (t.source === 'crypto_paper' ? '$' : '₹');
-      const pnl   = t.pnl || 0;
-      const cls   = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-      const sign  = pnl >= 0 ? '+' : '';
-      return `<tr>
-        <td style="color:var(--muted)">${t.id}</td>
-        <td><strong>${fmtSym(t.symbol, t.source)}</strong></td>
-        <td>${mktBadge(t.source)}</td>
-        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.entry_time, t.source)}</td>
-        <td>${cur}${(t.entry_price||0).toFixed(2)}</td>
-        <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.exit_time, t.source)}</td>
-        <td>${t.exit_price ? cur + (t.exit_price).toFixed(2) : '—'}</td>
-        <td class="${cls}">${t.status==='closed' ? sign+cur+Math.abs(pnl).toFixed(2) : '—'}</td>
-        <td class="${cls}">${t.status==='closed' && t.pnl_pct != null ? sign+(t.pnl_pct).toFixed(1)+'%' : '—'}</td>
-        <td style="color:var(--muted); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.exit_reason||'—'}</td>
-        <td><span class="badge ${t.status==='open'?'blue':'green'}">${t.status}</span></td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`;
+  var th = (sortable !== false)
+    ? function(col, label) { return thSort('trades', col, label); }
+    : function(col, label) { return '<th>' + label + '</th>'; };
+  return '<table><thead><tr>' +
+    '<th style="color:var(--muted)">#</th>' +
+    th('sym', 'Symbol') + '<th>Market</th>' +
+    th('date', 'Buy Time') + '<th>Entry</th>' +
+    '<th>Sell Time</th><th>Exit</th>' +
+    th('pnl', 'P&amp;L') + th('pct', '%') +
+    '<th>Reason</th><th>Status</th>' +
+    '</tr></thead><tbody>' +
+    trades.map(function(t) {
+      var cur  = t.source === 'us_paper' ? '$' : (t.source === 'crypto_paper' ? '$' : '&#8377;');
+      var pnl  = t.pnl || 0;
+      var cls  = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      var sign = pnl >= 0 ? '+' : '';
+      return '<tr>' +
+        '<td style="color:var(--muted)">' + t.id + '</td>' +
+        '<td><strong>' + fmtSym(t.symbol, t.source) + '</strong></td>' +
+        '<td>' + mktBadge(t.source) + '</td>' +
+        '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(t.entry_time, t.source) + '</td>' +
+        '<td>' + cur + (t.entry_price||0).toFixed(2) + '</td>' +
+        '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(t.exit_time, t.source) + '</td>' +
+        '<td>' + (t.exit_price ? cur + (t.exit_price).toFixed(2) : '&#8212;') + '</td>' +
+        '<td class="' + cls + '">' + (t.status==='closed' ? sign+cur+Math.abs(pnl).toFixed(2) : '&#8212;') + '</td>' +
+        '<td class="' + cls + '">' + (t.status==='closed' && t.pnl_pct != null ? sign+(t.pnl_pct).toFixed(1)+'%' : '&#8212;') + '</td>' +
+        '<td style="color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (t.exit_reason||'&#8212;') + '</td>' +
+        '<td><span class="badge ' + (t.status==='open'?'blue':'green') + '">' + t.status + '</span></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
 }
 
 async function loadTrades() {
   const market = document.getElementById('trade-market').value;
   const status = document.getElementById('trade-status').value;
-  const sort   = document.getElementById('trade-sort') ? document.getElementById('trade-sort').value : 'date_desc';
+  const sort   = getTradeSort();
   let url = `/api/trades?limit=${_tradeLimit}&offset=${_tradeOffset}`;
   if (market) url += '&market=' + market;
   if (status) url += '&status_filter=' + status;
@@ -1100,7 +1207,8 @@ async function loadTrades() {
   const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
-  document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades);
+  document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades, true);
+  updateSortIcons('trades');
   document.getElementById('trade-count').textContent = `${d.total} total trades`;
 
   // Total P&L display
@@ -1126,51 +1234,58 @@ async function loadTrades() {
 // ── Leaderboard ───────────────────────────────────────────────────────────
 var _lbData = [];
 async function loadLeaderboard(market) {
-  document.querySelectorAll('#page-leaderboard .tab').forEach((t,i) => {
-    t.classList.toggle('active', ['','india','us','crypto'][i] === market);
-  });
-  const url = '/api/stats/leaderboard' + (market ? '?market=' + market : '');
-  const r = await apiFetch(url);
+  if (market === undefined) market = _lbMarket || '';
+  _lbMarket = market;
+  var tabs = document.querySelectorAll('#page-leaderboard .tab');
+  var keys = ['','india','us','crypto'];
+  tabs.forEach(function(t, i) { t.classList.toggle('active', keys[i] === market); });
+  var url = '/api/stats/leaderboard' + (market ? '?market=' + market : '');
+  var r = await apiFetch(url);
   if (!r) return;
-  const d = await r.json();
-  _lbData = d.leaderboard || [];
+  var d = await r.json();
+  _lbData = (d && d.leaderboard) ? d.leaderboard : [];
   renderLeaderboard();
 }
-function resortLeaderboard() { renderLeaderboard(); }
 function renderLeaderboard() {
-  const el = document.getElementById('leaderboard-table');
-  if (!_lbData.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No trade data yet.</p>'; return; }
-  const sortEl = document.getElementById('lb-sort');
-  const sort = sortEl ? sortEl.value : 'pnl_desc';
-  const rows = _lbData.slice().sort(function(a,b) {
-    if (sort === 'pnl_desc')    return b.total_pnl - a.total_pnl;
-    if (sort === 'pnl_asc')     return a.total_pnl - b.total_pnl;
-    if (sort === 'wr_desc')     return b.win_rate  - a.win_rate;
-    if (sort === 'wr_asc')      return a.win_rate  - b.win_rate;
-    if (sort === 'trades_desc') return b.trades    - a.trades;
-    if (sort === 'sym_asc')     return (a.symbol||'').localeCompare(b.symbol||'');
+  var el = document.getElementById('leaderboard-table');
+  if (!el) return;
+  if (!_lbData || !_lbData.length) {
+    el.innerHTML = '<p style="color:var(--muted);padding:16px">No closed trade data yet.</p>';
+    return;
+  }
+  var s   = _sort.lb;
+  var col = s.col || 'pnl';
+  var dir = s.dir || 'desc';
+  var mul = dir === 'asc' ? 1 : -1;
+  var rows = _lbData.slice().sort(function(a, b) {
+    if (col === 'pnl')    return mul * (a.total_pnl - b.total_pnl);
+    if (col === 'wr')     return mul * (a.win_rate - b.win_rate);
+    if (col === 'trades') return mul * (a.trades - b.trades);
+    if (col === 'sym')    return mul * (a.symbol||'').localeCompare(b.symbol||'');
+    if (col === 'avg')    return mul * (a.avg_pnl - b.avg_pnl);
+    if (col === 'best')   return mul * (a.best - b.best);
+    if (col === 'worst')  return mul * (a.worst - b.worst);
     return 0;
   });
-  el.innerHTML = `<table>
-    <thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead>
-    <tbody>${rows.map(s => {
-      const wr = s.win_rate;
-      return `<tr>
-        <td><strong>${s.symbol}</strong></td>
-        <td>${s.trades} <span style="color:var(--muted);font-size:11px">(&#10003;${s.wins} &#10007;${s.losses})</span></td>
-        <td>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span>${wr.toFixed(1)}%</span>
-            <div class="win-bar" style="width:60px"><div class="win-fill" style="width:${wr}%"></div></div>
-          </div>
-        </td>
-        <td class="${s.total_pnl>=0?'pnl-pos':'pnl-neg'}">${s.total_pnl>=0?'+':''}${s.total_pnl.toFixed(2)}</td>
-        <td class="${s.avg_pnl>=0?'pnl-pos':'pnl-neg'}">${s.avg_pnl>=0?'+':''}${s.avg_pnl.toFixed(2)}</td>
-        <td class="pnl-pos">+${s.best.toFixed(2)}</td>
-        <td class="pnl-neg">${s.worst.toFixed(2)}</td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`;
+  el.innerHTML = '<table><thead><tr>' +
+    thSort('lb','sym','Symbol') + thSort('lb','trades','Trades') +
+    thSort('lb','wr','Win Rate') + thSort('lb','pnl','Total P&L') +
+    thSort('lb','avg','Avg P&L') + thSort('lb','best','Best') + thSort('lb','worst','Worst') +
+    '</tr></thead><tbody>' +
+    rows.map(function(row) {
+      var wr = row.win_rate || 0;
+      return '<tr>' +
+        '<td><strong>' + row.symbol + '</strong></td>' +
+        '<td>' + row.trades + ' <span style="color:var(--muted);font-size:11px">(' + row.wins + 'W/' + row.losses + 'L)</span></td>' +
+        '<td><div style="display:flex;align-items:center;gap:8px"><span>' + wr.toFixed(1) + '%</span>' +
+          '<div class="win-bar" style="width:60px"><div class="win-fill" style="width:' + wr + '%"></div></div></div></td>' +
+        '<td class="' + (row.total_pnl>=0?'pnl-pos':'pnl-neg') + '">' + (row.total_pnl>=0?'+':'') + row.total_pnl.toFixed(2) + '</td>' +
+        '<td class="' + (row.avg_pnl>=0?'pnl-pos':'pnl-neg') + '">' + (row.avg_pnl>=0?'+':'') + row.avg_pnl.toFixed(2) + '</td>' +
+        '<td class="pnl-pos">+' + row.best.toFixed(2) + '</td>' +
+        '<td class="pnl-neg">' + row.worst.toFixed(2) + '</td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+  updateSortIcons('lb');
 }
 
 // ── Config ────────────────────────────────────────────────────────────────
@@ -1720,6 +1835,56 @@ async function confirmDeleteUser(username) {
   else toast('❌ ' + (d.detail || 'Error'), 4000);
 }
 
+// ── Symbol watchlist management ────────────────────────────────────────────
+var _symbols = {india: [], us: [], crypto: []};
+async function loadSymbols() {
+  var r = await apiFetch('/api/symbols');
+  if (!r) return;
+  var d = await r.json();
+  _symbols = {india: d.india || [], us: d.us || [], crypto: d.crypto || []};
+  renderSymbolChips('india');
+  renderSymbolChips('us');
+  renderSymbolChips('crypto');
+}
+function renderSymbolChips(market) {
+  var el = document.getElementById('sym-' + market + '-chips');
+  if (!el) return;
+  var syms = _symbols[market] || [];
+  if (!syms.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:12px;font-style:italic">No symbols added yet.</span>';
+    return;
+  }
+  el.innerHTML = syms.map(function(s) {
+    return '<span class="sym-chip">' + s +
+      '<button onclick="removeSymbol(\'' + market + '\',\'' + s + '\')" title="Remove">&#215;</button>' +
+      '</span>';
+  }).join('');
+}
+function addSymbol(market) {
+  var input = document.getElementById('sym-' + market + '-input');
+  var sym = (input.value || '').trim().toUpperCase();
+  if (!sym) return;
+  if ((_symbols[market] || []).indexOf(sym) !== -1) { toast('Already in list'); return; }
+  _symbols[market] = (_symbols[market] || []).concat([sym]);
+  renderSymbolChips(market);
+  input.value = '';
+}
+function removeSymbol(market, sym) {
+  _symbols[market] = (_symbols[market] || []).filter(function(s) { return s !== sym; });
+  renderSymbolChips(market);
+}
+async function saveSymbols() {
+  var r = await apiFetch('/api/symbols', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(_symbols)
+  });
+  if (!r) return;
+  var d = await r.json();
+  if (d.ok) toast('Symbols saved');
+  else toast('Error: ' + (d.detail || 'Unknown'), 4000);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function _checkAdminAccess() {
   const r = await apiFetch('/api/users');
@@ -1775,8 +1940,8 @@ function updateLiveIndicators() {
   checkUpdate();
   _checkAdminAccess();
   updateLiveIndicators();
-  setInterval(refreshDashboard, 60000);
-  setInterval(checkUpdate, 1800000); // auto-check for updates every 30 min
+  setInterval(refreshDashboard, 30000);      // dashboard refreshes every 30s always
+  setInterval(checkUpdate, 1800000);
   setInterval(updateLiveIndicators, 30000);
 })();
 </script>

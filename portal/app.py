@@ -104,6 +104,29 @@ def _build_date_clause(date_filter: Optional[str]) -> tuple:
     return "", []
 
 
+_watchlist_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'watchlist.json')
+
+class SymbolsUpdate(BaseModel):
+    india: List[str] = []
+    us: List[str] = []
+    crypto: List[str] = []
+
+@app.get("/api/symbols")
+def get_symbols(user: str = Depends(require_auth)):
+    if os.path.exists(_watchlist_path):
+        with open(_watchlist_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {"india": [], "us": [], "crypto": []}
+
+@app.post("/api/symbols")
+def save_symbols(req: SymbolsUpdate, user: str = Depends(require_auth)):
+    data = {"india": req.india, "us": req.us, "crypto": req.crypto}
+    os.makedirs(os.path.dirname(_watchlist_path), exist_ok=True)
+    with open(_watchlist_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+    return {"ok": True}
+
+
 @app.get("/api/dashboard")
 def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_auth)):
     conn = get_conn()
@@ -222,9 +245,12 @@ def get_trades(
         'date_asc':  'entry_time ASC',
         'pnl_desc':  'pnl DESC',
         'pnl_asc':   'pnl ASC',
+        'pnl_pct_desc': 'pnl_pct DESC',
+        'pnl_pct_asc':  'pnl_pct ASC',
         'sym_asc':   'symbol ASC',
+        'sym_desc':  'symbol DESC',
     }
-    order_clause = _sort_map.get(sort_by or '', 'id DESC')
+    order_clause = _sort_map.get(sort_by or '', 'entry_time DESC')
 
     sql = "SELECT id,symbol,entry_time,exit_time,entry_price,exit_price,quantity,capital_used,pnl,pnl_pct,exit_reason,status,source FROM trades"
     if where:
