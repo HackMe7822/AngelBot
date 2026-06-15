@@ -974,7 +974,8 @@ async function fetchLivePrices(positions, callback) {
   // normalise source before building request AND lookup key
   const normed = positions.map(function(p) {
     return { id: p.id, symbol: p.symbol, source: p.source || 'paper',
-             entry_price: p.entry_price, quantity: p.quantity };
+             entry_price: p.entry_price, quantity: p.quantity,
+             capital_used: p.capital_used };
   });
   const r = await apiFetch('/api/prices', {
     method: 'POST',
