@@ -772,14 +772,16 @@ def apply_update(user: str = Depends(require_auth)):
             yield from emit("git pull", False, str(e))
             return
 
-        # 2. Restart the 3 workers (stop then start each)
+        # 2. Restart the 3 workers via nssm restart (stop+wait+start in one atomic command)
         for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
             try:
-                subprocess.run(['net', 'stop', svc], capture_output=True, timeout=25)
-                sr = subprocess.run(['net', 'start', svc], capture_output=True, text=True, timeout=25)
+                sr = subprocess.run(
+                    ['nssm', 'restart', svc],
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45
+                )
                 ok = sr.returncode == 0
-                yield from emit(f"restart {svc}", ok,
-                                "restarted" if ok else (sr.stdout.strip() or sr.stderr.strip()))
+                detail = "restarted" if ok else (sr.stderr.strip() or sr.stdout.strip() or "unknown error")
+                yield from emit(f"restart {svc}", ok, detail)
             except Exception as e:
                 yield from emit(f"restart {svc}", False, str(e))
 
