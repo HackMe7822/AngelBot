@@ -16,6 +16,12 @@ from datetime import datetime, timezone, timedelta
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
+try:
+    from config import MOOD_FILTER_THRESHOLD as _MOOD_THRESHOLD, MAX_SECTOR_POSITIONS as _MAX_SECTOR
+except ImportError:
+    _MOOD_THRESHOLD = -1.5
+    _MAX_SECTOR     = 2
+
 # ── Cache layer (5-min TTL) ───────────────────────────────────────────────────
 _cache = {}
 _CACHE_TTL = 300  # seconds
@@ -47,35 +53,43 @@ def _fetch_index_change(ticker):
         return None
 
 
-def india_market_mood_ok(threshold_pct=-1.5):
-    """Returns True if NIFTY is NOT down more than threshold_pct% today.
+def india_market_mood_ok():
+    """Returns True if NIFTY is NOT down more than MOOD_FILTER_THRESHOLD% today.
 
-    Fail-open: returns True if data unavailable (can't check, allow scan).
+    Threshold is read from config (env-driven). Fail-open: returns True if data unavailable.
     Caches for 5 min — NIFTY intraday trend doesn't flip every second.
     """
     def _check():
+        try:
+            from config import MOOD_FILTER_THRESHOLD as thr
+        except ImportError:
+            thr = _MOOD_THRESHOLD
         chg = _fetch_index_change('^NSEI')
         if chg is None:
             return True   # fail-open
-        if chg <= threshold_pct:
-            print(f"  [MOOD FILTER]  NIFTY {chg:+.2f}% today — skipping India buys")
+        if chg <= thr:
+            print(f"  [MOOD FILTER]  NIFTY {chg:+.2f}% today (threshold {thr}%) — skipping India buys")
             return False
         return True
 
     return _cached('india_mood', _check)
 
 
-def us_market_mood_ok(threshold_pct=-1.5):
-    """Returns True if S&P 500 is NOT down more than threshold_pct% today.
+def us_market_mood_ok():
+    """Returns True if S&P 500 is NOT down more than MOOD_FILTER_THRESHOLD% today.
 
     Fail-open: returns True if data unavailable.
     """
     def _check():
+        try:
+            from config import MOOD_FILTER_THRESHOLD as thr
+        except ImportError:
+            thr = _MOOD_THRESHOLD
         chg = _fetch_index_change('^GSPC')
         if chg is None:
             return True
-        if chg <= threshold_pct:
-            print(f"  [MOOD FILTER]  S&P500 {chg:+.2f}% today — skipping US buys")
+        if chg <= thr:
+            print(f"  [MOOD FILTER]  S&P500 {chg:+.2f}% today (threshold {thr}%) — skipping US buys")
             return False
         return True
 
@@ -218,7 +232,7 @@ _US_SECTORS = {
 }
 
 # Crypto has no sectors — skip sector cap for crypto
-MAX_SECTOR_POSITIONS = 2   # max open positions per sector
+MAX_SECTOR_POSITIONS = _MAX_SECTOR  # max open positions per sector (env-driven via config)
 
 
 def get_sector(symbol, market='india'):
@@ -231,8 +245,13 @@ def get_sector(symbol, market='india'):
 def sector_cap_ok(symbol, open_positions, market='india'):
     """Returns True if adding this symbol won't exceed MAX_SECTOR_POSITIONS in its sector.
 
-    Falls back to True (allow) if sector is unknown.
+    Reads MAX_SECTOR_POSITIONS live from config (env-driven). Falls back to True if sector unknown.
     """
+    try:
+        from config import MAX_SECTOR_POSITIONS as cap
+    except ImportError:
+        cap = MAX_SECTOR_POSITIONS
+
     sector = get_sector(symbol, market)
     if not sector:
         return True   # unknown sector — allow
@@ -241,7 +260,7 @@ def sector_cap_ok(symbol, open_positions, market='india'):
         1 for p in open_positions
         if get_sector(p['symbol'], market) == sector
     )
-    if sector_count >= MAX_SECTOR_POSITIONS:
-        print(f"  [SECTOR CAP]  {symbol} ({sector}) — already {sector_count} open positions in {sector}")
+    if sector_count >= cap:
+        print(f"  [SECTOR CAP]  {symbol} ({sector}) — already {sector_count} open positions in {sector} (max {cap})")
         return False
     return True

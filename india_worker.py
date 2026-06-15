@@ -119,7 +119,8 @@ def _acquire_lock():
 
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (PAPER_MODE, MAX_DAILY_LOSS_PCT, MAX_DAILY_TRADES, MAX_DEPLOYED_PCT,
-                    PEAK_DRAWDOWN_PCT, ENTRY_START_MIN, ENTRY_END_MIN, MIN_STOCK_PRICE)
+                    PEAK_DRAWDOWN_PCT, ENTRY_START_MIN, ENTRY_END_MIN, MIN_STOCK_PRICE,
+                    USE_MOOD_FILTER, USE_SECTOR_CAP)
 from data.nifty_stocks import get_all_stocks
 from data.live_feed import LiveFeed
 from trading.scanner import scan_stocks
@@ -205,8 +206,8 @@ def run_scan():
         sep()
         return
 
-    if not india_market_mood_ok():
-        cprint(f"  [{ist_str}]  NIFTY mood bearish — skipping India buy scan", YL)
+    if USE_MOOD_FILTER and not india_market_mood_ok():
+        cprint(f"  [{ist_str}]  NIFTY mood bearish — skipping India buy scan (mood filter ON)", YL)
         sep()
         return
 
@@ -256,7 +257,7 @@ def run_scan():
         if not symbol_event_clear(c['symbol']):
             cprint(f"  [EVENT]     {c['symbol']} — earnings/macro event today, skip", YL)
             continue
-        if not sector_cap_ok(c['symbol'], trader.open_positions, market='india'):
+        if USE_SECTOR_CAP and not sector_cap_ok(c['symbol'], trader.open_positions, market='india'):
             continue
         if monitor and monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)

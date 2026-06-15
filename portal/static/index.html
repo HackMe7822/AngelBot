@@ -449,7 +449,7 @@
         <div style="font-size:15px; font-weight:600; margin-bottom:4px;">&#127919; Strategy Quality Controls</div>
         <div class="cred-note" style="margin-bottom:14px;">
           <span class="icon">&#9432;</span>
-          <div>These settings have the biggest impact on profit vs loss. <strong>MIN_SIGNAL_SCORE=4</strong> and <strong>MAX_CONCURRENT_POSITIONS=5</strong> match the settings that produced the $300/4hr profitable session. <strong>Time Exit OFF</strong> lets good trades reach their full target instead of closing early.</div>
+          <div>These settings have the biggest impact on profit vs loss. Original <strong>$300/4hr session</strong> settings: <strong>Signal Score 4</strong> &bull; <strong>Mood Filter OFF</strong> &bull; <strong>Sector Cap OFF</strong> &bull; <strong>Time Exit OFF</strong>. Turning Mood Filter and Sector Cap OFF removes the biggest blockers that prevent buying on dip days or in popular sectors like IT/Banks. Changes are written to <code>.env</code> &mdash; restart bot workers to apply.</div>
         </div>
         <div id="config-strategy"></div>
       </div>
@@ -1535,7 +1535,9 @@ function renderLeaderboard() {
 const _CONFIG_SECTIONS = {
   strategy: {
     label: '&#127919; Strategy Quality',
-    keys: ['MIN_SIGNAL_SCORE','MAX_CONCURRENT_POSITIONS','USE_TIME_EXIT','MAX_HOLD_MINUTES']
+    keys: ['MIN_SIGNAL_SCORE','USE_MOOD_FILTER','MOOD_FILTER_THRESHOLD',
+           'USE_SECTOR_CAP','MAX_SECTOR_POSITIONS',
+           'MAX_CONCURRENT_POSITIONS','USE_TIME_EXIT','MAX_HOLD_MINUTES']
   },
   india: {
     label: 'India Settings',
@@ -1560,14 +1562,49 @@ const _CONFIG_SECTIONS = {
 };
 
 // Keys that render as ON/OFF toggle switches instead of text inputs
-const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT']);
+const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP']);
 
-// Human-readable descriptions for strategy keys
+// Keys that render as a button-group selector (options defined below)
+const _CONFIG_SELECTS = {
+  MIN_SIGNAL_SCORE: {
+    options: [
+      { val:'2', label:'2 — Aggressive', desc:'Any setup with 2+ signals. Most trades, lowest confidence. High frequency but noisy — expect more false entries.' },
+      { val:'3', label:'3 — Moderate',   desc:'Balanced. More setups than 4, still filtered. Good for active days when market is trending.' },
+      { val:'4', label:'4 — Strict',     desc:'High-confidence only. Fewest trades, strongest setups. Matches the original $300/4hr profitable session.' },
+    ]
+  }
+};
+
+// Human-readable descriptions (shown under each setting)
 const _CONFIG_HINTS = {
-  MIN_SIGNAL_SCORE:          'Signal quality threshold (4=strict/profitable, 3=more trades/lower quality). Higher = fewer but stronger setups.',
-  MAX_CONCURRENT_POSITIONS:  'Hard cap on parallel open positions (e.g. 5). Prevents too many stocks losing at once on a bad day.',
-  USE_TIME_EXIT:             'Close stagnating positions after MAX_HOLD_MINUTES. OFF recommended — good trades need time to develop.',
-  MAX_HOLD_MINUTES:          'Only used when Time Exit is ON. Minutes before a stuck position is force-closed (default 90).',
+  // Strategy
+  MIN_SIGNAL_SCORE:         'Signal quality gate — choose how strict the entry filter is.',
+  USE_MOOD_FILTER:          '<strong>ON:</strong> Block all new buys when NIFTY/S&amp;P is down more than the threshold — conservative, avoids buying into falling markets. <strong>OFF:</strong> Trade regardless of index direction. <em>OFF matches the original profitable session.</em>',
+  MOOD_FILTER_THRESHOLD:    'Index drop % that triggers the mood block (negative number). <strong>-0.5</strong> = very strict (blocks on any 0.5% dip). <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Only applies when Mood Filter is ON.',
+  USE_SECTOR_CAP:           '<strong>ON:</strong> Max stocks per sector (e.g. max 2 IT, max 2 Banks) — limits concentration risk. <strong>OFF:</strong> No sector limit — buys the best setups regardless of sector. <em>OFF matches the original profitable session.</em>',
+  MAX_SECTOR_POSITIONS:     'Max open positions allowed in the same sector at once. Only applies when Sector Cap is ON. Default 2.',
+  MAX_CONCURRENT_POSITIONS: 'Hard cap on total parallel open positions across all stocks. <strong>5</strong> = default. <strong>10+</strong> = high frequency. Applies to all markets.',
+  USE_TIME_EXIT:            '<strong>ON:</strong> Force-close stagnating positions after MAX_HOLD_MINUTES — can cut profitable trades early. <strong>OFF:</strong> Let trades reach their target or stop-loss naturally. <em>OFF recommended for quality setups.</em>',
+  MAX_HOLD_MINUTES:         'Minutes before a stuck position is force-closed. Only active when Time Exit is ON. Default 90 min.',
+  // India
+  MAX_DAILY_TRADES:         'Circuit breaker: stop new India buys after N closed trades per day. Default 30.',
+  MAX_DEPLOYED_PCT:         'Never deploy more than this fraction of India balance at once. <strong>0.70</strong> = 70%. Lower = more conservative.',
+  PEAK_DRAWDOWN_PCT:        'Pause India buys if account drops this % from today\'s session high. <strong>0.03</strong> = 3%.',
+  MAX_DAILY_LOSS_PCT:       'Stop all India buys if day loss exceeds this % of capital. <strong>0.02</strong> = 2%.',
+  SCALP_TARGET_PCT:         'Exit on this % profit per India trade. <strong>0.015</strong> = 1.5%. Wider = higher reward, fewer fills.',
+  SCALP_SL_PCT:             'Exit on this % loss per India trade. <strong>0.006</strong> = 0.6%. Tighter = smaller loss per trade.',
+  SL_CONFIRM_POLLS:         'Consecutive 15s polls below SL before exiting. <strong>2</strong> = 30s confirmation (reduces false exits on wicks).',
+  MIN_STOCK_PRICE:          'Skip India stocks below this ₹ price. ₹150 default — cheaper stocks have too-small SL gaps vs spread.',
+  // US
+  US_MAX_DAILY_TRADES:      'Circuit breaker: stop new US buys after N closed trades per day.',
+  US_MAX_DEPLOYED_PCT:      'Never deploy more than this fraction of US balance at once.',
+  US_PEAK_DRAWDOWN_PCT:     'Pause US buys if account drops this % from session high.',
+  US_MAX_DAILY_LOSS_PCT:    'Stop all US buys if day loss exceeds this % of capital.',
+  US_SCALP_TARGET_PCT:      'Exit on this % profit per US trade.',
+  US_SCALP_SL_PCT:          'Exit on this % loss per US trade.',
+  US_MIN_STOCK_PRICE:       'Skip US stocks below this $ price. $10 default — penny stocks are erratic.',
+  // Crypto
+  CRYPTO_BTC_MIN_CHANGE:    'Skip all alt coin buys if BTC dropped more than this % in the last 1h. e.g. <strong>-0.4</strong> = block if BTC down 0.4%.',
 };
 
 async function loadConfig() {
@@ -1579,7 +1616,30 @@ async function loadConfig() {
     const el = document.getElementById('config-' + containerId);
     if (!el) return;
     const rows = keys.filter(k => d[k] !== undefined).map(k => {
-      const hint = _CONFIG_HINTS[k] ? `<div style="color:var(--muted);font-size:11px;margin-top:3px;line-height:1.5">${_CONFIG_HINTS[k]}</div>` : '';
+      const hint = _CONFIG_HINTS[k] ? `<div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.6">${_CONFIG_HINTS[k]}</div>` : '';
+
+      // Button-group selector (e.g. MIN_SIGNAL_SCORE)
+      if (_CONFIG_SELECTS[k]) {
+        const sel    = _CONFIG_SELECTS[k];
+        const curVal = String(d[k]);
+        const btns   = sel.options.map(o => {
+          const active = o.val === curVal;
+          return `<button class="btn ${active?'primary':'sm'}" style="margin:2px 4px 2px 0;${active?'':'background:var(--card-bg);color:var(--text);border:1px solid var(--border);'}" onclick="selectConfig('${k}',this,'${o.val}')" data-val="${o.val}">${o.label}</button>`;
+        }).join('');
+        const curDesc = (sel.options.find(o => o.val === curVal) || sel.options[sel.options.length-1]).desc;
+        return `<div class="config-row" style="flex-wrap:wrap">
+          <span class="config-key">${k}</span>
+          <div style="flex:1">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;margin-bottom:4px">${btns}</div>
+            <div id="cfg-desc-${k}" style="color:var(--muted);font-size:11px;margin-top:2px;line-height:1.6">${curDesc}</div>
+            <input type="hidden" id="cfg-${k}" value="${curVal}"/>
+            ${hint}
+          </div>
+          <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
+        </div>`;
+      }
+
+      // Toggle switch
       if (_CONFIG_TOGGLES.has(k)) {
         const isOn = String(d[k]).toLowerCase() === 'true';
         return `<div class="config-row" style="flex-wrap:wrap">
@@ -1597,6 +1657,8 @@ async function loadConfig() {
           <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
         </div>`;
       }
+
+      // Plain text input
       return `<div class="config-row" style="flex-wrap:wrap">
         <span class="config-key">${k}</span>
         <div style="flex:1"><input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" style="width:100%"/>
@@ -1604,7 +1666,7 @@ async function loadConfig() {
         <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
       </div>`;
     }).join('');
-    el.innerHTML = rows || '<p style="color:var(--muted);font-size:13px">No settings available.</p>';
+    el.innerHTML = rows || '<p style="color:var(--muted);font-size:13px">No settings loaded — restart portal to apply latest config.</p>';
   }
 
   renderSection('strategy', _CONFIG_SECTIONS.strategy.keys);
@@ -1612,6 +1674,25 @@ async function loadConfig() {
   renderSection('us',       _CONFIG_SECTIONS.us.keys);
   renderSection('crypto',   _CONFIG_SECTIONS.crypto.keys);
   renderSection('general',  _CONFIG_SECTIONS.general.keys);
+}
+
+function selectConfig(key, btn, val) {
+  btn.parentElement.querySelectorAll('button').forEach(function(b) {
+    b.className = 'btn sm';
+    b.style.background = 'var(--card-bg)';
+    b.style.color = 'var(--text)';
+    b.style.border = '1px solid var(--border)';
+  });
+  btn.className = 'btn primary';
+  btn.style.background = '';
+  btn.style.color = '';
+  btn.style.border = '';
+  document.getElementById('cfg-' + key).value = val;
+  var descEl = document.getElementById('cfg-desc-' + key);
+  if (descEl && _CONFIG_SELECTS[key]) {
+    var opt = _CONFIG_SELECTS[key].options.find(function(o) { return o.val === val; });
+    if (opt) descEl.textContent = opt.desc;
+  }
 }
 
 function toggleConfig(key, wrap) {
@@ -1635,8 +1716,8 @@ async function saveConfig(key) {
   });
   if (!r) return;
   const d = await r.json();
-  if (d.ok) toast('✅ ' + d.message);
-  else toast('❌ ' + (d.detail || 'Error'), 5000);
+  if (d.ok) toast('&#10003; ' + d.message);
+  else toast('&#10007; ' + (d.detail || 'Error'), 5000);
 }
 
 // ── API Keys / Credentials ────────────────────────────────────────────────

@@ -22,29 +22,37 @@ RELOAD_THRESHOLD = CAPITAL * 0.30   # auto-reload when balance drops below 30% o
 RELOAD_AMOUNT    = CAPITAL          # reload by same amount as starting capital
 
 # Scalping parameters — 2.5:1 R:R gives profit at 29%+ win rate (accounts for ~0.15% NSE round-trip cost)
-SCALP_TARGET_PCT = 0.015   # exit on 1.5% profit
-SCALP_SL_PCT     = 0.006   # exit on 0.6% loss
-SL_CONFIRM_POLLS = 2       # consecutive 15s polls below SL before exit (2 × 15s = 30s)
+SCALP_TARGET_PCT = float(os.getenv("SCALP_TARGET_PCT", "0.015"))  # exit on 1.5% profit
+SCALP_SL_PCT     = float(os.getenv("SCALP_SL_PCT",     "0.006"))  # exit on 0.6% loss
+SL_CONFIRM_POLLS = int(os.getenv("SL_CONFIRM_POLLS",   "2"))       # consecutive 15s polls below SL
 
 # Signal quality — higher = fewer but stronger trades (4 = original profitable setting, 3 = more trades/lower quality)
 MIN_SIGNAL_SCORE = int(os.getenv("MIN_SIGNAL_SCORE", "4"))
 
 # Risk controls
-MAX_DAILY_LOSS_PCT  = 0.02   # stop all buys if day loss exceeds 2% of capital
-MAX_DAILY_TRADES    = 30     # circuit breaker — stop new buys after N closed trades per day
-MAX_DEPLOYED_PCT    = 0.70   # never deploy more than 70% of balance at once
-PEAK_DRAWDOWN_PCT   = 0.03   # pause new buys if account drops 3% from today's session high
-SLIPPAGE_PCT        = 0.0005 # 0.05% simulated slippage on paper entries (realistic fill cost)
+MAX_DAILY_LOSS_PCT  = float(os.getenv("MAX_DAILY_LOSS_PCT",  "0.02"))   # stop all buys if day loss exceeds 2%
+MAX_DAILY_TRADES    = int(os.getenv("MAX_DAILY_TRADES",      "30"))     # circuit breaker: max closed trades/day
+MAX_DEPLOYED_PCT    = float(os.getenv("MAX_DEPLOYED_PCT",    "0.70"))   # never deploy more than 70% of balance
+PEAK_DRAWDOWN_PCT   = float(os.getenv("PEAK_DRAWDOWN_PCT",   "0.03"))   # pause buys if account drops 3% from high
+SLIPPAGE_PCT        = float(os.getenv("SLIPPAGE_PCT",        "0.0005")) # simulated slippage on paper entries
 ENTRY_START_MIN     = (9, 45)  # no buys before 9:45 AM IST
 ENTRY_END_MIN       = (15, 0)  # no buys after 3:00 PM (approaching force-close)
-MIN_STOCK_PRICE     = 150.0    # skip stocks under ₹150 — SL gap too small vs bid-ask spread
+MIN_STOCK_PRICE     = float(os.getenv("MIN_STOCK_PRICE",     "150.0"))  # skip stocks under ₹150
 
 # Parallel position cap — hard limit on how many stocks open at once across all buys
 MAX_CONCURRENT_POSITIONS = int(os.getenv("MAX_CONCURRENT_POSITIONS", "5"))
 
 # Time-based stagnation exit — if enabled, close positions open >MAX_HOLD_MINUTES with <50% of target move
-USE_TIME_EXIT    = os.getenv("USE_TIME_EXIT", "false").lower() == "true"
+USE_TIME_EXIT    = os.getenv("USE_TIME_EXIT",    "false").lower() == "true"
 MAX_HOLD_MINUTES = int(os.getenv("MAX_HOLD_MINUTES", "90"))
+
+# Market mood filter — if OFF, trades regardless of NIFTY/S&P direction (matches original profitable session)
+USE_MOOD_FILTER       = os.getenv("USE_MOOD_FILTER",       "true").lower() == "true"
+MOOD_FILTER_THRESHOLD = float(os.getenv("MOOD_FILTER_THRESHOLD", "-1.5"))  # block if index down this %
+
+# Sector concentration cap — if OFF, buys best setups regardless of sector (matches original profitable session)
+USE_SECTOR_CAP       = os.getenv("USE_SECTOR_CAP",       "true").lower() == "true"
+MAX_SECTOR_POSITIONS = int(os.getenv("MAX_SECTOR_POSITIONS", "2"))  # max open positions per sector
 
 # ── Alpaca / US market config ─────────────────────────────────────────────────
 ALPACA_KEY    = os.getenv("ALPACA_KEY",    "")
@@ -54,13 +62,13 @@ ALPACA_PAPER  = os.getenv("ALPACA_PAPER",  "true").lower() == "true"
 US_CAPITAL          = float(os.getenv("US_CAPITAL", "10000"))   # set in .env when going live
 US_MAX_POSITIONS    = 500       # effectively unlimited — capital is the natural cap
 US_MAX_POSITION_PCT = 0.10      # 10% per stock — same as India
-US_MAX_DAILY_LOSS_PCT = 0.02    # 2% daily loss limit in USD
-US_MAX_DAILY_TRADES   = 30     # circuit breaker for US session
-US_MIN_STOCK_PRICE  = 10.0      # skip stocks under $10 — penny stocks are erratic
-US_SCALP_TARGET_PCT = 0.015     # exit on 1.5% profit (same as India default)
-US_SCALP_SL_PCT     = 0.006     # exit on 0.6% loss (same as India default)
-US_MAX_DEPLOYED_PCT = 0.70      # never deploy more than 70% of US balance at once
-US_PEAK_DRAWDOWN_PCT = 0.03     # pause new buys if US account drops 3% from session high
+US_MAX_DAILY_LOSS_PCT = float(os.getenv("US_MAX_DAILY_LOSS_PCT", "0.02"))   # 2% daily loss limit in USD
+US_MAX_DAILY_TRADES   = int(os.getenv("US_MAX_DAILY_TRADES",     "30"))     # circuit breaker for US session
+US_MIN_STOCK_PRICE  = float(os.getenv("US_MIN_STOCK_PRICE",      "10.0"))   # skip stocks under $10
+US_SCALP_TARGET_PCT = float(os.getenv("US_SCALP_TARGET_PCT",     "0.015"))  # exit on 1.5% profit
+US_SCALP_SL_PCT     = float(os.getenv("US_SCALP_SL_PCT",         "0.006"))  # exit on 0.6% loss
+US_MAX_DEPLOYED_PCT = float(os.getenv("US_MAX_DEPLOYED_PCT",     "0.70"))   # never deploy more than 70%
+US_PEAK_DRAWDOWN_PCT = float(os.getenv("US_PEAK_DRAWDOWN_PCT",   "0.03"))   # pause if drops 3% from high
 
 # US market entry window (ET → IST: 9:30 AM ET = 7:00 PM IST, 3:30 PM ET = 1:00 AM IST)
 US_ENTRY_START_IST = (19, 30)   # 7:30 PM IST = 30 min after US open (skip opening volatility)

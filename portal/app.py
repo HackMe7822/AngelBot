@@ -487,6 +487,7 @@ def get_config(user: str = Depends(require_auth)):
         'PAPER_MODE', 'ALPACA_PAPER', 'BINANCE_PAPER',
         # Strategy quality controls
         'MIN_SIGNAL_SCORE', 'MAX_CONCURRENT_POSITIONS', 'USE_TIME_EXIT', 'MAX_HOLD_MINUTES',
+        'USE_MOOD_FILTER', 'MOOD_FILTER_THRESHOLD', 'USE_SECTOR_CAP', 'MAX_SECTOR_POSITIONS',
     ]
     result = {}
     for key in editable:

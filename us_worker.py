@@ -137,7 +137,7 @@ def _next_us_open():
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAILY_TRADES,
                     US_MAX_DEPLOYED_PCT, US_PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE,
-                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT)
+                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP)
 from trading.alpaca_trader import AlpacaTrader
 from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
@@ -257,8 +257,8 @@ def run_us_scan():
         cprint(f"[US] Max concurrent positions ({MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
         return
 
-    if not us_market_mood_ok():
-        cprint("[US] S&P 500 mood bearish — skipping US buy scan", YL)
+    if USE_MOOD_FILTER and not us_market_mood_ok():
+        cprint("[US] S&P 500 mood bearish — skipping US buy scan (mood filter ON)", YL)
         return
 
     if not us_trader.can_buy():
@@ -338,7 +338,7 @@ def run_us_scan():
         if not symbol_event_clear(c['symbol']):
             cprint(f"  [US EVENT]     {c['symbol']} — earnings/macro event today, skip", YL)
             continue
-        if not sector_cap_ok(c['symbol'], us_trader.open_positions, market='us'):
+        if USE_SECTOR_CAP and not sector_cap_ok(c['symbol'], us_trader.open_positions, market='us'):
             continue
         if us_monitor and us_monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [US COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)
