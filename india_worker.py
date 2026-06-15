@@ -333,8 +333,8 @@ def pre_market_check():
 
     # 2. Angel One API
     try:
-        from data.angel_login import get_smartapi
-        obj = get_smartapi()
+        from data.angel_login import get_api
+        obj = get_api()
         if obj:
             checks.append("✅ Angel One: Connected")
         else:
