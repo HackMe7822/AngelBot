@@ -772,15 +772,29 @@ def apply_update(user: str = Depends(require_auth)):
             yield from emit("git pull", False, str(e))
             return
 
-        # 2. Restart the 3 workers via nssm restart (stop+wait+start in one atomic command)
+        # 2. Restart the 3 workers via nssm restart, then wait until each is RUNNING before moving on
+        import time
         for svc in ["AngelBot-India", "AngelBot-US", "AngelBot-Crypto"]:
             try:
                 sr = subprocess.run(
                     ['nssm', 'restart', svc],
                     capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45
                 )
-                ok = sr.returncode == 0
-                detail = "restarted" if ok else (sr.stderr.strip() or sr.stdout.strip() or "unknown error")
+                if sr.returncode != 0:
+                    yield from emit(f"restart {svc}", False, sr.stderr.strip() or sr.stdout.strip() or "unknown error")
+                    continue
+
+                # Poll until RUNNING (up to 30 s) before touching the next service
+                deadline = time.time() + 30
+                while time.time() < deadline:
+                    st = _sc_status(svc)
+                    if st == 'running':
+                        break
+                    time.sleep(2)
+
+                final = _sc_status(svc)
+                ok = final == 'running'
+                detail = "running" if ok else f"still {final} after 30s"
                 yield from emit(f"restart {svc}", ok, detail)
             except Exception as e:
                 yield from emit(f"restart {svc}", False, str(e))
