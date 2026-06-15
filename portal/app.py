@@ -819,6 +819,51 @@ def apply_update(user: str = Depends(require_auth)):
     return StreamingResponse(_stream(), media_type="text/plain")
 
 
+# ── Credentials (API keys / tokens stored in .env) ────────────────────────────
+_CREDENTIAL_KEYS = [
+    'ANGEL_API_KEY', 'ANGEL_SECRET', 'ANGEL_CLIENT_ID', 'ANGEL_PIN', 'ANGEL_TOTP_SECRET',
+    'ALPACA_KEY', 'ALPACA_SECRET',
+    'BINANCE_KEY', 'BINANCE_SECRET',
+    'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID',
+    'PORTAL_PASS', 'SQL_SA_PASS',
+]
+
+@app.get("/api/credentials")
+def get_credentials(user: str = Depends(require_auth)):
+    _require_admin(user)
+    env_path = Path(__file__).parent.parent / '.env'
+    env_vals = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                k, _, v = line.partition('=')
+                env_vals[k.strip()] = v.strip()
+    return {key: env_vals.get(key, '') for key in _CREDENTIAL_KEYS}
+
+@app.post("/api/credentials")
+def update_credential(update: ConfigUpdate, user: str = Depends(require_auth)):
+    _require_admin(user)
+    env_path = Path(__file__).parent.parent / '.env'
+    key   = update.key.strip()
+    value = update.value.strip()
+    if key not in _CREDENTIAL_KEYS:
+        raise HTTPException(400, f"'{key}' is not an editable credential.")
+    lines = env_path.read_text(encoding='utf-8').splitlines() if env_path.exists() else []
+    found = False
+    new_lines = []
+    for line in lines:
+        if line.startswith(f"{key}="):
+            new_lines.append(f"{key}={value}")
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(f"{key}={value}")
+    env_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
+    return {"ok": True, "message": f"{key} saved. Restart workers to apply."}
+
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/api/stats/leaderboard")
 def leaderboard(market: Optional[str] = None, user: str = Depends(require_auth)):

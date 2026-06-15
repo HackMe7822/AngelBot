@@ -162,6 +162,7 @@
     <a href="#" onclick="showPage('trades')" id="nav-trades">📈 Trade History</a>
     <a href="#" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
     <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Config</a>
+    <a href="#" onclick="showPage('apikeys')" id="nav-apikeys">🔑 API Keys</a>
     <a href="#" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
     <a href="#" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
     <a href="#" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
@@ -308,7 +309,7 @@
     <div class="config-section">
       <div class="config-section-title">
         <div class="card">
-          <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🇮🇳 India Settings</div>
+          <div style="font-size:15px; font-weight:600; margin-bottom:12px;">India Settings</div>
           <div id="config-india"></div>
         </div>
       </div>
@@ -316,14 +317,14 @@
 
     <div class="config-section">
       <div class="card">
-        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🇺🇸 US Settings</div>
+        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">US Settings</div>
         <div id="config-us"></div>
       </div>
     </div>
 
     <div class="config-section">
       <div class="card">
-        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">🪙 Crypto Settings</div>
+        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Crypto Settings</div>
         <div id="config-crypto"></div>
       </div>
     </div>
@@ -335,6 +336,37 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- API KEYS -->
+  <div id="page-apikeys" class="page">
+    <h2>API Keys &amp; Tokens</h2>
+    <p style="color:var(--muted); margin-bottom:20px; font-size:13px;">Saved to .env on the server. Restart workers after changes.</p>
+
+    <div class="config-section"><div class="card">
+      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Angel One (India NSE)</div>
+      <div id="cred-angelone"></div>
+    </div></div>
+
+    <div class="config-section"><div class="card">
+      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Alpaca (US Paper)</div>
+      <div id="cred-alpaca"></div>
+    </div></div>
+
+    <div class="config-section"><div class="card">
+      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Binance (Crypto)</div>
+      <div id="cred-binance"></div>
+    </div></div>
+
+    <div class="config-section"><div class="card">
+      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Telegram</div>
+      <div id="cred-telegram"></div>
+    </div></div>
+
+    <div class="config-section"><div class="card">
+      <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Portal &amp; Database</div>
+      <div id="cred-portal"></div>
+    </div></div>
   </div>
 
   <!-- LOGS -->
@@ -584,6 +616,7 @@ function showPage(name) {
   if (name === 'trades')      { _tradeOffset = 0; loadTrades(); }
   if (name === 'leaderboard') loadLeaderboard('');
   if (name === 'config')      loadConfig();
+  if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
   if (name === 'logs')        loadLog();
   if (name === 'monitor')     startMonitor();
@@ -935,19 +968,19 @@ async function loadLeaderboard(market) {
 // ── Config ────────────────────────────────────────────────────────────────
 const _CONFIG_SECTIONS = {
   india: {
-    label: '🇮🇳 India Settings',
+    label: 'India Settings',
     keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
            'SCALP_TARGET_PCT','SCALP_SL_PCT','SL_CONFIRM_POLLS',
            'MAX_DAILY_LOSS_PCT','MIN_STOCK_PRICE','ENTRY_START_MIN','ENTRY_END_MIN']
   },
   us: {
-    label: '🇺🇸 US Settings',
+    label: 'US Settings',
     keys: ['US_CAPITAL','US_MAX_DAILY_TRADES','US_MAX_DAILY_LOSS_PCT',
            'US_MAX_DEPLOYED_PCT','US_PEAK_DRAWDOWN_PCT',
            'US_SCALP_TARGET_PCT','US_SCALP_SL_PCT','US_MIN_STOCK_PRICE']
   },
   crypto: {
-    label: '🪙 Crypto Settings',
+    label: 'Crypto Settings',
     keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
   },
   general: {
@@ -988,6 +1021,69 @@ async function saveConfig(key) {
   const d = await r.json();
   if (d.ok) toast('✅ ' + d.message);
   else toast('❌ ' + (d.detail || 'Error'), 5000);
+}
+
+// ── API Keys / Credentials ────────────────────────────────────────────────
+const _CRED_SECTIONS = [
+  { id: 'angelone', keys: [
+      {k:'ANGEL_API_KEY',    label:'API Key'},
+      {k:'ANGEL_SECRET',     label:'Client Secret'},
+      {k:'ANGEL_CLIENT_ID',  label:'Client ID'},
+      {k:'ANGEL_PIN',        label:'MPIN'},
+      {k:'ANGEL_TOTP_SECRET',label:'TOTP Secret'},
+  ]},
+  { id: 'alpaca', keys: [
+      {k:'ALPACA_KEY',    label:'API Key'},
+      {k:'ALPACA_SECRET', label:'Secret Key'},
+  ]},
+  { id: 'binance', keys: [
+      {k:'BINANCE_KEY',    label:'API Key'},
+      {k:'BINANCE_SECRET', label:'Secret Key'},
+  ]},
+  { id: 'telegram', keys: [
+      {k:'TELEGRAM_BOT_TOKEN', label:'Bot Token'},
+      {k:'TELEGRAM_CHAT_ID',   label:'Chat ID'},
+  ]},
+  { id: 'portal', keys: [
+      {k:'PORTAL_PASS', label:'Admin Password'},
+      {k:'SQL_SA_PASS', label:'SQL SA Password'},
+  ]},
+];
+
+async function loadCredentials() {
+  const r = await apiFetch('/api/credentials');
+  if (!r) return;
+  const d = await r.json();
+  for (const sec of _CRED_SECTIONS) {
+    const el = document.getElementById('cred-' + sec.id);
+    el.innerHTML = sec.keys.map(({k, label}) => `
+      <div class="config-row">
+        <span class="config-key">${label}</span>
+        <div style="display:flex;gap:6px;flex:1">
+          <input type="password" id="cred-${k}" value="${(d[k]||'').replace(/"/g,'&quot;')}"
+                 class="config-val" style="flex:1" placeholder="not set" />
+          <button class="btn" style="padding:4px 8px;font-size:12px" onclick="toggleCredVis('${k}')" title="Show/hide">👁</button>
+        </div>
+        <button class="btn primary sm" onclick="saveCredential('${k}')">Save</button>
+      </div>`).join('');
+  }
+}
+
+function toggleCredVis(key) {
+  const inp = document.getElementById('cred-' + key);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function saveCredential(key) {
+  const val = document.getElementById('cred-' + key).value;
+  const r   = await apiFetch('/api/credentials', {
+    method: 'POST',
+    body: JSON.stringify({ key, value: val }),
+  });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) toast('Saved: ' + d.message);
+  else toast('Error: ' + (d.detail || 'Unknown error'), 5000);
 }
 
 // ── Logs (historical) ─────────────────────────────────────────────────────

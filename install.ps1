@@ -258,101 +258,55 @@ function Set-EnvKey($path, $key, $value) {
     }
 }
 
-# Check if .env has all required keys
-$envHasKeys = $false
+# If .env already exists just make sure SQL_SA_PASS is current, otherwise write blank template.
+# All API keys are configured via the portal after startup — no prompts needed here.
+$saForEnv = if ($script:saPass) { $script:saPass } else { "" }
+
 if (Test-Path $envPath) {
-    $envTxt = Get-Content $envPath -Raw -ErrorAction SilentlyContinue
-    if ($envTxt -match "ALPACA_KEY=" -and $envTxt -match "ANGEL_API_KEY=") {
-        $envHasKeys = $true
+    if ($saForEnv) {
+        Set-EnvKey $envPath "SQL_SA_PASS" $saForEnv
+        OK "SQL_SA_PASS updated in .env"
     }
-}
-
-if ($envHasKeys) {
-    OK ".env already complete -- skipping API key entry"
-    # Still ensure SQL_SA_PASS is there
-    if ($script:saPass) {
-        Set-EnvKey $envPath "SQL_SA_PASS" $script:saPass
-        OK "SQL_SA_PASS added/updated in .env"
-    } elseif ((Get-Content $envPath -Raw) -notmatch "SQL_SA_PASS=") {
-        $saSecure2 = Read-Host "  .env exists but SQL_SA_PASS is missing. Enter SA Password"
-        Set-EnvKey $envPath "SQL_SA_PASS" $saSecure2
-        OK "SQL_SA_PASS added to .env"
-    }
+    OK ".env exists -- configure API keys via the portal at http://localhost:8080 (API Keys tab)"
 } else {
-    Write-Host ""
-    Write-Host "  Enter your API keys. Bot runs in PAPER mode by default." -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Angel One (India NSE)" -ForegroundColor Yellow
-    $aKey     = Read-Host "     API Key"
-    $aSecret  = Read-Host "     Client Secret"
-    $aClient  = Read-Host "     Client ID"
-    $aPin     = Read-Host "     MPIN (4-digit)"
-    $aTotp    = Read-Host "     TOTP Secret"
-    Write-Host "  Alpaca (US paper trading)" -ForegroundColor Yellow
-    $alKey    = Read-Host "     API Key"
-    $alSecret = Read-Host "     Secret Key"
-    Write-Host "  Binance (Crypto)" -ForegroundColor Yellow
-    $bKey     = Read-Host "     API Key"
-    $bSecret  = Read-Host "     Secret Key"
-    Write-Host "  Telegram (optional -- press Enter to skip)" -ForegroundColor Yellow
-    $tgToken  = Read-Host "     Bot Token"
-    $tgChatId = Read-Host "     Chat ID"
-    Write-Host "  Portal login" -ForegroundColor Yellow
-    $pUser    = Read-Host "     Username  (Enter = admin)"
-    $pPass    = Read-Host "     Password  (Enter = AngelBot@1234)"
-    Write-Host "  Starting capital" -ForegroundColor Yellow
-    $indCap   = Read-Host "     India capital INR  (Enter = 100000)"
-    $usCap    = Read-Host "     US capital USD     (Enter = 10000)"
-    $cryCap   = Read-Host "     Crypto capital USD (Enter = 1000)"
-    if (-not $pUser)   { $pUser   = "admin" }
-    if (-not $pPass)   { $pPass   = "AngelBot@1234" }
-    if (-not $indCap)  { $indCap  = "100000" }
-    if (-not $usCap)   { $usCap   = "10000" }
-    if (-not $cryCap)  { $cryCap  = "1000" }
-
-    # Collect SA password if not already entered in Step 4
-    $saForEnv = if ($script:saPass) { $script:saPass } else {
-        Read-Host "  SQL Server SA Password (same as entered in Step 4)"
-    }
-
     $envLines = @(
-        "# Angel One (India)",
-        "ANGEL_API_KEY=$aKey",
-        "ANGEL_SECRET=$aSecret",
-        "ANGEL_CLIENT_ID=$aClient",
-        "ANGEL_PIN=$aPin",
-        "ANGEL_TOTP_SECRET=$aTotp",
+        "# Angel One (India NSE)",
+        "ANGEL_API_KEY=",
+        "ANGEL_SECRET=",
+        "ANGEL_CLIENT_ID=",
+        "ANGEL_PIN=",
+        "ANGEL_TOTP_SECRET=",
         "",
-        "# Alpaca (US)",
-        "ALPACA_KEY=$alKey",
-        "ALPACA_SECRET=$alSecret",
+        "# Alpaca (US Paper Trading)",
+        "ALPACA_KEY=",
+        "ALPACA_SECRET=",
         "ALPACA_PAPER=true",
         "",
-        "# Binance (Crypto)",
-        "BINANCE_KEY=$bKey",
-        "BINANCE_SECRET=$bSecret",
+        "# Binance (Crypto -- paper trading only)",
+        "BINANCE_KEY=",
+        "BINANCE_SECRET=",
         "BINANCE_PAPER=true",
         "",
-        "# Telegram",
-        "TELEGRAM_BOT_TOKEN=$tgToken",
-        "TELEGRAM_CHAT_ID=$tgChatId",
+        "# Telegram (optional)",
+        "TELEGRAM_BOT_TOKEN=",
+        "TELEGRAM_CHAT_ID=",
         "",
-        "# Capital",
-        "INDIA_CAPITAL=$indCap",
-        "US_CAPITAL=$usCap",
-        "CRYPTO_CAPITAL=$cryCap",
+        "# Capital (INR / USD)",
+        "INDIA_CAPITAL=10000",
+        "US_CAPITAL=10000",
+        "CRYPTO_CAPITAL=1000",
         "",
         "# Safety flags -- NEVER set these to false via portal",
         "PAPER_MODE=true",
         "",
-        "# Portal",
-        "PORTAL_PASS=$pPass",
+        "# Portal admin password",
+        "PORTAL_PASS=AngelBot@1234",
         "",
         "# SQL Server",
         "SQL_SA_PASS=$saForEnv"
     )
     $envLines -join "`r`n" | Out-File $envPath -Encoding ASCII -Force
-    OK ".env saved with all keys"
+    OK ".env template written -- configure API keys via the portal at http://localhost:8080 (API Keys tab)"
 }
 
 # ---------------------------------------------------------------------------
@@ -545,6 +499,9 @@ Write-Host "    Logs             : C:\AngelBot\logs\" -ForegroundColor Green
 Write-Host "    Config file      : C:\AngelBot\.env" -ForegroundColor Green
 Write-Host "    All 4 workers auto-start on every reboot." -ForegroundColor Green
 Write-Host "  ============================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "  NEXT: Open the portal and click API Keys in the nav bar to enter" -ForegroundColor Yellow
+Write-Host "  your Angel One / Alpaca / Binance / Telegram credentials." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  If any service shows yellow (not yet running), wait 30s" -ForegroundColor DarkGray
 Write-Host "  and run fix_services.ps1 to diagnose." -ForegroundColor DarkGray
