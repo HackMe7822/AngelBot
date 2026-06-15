@@ -366,10 +366,10 @@
     <h2>Live Monitor</h2>
     <div class="monitor-bar">
       <div class="pill-group" id="monitor-market-pills">
-        <span class="pill active" data-val="india" onclick="setMonitorMarket(this,'india')">🇮🇳 India</span>
-        <span class="pill" data-val="us" onclick="setMonitorMarket(this,'us')">🇺🇸 US</span>
-        <span class="pill" data-val="crypto" onclick="setMonitorMarket(this,'crypto')">🪙 Crypto</span>
-        <span class="pill" data-val="portal" onclick="setMonitorMarket(this,'portal')">🌐 Portal</span>
+        <span class="pill active" data-val="india" onclick="setMonitorMarket(this,'india')">India</span>
+        <span class="pill" data-val="us" onclick="setMonitorMarket(this,'us')">US</span>
+        <span class="pill" data-val="crypto" onclick="setMonitorMarket(this,'crypto')">Crypto</span>
+        <span class="pill" data-val="portal" onclick="setMonitorMarket(this,'portal')">Portal</span>
       </div>
       <button class="btn sm" onclick="clearMonitor()">Clear</button>
       <button class="btn sm" id="monitor-pause-btn" onclick="toggleMonitorPause()">⏸ Pause</button>
@@ -735,10 +735,9 @@ async function loadPositions() {
     <thead><tr><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th><th>Qty</th><th>Capital</th><th>SL</th><th>Target</th><th>Action</th></tr></thead>
     <tbody>${d.positions.map(p => {
       const cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '₹');
-      const mkt = p.source === 'us_paper' ? '🇺🇸' : (p.source === 'crypto_paper' ? '🪙' : '🇮🇳');
       return `<tr id="pos-row-${p.id}">
-        <td><strong>${p.symbol}</strong></td>
-        <td>${mkt}</td>
+        <td><strong>${fmtSym(p.symbol, p.source)}</strong></td>
+        <td>${mktBadge(p.source)}</td>
         <td>${p.entry_time}</td>
         <td>${cur}${(p.entry_price||0).toFixed(4)}</td>
         <td>${p.quantity}</td>
@@ -810,9 +809,22 @@ function setTradeFilter(el, val) {
 
 function fmtDt(s) {
   if (!s) return '—';
-  // "2026-06-15 14:32:05" → "15/06 14:32"
   const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
   return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : s.slice(0,16);
+}
+
+function fmtSym(sym, source) {
+  if (source === 'crypto_paper')
+    return sym.replace(/USDT$/, '').replace(/BUSD$/, '').replace(/USD$/, '');
+  return sym;
+}
+
+function mktBadge(source) {
+  if (source === 'us_paper')
+    return '<span style="background:#0d2a4a;color:#7eb8f0;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">US</span>';
+  if (source === 'crypto_paper')
+    return '<span style="background:#3a2600;color:#f0c07e;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">Crypto</span>';
+  return '<span style="background:#0a2e18;color:#7ef0a0;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">IN</span>';
 }
 
 function buildTradeTable(trades) {
@@ -821,14 +833,13 @@ function buildTradeTable(trades) {
     <thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Buy Time</th><th>Entry</th><th>Sell Time</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th><th>Status</th></tr></thead>
     <tbody>${trades.map(t => {
       const cur   = t.source === 'us_paper' ? '$' : (t.source === 'crypto_paper' ? '$' : '₹');
-      const mkt   = t.source === 'us_paper' ? '🇺🇸' : (t.source === 'crypto_paper' ? '🪙' : '🇮🇳');
       const pnl   = t.pnl || 0;
       const cls   = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
       const sign  = pnl >= 0 ? '+' : '';
       return `<tr>
         <td style="color:var(--muted)">${t.id}</td>
-        <td><strong>${t.symbol}</strong></td>
-        <td>${mkt}</td>
+        <td><strong>${fmtSym(t.symbol, t.source)}</strong></td>
+        <td>${mktBadge(t.source)}</td>
         <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.entry_time)}</td>
         <td>${cur}${(t.entry_price||0).toFixed(2)}</td>
         <td style="color:var(--muted);white-space:nowrap">${fmtDt(t.exit_time)}</td>
@@ -990,6 +1001,7 @@ function toggleAutoRefresh() {
 
 // ── Log line colorizer ────────────────────────────────────────────────────
 function colorLogLine(l, dark) {
+  l = l.replace(/\x1b\[[0-9;]*m/g, '');
   const lc = l.toLowerCase();
   const e  = escHtml(l);
   const errCls  = dark ? 't-err'  : 'err';
