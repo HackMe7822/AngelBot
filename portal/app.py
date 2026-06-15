@@ -777,20 +777,19 @@ def restart_service(name: str, user: str = Depends(require_auth)):
         raise HTTPException(400, f"Unknown service '{name}'.")
     try:
         if name == "AngelBot-Portal":
-            # Restarting own process synchronously would kill this response mid-flight.
-            # CREATE_BREAKAWAY_FROM_JOB lets cmd.exe escape NSSM's Job Object so it
-            # survives after the portal service is stopped.
-            DETACHED_PROCESS        = 0x00000008
-            CREATE_NEW_PROC_GROUP   = 0x00000200
-            CREATE_BREAKAWAY_FROM_JOB = 0x01000000
-            subprocess.Popen(
-                ['cmd', '/c', f'timeout /t 5 /nobreak >nul & C:\\Windows\\nssm.exe restart {name}'],
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP | CREATE_BREAKAWAY_FROM_JOB,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            # Use Task Scheduler — completely independent of NSSM Job Objects.
+            # Detached-process tricks fail when NSSM's Job Object lacks BREAKAWAY_OK.
+            ps = (
+                "Unregister-ScheduledTask -TaskName 'ABPortalRestart' -Confirm:$false -ErrorAction SilentlyContinue;"
+                "$a=New-ScheduledTaskAction -Execute 'C:\\Windows\\nssm.exe' -Argument 'restart AngelBot-Portal';"
+                "$t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(10));"
+                "Register-ScheduledTask -TaskName 'ABPortalRestart' -Action $a -Trigger $t -RunLevel Highest -Force | Out-Null"
             )
-            return {"ok": True, "name": name, "message": f"{name} restarting in ~5s — page will reload."}
+            r = subprocess.run(['powershell', '-NonInteractive', '-Command', ps],
+                               capture_output=True, text=True, timeout=20)
+            if r.returncode != 0:
+                raise HTTPException(500, f"Failed to schedule restart: {r.stderr.strip()}")
+            return {"ok": True, "name": name, "message": f"{name} restarting in ~10s — page will reload."}
         subprocess.run(['nssm', 'stop', name], capture_output=True, text=True,
                        encoding='utf-8', errors='replace', timeout=30)
         start = subprocess.run(['nssm', 'start', name], capture_output=True, text=True,
@@ -890,21 +889,21 @@ def apply_update(user: str = Depends(require_auth)):
             except Exception as e:
                 yield from emit(f"restart {svc}", False, str(e))
 
-        # 3. Portal restarts via detached cmd.exe — 30s delay lets this response fully reach browser.
-        # CREATE_BREAKAWAY_FROM_JOB (0x01000000) escapes NSSM's Job Object so cmd.exe survives
-        # after the portal service is stopped (without it, NSSM kills all child processes).
+        # 3. Portal restart via Task Scheduler — survives NSSM Job Object teardown.
+        # Detached Popen (even with CREATE_BREAKAWAY_FROM_JOB) is unreliable when
+        # NSSM's Job Object lacks JOB_OBJECT_LIMIT_BREAKAWAY_OK. Task Scheduler is
+        # a separate Windows service and is invisible to Job Objects entirely.
         try:
-            DETACHED_PROCESS          = 0x00000008
-            CREATE_NEW_PROC_GROUP     = 0x00000200
-            CREATE_BREAKAWAY_FROM_JOB = 0x01000000
-            subprocess.Popen(
-                ['cmd', '/c',
-                 'timeout /t 30 /nobreak >nul & C:\\Windows\\nssm.exe restart AngelBot-Portal'],
-                creationflags=DETACHED_PROCESS | CREATE_NEW_PROC_GROUP | CREATE_BREAKAWAY_FROM_JOB,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            ps = (
+                "Unregister-ScheduledTask -TaskName 'ABPortalRestart' -Confirm:$false -ErrorAction SilentlyContinue;"
+                "$a=New-ScheduledTaskAction -Execute 'C:\\Windows\\nssm.exe' -Argument 'restart AngelBot-Portal';"
+                "$t=New-ScheduledTaskTrigger -Once -At ((Get-Date).AddSeconds(30));"
+                "Register-ScheduledTask -TaskName 'ABPortalRestart' -Action $a -Trigger $t -RunLevel Highest -Force | Out-Null"
             )
+            r = subprocess.run(['powershell', '-NonInteractive', '-Command', ps],
+                               capture_output=True, text=True, timeout=20)
+            if r.returncode != 0:
+                raise Exception(r.stderr.strip() or "Task Scheduler registration failed")
             yield from emit("restart portal", True, "portal restarts in ~30s — page will auto-reconnect")
         except Exception as e:
             yield from emit("restart portal", False, str(e))
