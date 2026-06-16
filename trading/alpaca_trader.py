@@ -127,8 +127,9 @@ class AlpacaTrader:
         }
         self.open_positions.append(position)
         self.balance = self._get_balance()
-        if self.balance > self._session_high:
-            self._session_high = self.balance
+        pv = self.balance + sum(p['capital_used'] for p in self.open_positions)
+        if pv > self._session_high:
+            self._session_high = pv
         print(f"{_BL}[US BUY]  {symbol} @ ${price:.2f} × {quantity}  SL:${stop_loss:.2f}  TGT:${target:.2f}  ${capital_used:.0f}  Bal:${self.balance:.2f}{_R}")
         return position, None
 
@@ -159,8 +160,9 @@ class AlpacaTrader:
 
         self.open_positions = [p for p in self.open_positions if p['id'] != position['id']]
         self.balance        = self._get_balance()
-        if self.balance > self._session_high:
-            self._session_high = self.balance
+        pv = self.balance + sum(p['capital_used'] for p in self.open_positions)
+        if pv > self._session_high:
+            self._session_high = pv
 
         result = 'PROFIT' if pnl >= 0 else 'LOSS'
         _c = _G if pnl >= 0 else _RD
@@ -168,9 +170,10 @@ class AlpacaTrader:
         return pnl, pnl_pct
 
     def get_drawdown_pct(self):
+        portfolio_value = self.balance + sum(p['capital_used'] for p in self.open_positions)
         if self._session_high <= 0:
             return 0.0
-        return max(0.0, (self._session_high - self.balance) / self._session_high)
+        return max(0.0, (self._session_high - portfolio_value) / self._session_high)
 
     def get_deployed_pct(self):
         deployed = sum(p['capital_used'] for p in self.open_positions)

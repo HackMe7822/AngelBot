@@ -124,8 +124,9 @@ class PaperTrader:
         }
         self.open_positions.append(position)
         self.balance = self._get_balance()
-        if self.balance > self._session_high:
-            self._session_high = self.balance
+        pv = self.balance + sum(p['capital_used'] for p in self.open_positions)
+        if pv > self._session_high:
+            self._session_high = pv
         print(f"{_CY}[BUY]  {symbol} @ ₹{price:.2f} × {quantity} share(s)  SL:₹{stop_loss:.2f}  TGT:₹{target:.2f}  Capital:₹{capital_used:.0f}  Balance:₹{self.balance:.2f}{_R}")
         return position, None
 
@@ -151,8 +152,9 @@ class PaperTrader:
 
         self.open_positions = [p for p in self.open_positions if p['id'] != position['id']]
         self.balance = self._get_balance()
-        if self.balance > self._session_high:
-            self._session_high = self.balance
+        pv = self.balance + sum(p['capital_used'] for p in self.open_positions)
+        if pv > self._session_high:
+            self._session_high = pv
 
         result = 'PROFIT' if pnl >= 0 else 'LOSS'
         _c = _G if pnl >= 0 else _RD
@@ -227,10 +229,13 @@ class PaperTrader:
         return pnl, pnl_pct
 
     def get_drawdown_pct(self):
-        """Returns how far current balance has dropped from today's session high (0.0–1.0)."""
+        """Fraction of session-peak portfolio value lost to actual closed-trade losses.
+        Uses cash + deployed-capital-at-cost so that buying stocks does NOT trigger the
+        drawdown check — only realized losses from SL hits reduce this number."""
+        portfolio_value = self.balance + sum(p['capital_used'] for p in self.open_positions)
         if self._session_high <= 0:
             return 0.0
-        return max(0.0, (self._session_high - self.balance) / self._session_high)
+        return max(0.0, (self._session_high - portfolio_value) / self._session_high)
 
     def get_deployed_pct(self):
         """Returns fraction of balance currently deployed in open positions (0.0–1.0)."""
