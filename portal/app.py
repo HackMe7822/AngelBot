@@ -144,8 +144,10 @@ async def root():
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
-def _build_date_clause(date_filter: Optional[str]) -> tuple:
-    """Filter on entry_time using IST calendar-day boundaries.
+def _build_date_clause(date_filter: Optional[str], col: str = "entry_time") -> tuple:
+    """Filter on `col` using IST calendar-day boundaries.
+    Use col='exit_time' for closed-trade period counts (dashboard P&L).
+    Use col='entry_time' for open-position / trade-history filtering.
     Rolling 24h windows break US trades: US session runs 7:30 PM–1:25 AM IST,
     so 'yesterday' trades entered 7:30 PM–midnight IST land outside a rolling 24–48h window
     when checked the next morning. Midnight-anchored boundaries capture them correctly.
@@ -154,14 +156,14 @@ def _build_date_clause(date_filter: Optional[str]) -> tuple:
     today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
     fmt = "%Y-%m-%d %H:%M:%S"
     if date_filter == 'today':
-        return "AND entry_time >= ?", [today_start.strftime(fmt)]
+        return f"AND {col} >= ?", [today_start.strftime(fmt)]
     elif date_filter == 'yesterday':
         yesterday_start = (today_start - timedelta(days=1)).strftime(fmt)
-        return "AND entry_time >= ? AND entry_time < ?", [yesterday_start, today_start.strftime(fmt)]
+        return f"AND {col} >= ? AND {col} < ?", [yesterday_start, today_start.strftime(fmt)]
     elif date_filter == 'week':
-        return "AND entry_time >= ?", [(today_start - timedelta(days=7)).strftime(fmt)]
+        return f"AND {col} >= ?", [(today_start - timedelta(days=7)).strftime(fmt)]
     elif date_filter == 'month':
-        return "AND entry_time >= ?", [(today_start - timedelta(days=30)).strftime(fmt)]
+        return f"AND {col} >= ?", [(today_start - timedelta(days=30)).strftime(fmt)]
     return "", []
 
 
@@ -194,15 +196,16 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
     c    = conn.cursor()
     today_ist = datetime.now(_IST).strftime("%Y-%m-%d")
 
-    date_sql, date_params = _build_date_clause(date_filter)
+    # Filter closed trades by exit_time — "today" = trades that CLOSED today, not entered today
+    closed_date_sql, closed_date_params = _build_date_clause(date_filter, col="exit_time")
 
     def _market_summary(source_clause, cur_sym, dec):
-        # Period data — uses date_sql/date_params (empty = all-time when no filter selected)
+        # Period data — filtered by exit_time so "today" = trades that CLOSED today
         c.execute(
             f"SELECT COUNT(*), COALESCE(SUM(pnl),0), "
             f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) FROM trades "
-            f"WHERE status='closed' AND {source_clause} {date_sql}",
-            date_params
+            f"WHERE status='closed' AND {source_clause} {closed_date_sql}",
+            closed_date_params
         )
         trades, day_pnl, wins = c.fetchone()
 
