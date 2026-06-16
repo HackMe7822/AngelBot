@@ -1248,6 +1248,7 @@ async function doLogin() {
   _currentUser = u;
   hideLogin(u);
   refreshDashboard();
+  _pageTimer = setInterval(refreshDashboard, 30000);
   checkUpdate();
   _checkAdminAccess();
 }
@@ -1392,7 +1393,7 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
   _stopPageTimer();
-  if (name === 'dashboard')   { applyDefault('dash'); refreshDashboard(); }
+  if (name === 'dashboard')   { applyDefault('dash'); refreshDashboard(); _pageTimer = setInterval(refreshDashboard, 30000); }
   if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 30000); }
   if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
   if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
