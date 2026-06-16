@@ -1826,10 +1826,20 @@ async function loadLog() {
   box.scrollTop = box.scrollHeight;
 }
 
-function downloadLog() {
+async function downloadLog() {
   const market = document.getElementById('log-market').value;
   const date   = document.getElementById('log-date').value;
-  window.location = `/api/logs/download/${market}` + (date ? `?date=${date}` : '');
+  const url    = `/api/logs/download/${market}` + (date ? `?date=${date}` : '');
+  const r = await apiFetch(url);
+  if (!r || !r.ok) return;
+  const blob = await r.blob();
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = market + (date ? '_' + date : '') + '.log';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }
 
 function toggleAutoRefresh() {

@@ -797,6 +797,25 @@ def get_log_dates(market: str, user: str = Depends(require_auth)):
 def get_log(market: str, lines: int = 200, date: str = '', user: str = Depends(require_auth)):
     if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
         raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog, portal")
+
+    # India IST session starts at ~10:45 PM EST — always spans midnight EST and splits
+    # across two log files.  Merge the two most recent files when showing "latest" so
+    # the full IST day is visible without the user needing to know about EST dates.
+    if market == 'india' and not date:
+        log_dir = Path(__file__).parent.parent / 'logs'
+        files = sorted(log_dir.glob('india_*.log'), key=lambda f: f.stat().st_mtime, reverse=True)
+        if len(files) >= 2:
+            all_lines = []
+            for f in reversed(files[:2]):   # older first, so log reads chronologically
+                try:
+                    with open(f, encoding='utf-8', errors='replace') as fp:
+                        all_lines.extend(fp.readlines())
+                except Exception:
+                    pass
+            tail = all_lines if lines <= 0 else all_lines[-lines:]
+            label = f"{files[1].name} + {files[0].name} (IST merged)"
+            return {"lines": [l.rstrip() for l in tail], "path": label, "total": len(all_lines)}
+
     log_path = _resolve_log_path(market, date)
     if not log_path.exists():
         return {"lines": [], "path": str(log_path), "total": 0}
