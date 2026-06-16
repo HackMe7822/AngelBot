@@ -196,45 +196,32 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
     date_sql, date_params = _build_date_clause(date_filter)
 
     def _market_summary(source_clause, cur_sym, dec):
-        # For the main display period (respects date_filter, falls back to today for labels)
-        if date_filter:
-            c.execute(
-                f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades "
-                f"WHERE status='closed' AND {source_clause} {date_sql}",
-                date_params
-            )
-            trades, day_pnl = c.fetchone()
-            c.execute(
-                f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} "
-                f"AND pnl>0 {date_sql}",
-                date_params
-            )
-            wins = c.fetchone()[0]
-        else:
-            c.execute(
-                f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades "
-                f"WHERE status='closed' AND {source_clause} "
-                f"AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?",
-                (today_ist,)
-            )
-            trades, day_pnl = c.fetchone()
-            c.execute(
-                f"SELECT COUNT(*) FROM trades WHERE status='closed' AND {source_clause} AND pnl>0 "
-                f"AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE) = ?",
-                (today_ist,)
-            )
-            wins = c.fetchone()[0]
+        # Period data — uses date_sql/date_params (empty = all-time when no filter selected)
+        c.execute(
+            f"SELECT COUNT(*), COALESCE(SUM(pnl),0), "
+            f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) FROM trades "
+            f"WHERE status='closed' AND {source_clause} {date_sql}",
+            date_params
+        )
+        trades, day_pnl, wins = c.fetchone()
+
+        # All-time totals (always, regardless of filter)
+        c.execute(
+            f"SELECT COALESCE(SUM(pnl),0), COUNT(*), "
+            f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) FROM trades "
+            f"WHERE status='closed' AND {source_clause}"
+        )
+        total_pnl, total_trades, total_wins = c.fetchone()
 
         c.execute(f"SELECT COUNT(*) FROM trades WHERE status='open' AND {source_clause}")
         open_pos = c.fetchone()[0]
-        c.execute(f"SELECT COALESCE(SUM(pnl),0) FROM trades WHERE status='closed' AND {source_clause}")
-        total_pnl = c.fetchone()[0]
         c.execute(f"SELECT COALESCE(SUM(capital_used),0) FROM trades WHERE status='open' AND {source_clause}")
         deployed = c.fetchone()[0] or 0.0
         return {
-            "today_trades": trades, "today_pnl": round(day_pnl or 0, dec),
-            "today_wins": wins, "today_losses": (trades or 0) - (wins or 0),
+            "today_trades": trades or 0, "today_pnl": round(day_pnl or 0, dec),
+            "today_wins": wins or 0, "today_losses": (trades or 0) - (wins or 0),
             "open_positions": open_pos, "total_pnl": round(total_pnl or 0, dec),
+            "total_trades": total_trades or 0, "total_wins": total_wins or 0,
             "deployed": round(deployed, dec),
             "currency": cur_sym,
         }

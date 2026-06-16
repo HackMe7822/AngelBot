@@ -99,6 +99,31 @@
   .mkt-in    { background:#e36209; color:#fff; }
   .mkt-us    { background:#1a7f37; color:#fff; }
   .mkt-btc   { background:#8250df; color:#fff; }
+  /* Dashboard market cards */
+  .mkt-dash-card { padding:0 !important; overflow:hidden; transition:box-shadow .2s; cursor:default; }
+  .mkt-dash-card:hover { box-shadow:0 6px 24px rgba(0,0,0,.14); }
+  .mkt-card-hdr { display:flex; justify-content:space-between; align-items:center; padding:14px 16px 12px; border-bottom:1px solid var(--border); }
+  .mkt-icon { width:34px; height:34px; font-size:13px; border-radius:8px; flex-shrink:0; }
+  .mkt-name { font-weight:700; font-size:14px; line-height:1.3; }
+  .mkt-sub { font-weight:400; color:var(--muted); font-size:12px; margin-left:4px; }
+  .mkt-hours { font-size:11px; color:var(--muted); margin-top:2px; }
+  .mkt-pnl-split { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid var(--border); }
+  .mkt-pnl-half { padding:14px 16px; }
+  .mkt-pnl-half:first-child { border-right:1px solid var(--border); }
+  .mkt-pnl-lbl { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; margin-bottom:6px; }
+  .mkt-pnl-big { font-size:22px !important; font-weight:700; }
+  .mkt-pnl-sm  { font-size:17px !important; }
+  .mkt-wl { font-size:11px; color:var(--muted); margin-top:5px; display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  .chip-win  { background:rgba(0,200,83,.12);  color:#00a846; border-radius:4px; padding:1px 6px; font-size:10px; font-weight:700; }
+  .chip-loss { background:rgba(207,34,46,.1);  color:#cf222e; border-radius:4px; padding:1px 6px; font-size:10px; font-weight:700; }
+  .chip-rate { background:rgba(9,105,218,.1);  color:var(--blue); border-radius:4px; padding:1px 6px; font-size:10px; font-weight:700; }
+  .mkt-row { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-bottom:1px solid var(--border); }
+  .mkt-row:last-child { border-bottom:none; }
+  .mkt-row.go { cursor:pointer; }
+  .mkt-row.go:hover { background:rgba(9,105,218,.05); }
+  .mkt-row-lbl { font-size:12px; color:var(--muted); }
+  .mkt-row-val { font-size:13px; font-weight:600; display:flex; align-items:center; gap:5px; }
+  .mkt-arr { font-size:11px; color:var(--blue); opacity:.8; }
   /* Settings tabs */
   .settings-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px; overflow-x:auto; flex-shrink:0; }
   .settings-tab { padding:10px 20px; font-size:13px; font-weight:600; color:var(--muted); background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; margin-bottom:-2px; transition:color .15s,border-color .15s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
@@ -281,24 +306,88 @@
     </div>
 
     <div class="grid grid-3" id="market-cards" style="margin-bottom:16px;">
-      <div class="card market-card-link" onclick="goToMarket('india')" id="card-india">
-        <h3>India (NSE) <span class="live-badge" id="live-india"></span></h3>
-        <div class="stat" id="india-pnl">—</div>
-        <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="india-trades">—</div>
-        <div style="margin-top:12px;" id="india-details"></div>
+
+      <!-- India -->
+      <div class="card mkt-dash-card" id="card-india" style="border-top:3px solid #e36209;">
+        <div class="mkt-card-hdr">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="mkt-badge mkt-in mkt-icon">IN</div>
+            <div>
+              <div class="mkt-name">India<span class="mkt-sub">NSE</span></div>
+              <div class="mkt-hours">9:15 AM – 3:30 PM IST &middot; Paper</div>
+            </div>
+          </div>
+          <span class="live-badge" id="live-india"></span>
+        </div>
+        <div class="mkt-pnl-split">
+          <div class="mkt-pnl-half">
+            <div class="mkt-pnl-lbl" id="india-period-label">Today's P&amp;L</div>
+            <div class="stat mkt-pnl-big" id="india-pnl">—</div>
+            <div class="mkt-wl" id="india-trades">—</div>
+          </div>
+          <div class="mkt-pnl-half">
+            <div class="mkt-pnl-lbl">All-Time P&amp;L</div>
+            <div class="stat mkt-pnl-sm" id="india-total-pnl">—</div>
+            <div class="mkt-wl" id="india-total-trades">—</div>
+          </div>
+        </div>
+        <div id="india-details"></div>
       </div>
-      <div class="card market-card-link" onclick="goToMarket('us')" id="card-us">
-        <h3>US Market <span class="live-badge" id="live-us"></span></h3>
-        <div class="stat" id="us-pnl">—</div>
-        <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="us-trades">—</div>
-        <div style="margin-top:12px;" id="us-details"></div>
+
+      <!-- US -->
+      <div class="card mkt-dash-card" id="card-us" style="border-top:3px solid #1a7f37;">
+        <div class="mkt-card-hdr">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="mkt-badge mkt-us mkt-icon">US</div>
+            <div>
+              <div class="mkt-name">US Market<span class="mkt-sub">NYSE / NASDAQ</span></div>
+              <div class="mkt-hours">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
+            </div>
+          </div>
+          <span class="live-badge" id="live-us"></span>
+        </div>
+        <div class="mkt-pnl-split">
+          <div class="mkt-pnl-half">
+            <div class="mkt-pnl-lbl" id="us-period-label">Today's P&amp;L</div>
+            <div class="stat mkt-pnl-big" id="us-pnl">—</div>
+            <div class="mkt-wl" id="us-trades">—</div>
+          </div>
+          <div class="mkt-pnl-half">
+            <div class="mkt-pnl-lbl">All-Time P&amp;L</div>
+            <div class="stat mkt-pnl-sm" id="us-total-pnl">—</div>
+            <div class="mkt-wl" id="us-total-trades">—</div>
+          </div>
+        </div>
+        <div id="us-details"></div>
       </div>
-      <div class="card market-card-link" onclick="goToMarket('crypto')" id="card-crypto">
-        <h3>Crypto (24/7) <span class="live-badge" id="live-crypto"></span></h3>
-        <div class="stat" id="crypto-pnl">—</div>
-        <div style="color:var(--muted); font-size:12px; margin-top:4px;" id="crypto-trades">—</div>
-        <div style="margin-top:12px;" id="crypto-details"></div>
+
+      <!-- Crypto -->
+      <div class="card mkt-dash-card" id="card-crypto" style="border-top:3px solid #8250df;">
+        <div class="mkt-card-hdr">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="mkt-badge mkt-btc mkt-icon">₿</div>
+            <div>
+              <div class="mkt-name">Crypto<span class="mkt-sub">24/7</span></div>
+              <div class="mkt-hours">Binance BTC/ETH/USDT &middot; Paper</div>
+            </div>
+          </div>
+          <span class="live-badge" id="live-crypto"></span>
+        </div>
+        <div class="mkt-pnl-split">
+          <div class="mkt-pnl-half">
+            <div class="mkt-pnl-lbl" id="crypto-period-label">Today's P&amp;L</div>
+            <div class="stat mkt-pnl-big" id="crypto-pnl">—</div>
+            <div class="mkt-wl" id="crypto-trades">—</div>
+          </div>
+          <div class="mkt-pnl-half">
+            <div class="mkt-pnl-lbl">All-Time P&amp;L</div>
+            <div class="stat mkt-pnl-sm" id="crypto-total-pnl">—</div>
+            <div class="mkt-wl" id="crypto-total-trades">—</div>
+          </div>
+        </div>
+        <div id="crypto-details"></div>
       </div>
+
     </div>
 
     <!-- Services widget -->
@@ -1198,6 +1287,14 @@ function setDashFilter(el, val) {
   refreshDashboard();
 }
 
+// Navigate to positions page with market filter pre-set
+function goToPositions(market) {
+  const sel = document.getElementById('pos-market-filter');
+  if (sel) sel.value = market || '';
+  _posCache = null;
+  showPage('positions');
+}
+
 // Navigate to trades page with market + date filter pre-set
 function goToMarket(market) {
   document.getElementById('trade-market').value = market;
@@ -1242,20 +1339,61 @@ async function refreshDashboard() {
 
   // Market cards
   function renderCard(id, data, cur) {
-    const pnl = data.today_pnl;
-    const cls = pnl >= 0 ? 'green' : 'red';
-    const wr  = data.today_trades > 0 ? Math.round(data.today_wins / data.today_trades * 100) : 0;
-    document.getElementById(id + '-pnl').className  = 'stat ' + cls;
-    document.getElementById(id + '-pnl').textContent = fmtPnl(pnl, cur);
-    document.getElementById(id + '-trades').textContent =
-      `${periodLabel}: ${data.today_trades} trades  ✅${data.today_wins}  ❌${data.today_losses}  ${wr}% win`;
-    const balCls  = (data.balance||0) >= (data.capital||0) ? 'pnl-pos' : 'pnl-neg';
-    const depPct  = data.capital > 0 ? Math.round((data.deployed||0) / data.capital * 100) : 0;
+    // Period P&L
+    const pnl    = data.today_pnl;
+    const pnlCls = pnl >= 0 ? 'green' : 'red';
+    const wr     = data.today_trades > 0 ? Math.round(data.today_wins / data.today_trades * 100) : 0;
+    const el     = document.getElementById(id + '-pnl');
+    el.className  = 'stat mkt-pnl-big ' + pnlCls;
+    el.textContent = fmtPnl(pnl, cur);
+
+    // Period label
+    const lbl = document.getElementById(id + '-period-label');
+    if (lbl) lbl.textContent = ({
+      '': 'All-Time P&L', 'today': "Today's P&L", 'yesterday': "Yesterday's P&L", 'week': "7-Day P&L"
+    }[_dashDateFilter] || "Today's P&L");
+
+    // Period win/loss chips
+    document.getElementById(id + '-trades').innerHTML =
+      `<span class="chip-win">${data.today_wins}W</span>` +
+      `<span class="chip-loss">${data.today_losses}L</span>` +
+      `<span class="chip-rate">${wr}%</span>` +
+      `<span style="color:var(--muted);font-size:10px;">${data.today_trades} trades</span>`;
+
+    // All-time P&L
+    const totalEl = document.getElementById(id + '-total-pnl');
+    if (totalEl) {
+      totalEl.className  = 'stat mkt-pnl-sm ' + (data.total_pnl >= 0 ? 'green' : 'red');
+      totalEl.textContent = fmtPnl(data.total_pnl || 0, cur);
+    }
+
+    // All-time win/loss chips
+    const totalWr  = data.total_trades > 0 ? Math.round((data.total_wins||0) / data.total_trades * 100) : 0;
+    const totalLosses = (data.total_trades||0) - (data.total_wins||0);
+    const ttEl = document.getElementById(id + '-total-trades');
+    if (ttEl) ttEl.innerHTML =
+      `<span class="chip-win">${data.total_wins||0}W</span>` +
+      `<span class="chip-loss">${totalLosses}L</span>` +
+      `<span class="chip-rate">${totalWr}%</span>` +
+      `<span style="color:var(--muted);font-size:10px;">${data.total_trades||0} trades</span>`;
+
+    // Detail rows — open positions (clickable), balance (clickable → trades), deployed
+    const depPct  = (data.balance||0) + (data.deployed||0) > 0
+      ? Math.round((data.deployed||0) / ((data.balance||0) + (data.deployed||0)) * 100) : 0;
+    const balCls  = (data.balance||0) >= 0 ? 'pnl-pos' : 'pnl-neg';
     document.getElementById(id + '-details').innerHTML =
-      `<div class="stat-row"><span style="color:var(--muted)">Available balance</span><span class="${balCls}" style="font-weight:600">${fmtPnl(data.balance||0, cur)}</span></div>` +
-      `<div class="stat-row"><span style="color:var(--muted)">Deployed in positions</span><span>${fmtPnl(data.deployed||0, cur)} (${depPct}%)</span></div>` +
-      `<div class="stat-row"><span style="color:var(--muted)">Open positions</span><span>${data.open_positions}</span></div>` +
-      `<div class="stat-row"><span style="color:var(--muted)">All-time P&L</span><span class="${data.total_pnl>=0?'pnl-pos':'pnl-neg'}">${fmtPnl(data.total_pnl, cur)}</span></div>`;
+      `<div class="mkt-row go" onclick="goToPositions('${id}')">` +
+        `<span class="mkt-row-lbl">Open positions</span>` +
+        `<span class="mkt-row-val">${data.open_positions} <span class="mkt-arr">›</span></span>` +
+      `</div>` +
+      `<div class="mkt-row go" onclick="goToMarket('${id}')">` +
+        `<span class="mkt-row-lbl">Available balance</span>` +
+        `<span class="mkt-row-val ${balCls}">${fmtPnl(data.balance||0, cur)} <span class="mkt-arr">›</span></span>` +
+      `</div>` +
+      `<div class="mkt-row">` +
+        `<span class="mkt-row-lbl">Deployed capital</span>` +
+        `<span class="mkt-row-val">${fmtPnl(data.deployed||0, cur)} <span style="color:var(--muted);font-size:11px;">(${depPct}%)</span></span>` +
+      `</div>`;
   }
   renderCard('india',  d.india,  '₹');
   renderCard('us',     d.us,     '$');
