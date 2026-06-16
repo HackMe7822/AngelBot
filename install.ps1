@@ -512,24 +512,27 @@ foreach ($svc in $services) {
     $script = "$BOT_DIR\$($svc.Script)"
     $log    = "$BOT_DIR\logs\$name.log"
 
-    # Remove any existing registration cleanly
     $existing = Get-Service -Name $name -ErrorAction SilentlyContinue
     if ($existing) {
-        Info "Removing existing $name ..."
+        # Service already registered -- stop it, update settings in-place (never remove first)
+        Info "Updating existing $name ..."
         Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
-        & $nssmDest remove $name confirm 2>&1 | Out-Null
-        Start-Sleep -Seconds 2
+        & $nssmDest set $name Application          $pyExe           2>&1 | Out-Null
+        & $nssmDest set $name AppParameters        $script          2>&1 | Out-Null
+    } else {
+        # Fresh registration
+        Info "Installing $name ..."
+        & $nssmDest install $name $pyExe $script                    2>&1 | Out-Null
     }
 
-    # Register service
-    & $nssmDest install             $name $pyExe $script            2>&1 | Out-Null
+    # Apply / refresh all settings (safe to run on both new and existing services)
     & $nssmDest set $name AppDirectory          $BOT_DIR            2>&1 | Out-Null
     & $nssmDest set $name AppStdout             $log                2>&1 | Out-Null
     & $nssmDest set $name AppStderr             $log                2>&1 | Out-Null
     & $nssmDest set $name AppRotateFiles        1                   2>&1 | Out-Null
     & $nssmDest set $name AppRotateBytes        10485760            2>&1 | Out-Null
-    & $nssmDest set $name Start                 SERVICE_AUTO_START   2>&1 | Out-Null
+    & $nssmDest set $name Start                 SERVICE_AUTO_START  2>&1 | Out-Null
     & $nssmDest set $name AppThrottle           5000                2>&1 | Out-Null
     & $nssmDest set $name AppEnvironmentExtra "PYTHONPATH=$BOT_DIR" "PYTHONUTF8=1" 2>&1 | Out-Null
 
@@ -604,7 +607,7 @@ if ($cfDest -and (Test-Path $cfDest)) {
             & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
             Start-Sleep -Seconds 2
         }
-        & $nssmDest install $cfSvcName $cfDest "tunnel --url http://localhost:8080" 2>&1 | Out-Null
+        & $nssmDest install $cfSvcName $cfDest "tunnel --no-autoupdate --url http://localhost:8080" 2>&1 | Out-Null
         & $nssmDest set $cfSvcName AppDirectory    $BOT_DIR             2>&1 | Out-Null
         & $nssmDest set $cfSvcName AppStdout       $cfLog               2>&1 | Out-Null
         & $nssmDest set $cfSvcName AppStderr       $cfLog               2>&1 | Out-Null
@@ -699,7 +702,7 @@ ingress:
                 & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
                 Start-Sleep -Seconds 2
             }
-            & $nssmDest install $cfSvcName $cfDest "tunnel --config `"$cfConfigPath`" run" 2>&1 | Out-Null
+            & $nssmDest install $cfSvcName $cfDest "tunnel --no-autoupdate --config `"$cfConfigPath`" run" 2>&1 | Out-Null
             & $nssmDest set $cfSvcName AppDirectory    $BOT_DIR            2>&1 | Out-Null
             & $nssmDest set $cfSvcName AppStdout       $cfLog              2>&1 | Out-Null
             & $nssmDest set $cfSvcName AppStderr       $cfLog              2>&1 | Out-Null
