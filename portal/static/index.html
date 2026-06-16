@@ -1541,6 +1541,10 @@ function _refreshPositionPrices(positions) {
 async function loadPositions() {
   const market = document.getElementById('pos-market-filter').value;
   const sortKey = (_sort.pos.col || '') + (_sort.pos.dir || '');
+  var _ptel = document.getElementById('positions-table');
+  if (_ptel) _ptel.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;">&#8635; Loading positions&hellip;</div>';
+  var _psel = document.getElementById('pos-summary');
+  if (_psel) _psel.innerHTML = '';
   const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
   if (!r) return;
   const d = await r.json();
@@ -1690,6 +1694,11 @@ function buildTradeTable(trades, sortable) {
 }
 
 async function loadTrades() {
+  var _ttel = document.getElementById('trades-table');
+  if (_ttel) _ttel.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;">&#8635; Loading trades&hellip;</div>';
+  var _tcel = document.getElementById('trade-count'); if (_tcel) _tcel.textContent = '';
+  var _tpel = document.getElementById('trade-total-pnl'); if (_tpel) _tpel.innerHTML = '';
+  var _tpgl = document.getElementById('trade-pagination'); if (_tpgl) _tpgl.innerHTML = '';
   const market = document.getElementById('trade-market').value;
   const status = document.getElementById('trade-status').value;
   const sort   = getTradeSort();
@@ -1733,6 +1742,8 @@ async function loadLeaderboard(market) {
   var tabs = document.querySelectorAll('#page-leaderboard .tab');
   var keys = ['','india','us','crypto'];
   tabs.forEach(function(t, i) { t.classList.toggle('active', keys[i] === market); });
+  var _lbel = document.getElementById('leaderboard-table');
+  if (_lbel) _lbel.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;">&#8635; Loading leaderboard&hellip;</div>';
   var url = '/api/stats/leaderboard' + (market ? '?market=' + market : '');
   var r = await apiFetch(url);
   if (!r) return;
