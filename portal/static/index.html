@@ -407,6 +407,7 @@
         </div>
         <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
       </div>
+      <div id="dash-pos-summary" style="display:none; margin-bottom:10px;"></div>
       <div class="table-wrap" id="recent-trades-table">Loading...</div>
     </div>
   </div>
@@ -1437,8 +1438,15 @@ function setDashView(view) {
   document.getElementById('dash-view-closed').classList.toggle('active', view === 'closed');
   document.getElementById('dash-view-buys').classList.toggle('active', view === 'buys');
   var sub = document.getElementById('dash-recent-subtitle');
-  if (view === 'buys') { if (sub) sub.textContent = 'Current open positions (live price)'; loadRecentBuys(); }
-  else                 { if (sub) sub.textContent = 'Last 10 closed'; loadRecentTrades(); }
+  if (view === 'buys') {
+    if (sub) sub.textContent = 'Current open positions (live price)';
+    loadRecentBuys();
+  } else {
+    if (sub) sub.textContent = 'Last 10 closed';
+    var dps = document.getElementById('dash-pos-summary');
+    if (dps) { dps.style.display = 'none'; dps.innerHTML = ''; }
+    loadRecentTrades();
+  }
 }
 function loadDashRecent() {
   if (_dashView === 'buys') loadRecentBuys(); else loadRecentTrades();
@@ -1477,6 +1485,7 @@ async function loadRecentBuys() {
         '</tr>';
     }).join('') + '</tbody></table>';
   fetchLivePrices(rows, function(prices, normed) {
+    var totalUpnl = 0, totalCapital = 0, priced = 0;
     (normed || rows).forEach(function(p) {
       var key    = p.symbol + '|' + (p.source || 'paper');
       var lp     = prices[key];
@@ -1484,6 +1493,7 @@ async function loadRecentBuys() {
       var lpEl   = document.getElementById('rb-lp-'   + p.id);
       var gainEl = document.getElementById('rb-gain-' + p.id);
       var upnlEl = document.getElementById('rb-upnl-' + p.id);
+      totalCapital += (p.capital_used || 0);
       if (!lpEl || !upnlEl) return;
       if (lp == null) {
         lpEl.innerHTML = '<span style="color:var(--muted)">N/A</span>';
@@ -1491,6 +1501,7 @@ async function loadRecentBuys() {
         upnlEl.innerHTML = '&#8212;';
         return;
       }
+      priced++;
       var dp      = lp < 1 ? 6 : 2;
       var prev    = parseFloat(lpEl.dataset.price || '0');
       lpEl.dataset.price = lp;
@@ -1515,12 +1526,29 @@ async function loadRecentBuys() {
       var upnl    = gainPS * (p.quantity || 0);
       var invested = entry * (p.quantity || 0);
       var upnlPct  = invested > 0 ? (upnl / invested * 100) : 0;
+      totalUpnl += upnl;
       var uCls = upnl > 0 ? 'pos' : upnl < 0 ? 'neg' : 'flat';
       upnlEl.className = '';
       upnlEl.innerHTML = '<span class="pnl-badge ' + uCls + '" style="font-size:13px;padding:4px 10px;">' +
         (upnl >= 0 ? '&#9650; +' : '&#9660; ') + cur + Math.abs(upnl).toFixed(2) +
         ' <span style="opacity:.75">(' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)</span></span>';
     });
+    // Summary bar
+    var sumEl = document.getElementById('dash-pos-summary');
+    if (sumEl && priced > 0) {
+      var pnlCls  = totalUpnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      var pnlSign = totalUpnl >= 0 ? '+' : '';
+      var pnlPct  = totalCapital > 0 ? (totalUpnl / totalCapital * 100) : 0;
+      sumEl.style.display = 'block';
+      sumEl.innerHTML =
+        '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">' +
+        '<span style="color:var(--muted);font-size:12px">Open: <strong style="color:var(--text)">' + rows.length + '</strong></span>' +
+        '<span style="color:var(--muted);font-size:12px">Capital: <strong style="color:var(--text)">' + totalCapital.toFixed(2) + '</strong></span>' +
+        '<span style="font-size:14px;font-weight:700">Unrealised P&amp;L: <span class="' + pnlCls + '">' +
+          pnlSign + totalUpnl.toFixed(2) + ' (' + pnlSign + pnlPct.toFixed(2) + '%)</span></span>' +
+        '<span style="color:var(--muted);font-size:11px">(' + priced + '/' + rows.length + ' priced live)</span>' +
+        '</div>';
+    }
   });
 }
 
