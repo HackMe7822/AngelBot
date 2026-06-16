@@ -145,22 +145,23 @@ async def root():
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 def _build_date_clause(date_filter: Optional[str]) -> tuple:
-    """Filter on entry_time using rolling windows — avoids IST/ET midnight-crossing issues."""
+    """Filter on entry_time using IST calendar-day boundaries.
+    Rolling 24h windows break US trades: US session runs 7:30 PM–1:25 AM IST,
+    so 'yesterday' trades entered 7:30 PM–midnight IST land outside a rolling 24–48h window
+    when checked the next morning. Midnight-anchored boundaries capture them correctly.
+    """
     now_ist = datetime.now(_IST)
+    today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
     fmt = "%Y-%m-%d %H:%M:%S"
     if date_filter == 'today':
-        cutoff = (now_ist - timedelta(hours=24)).strftime(fmt)
-        return "AND entry_time >= ?", [cutoff]
+        return "AND entry_time >= ?", [today_start.strftime(fmt)]
     elif date_filter == 'yesterday':
-        t_from = (now_ist - timedelta(hours=48)).strftime(fmt)
-        t_to   = (now_ist - timedelta(hours=24)).strftime(fmt)
-        return "AND entry_time >= ? AND entry_time < ?", [t_from, t_to]
+        yesterday_start = (today_start - timedelta(days=1)).strftime(fmt)
+        return "AND entry_time >= ? AND entry_time < ?", [yesterday_start, today_start.strftime(fmt)]
     elif date_filter == 'week':
-        cutoff = (now_ist - timedelta(days=7)).strftime(fmt)
-        return "AND entry_time >= ?", [cutoff]
+        return "AND entry_time >= ?", [(today_start - timedelta(days=7)).strftime(fmt)]
     elif date_filter == 'month':
-        cutoff = (now_ist - timedelta(days=30)).strftime(fmt)
-        return "AND entry_time >= ?", [cutoff]
+        return "AND entry_time >= ?", [(today_start - timedelta(days=30)).strftime(fmt)]
     return "", []
 
 

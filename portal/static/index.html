@@ -298,8 +298,8 @@
     <!-- Date filter pills for dashboard -->
     <div class="toolbar" style="margin-bottom:16px;">
       <div class="pill-group" id="dash-date-pills">
-        <span class="pill active" data-val="" onclick="setDashFilter(this,'')">All Time</span>
-        <span class="pill" data-val="today" onclick="setDashFilter(this,'today')">Today</span>
+        <span class="pill" data-val="" onclick="setDashFilter(this,'')">All Time</span>
+        <span class="pill active" data-val="today" onclick="setDashFilter(this,'today')">Today</span>
         <span class="pill" data-val="yesterday" onclick="setDashFilter(this,'yesterday')">Yesterday</span>
         <span class="pill" data-val="week" onclick="setDashFilter(this,'week')">7 Days</span>
       </div>
@@ -1102,7 +1102,7 @@ function showConfirm(title, msg, okLabel) {
     can.onclick = () => close(false);
   });
 }
-let _dashDateFilter = '';
+let _dashDateFilter = 'today';
 let _tradeDateFilter = '';
 
 // Live monitor state
