@@ -139,7 +139,8 @@ from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAIL
                     US_MAX_DEPLOYED_PCT, US_PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE,
                     US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP,
                     US_MAX_BUYS_PER_SCAN, US_LOSS_BURST_COUNT, US_LOSS_BURST_WINDOW,
-                    US_LOSS_BURST_COOLDOWN, US_CANDLE_CONFIRM_REENTRY)
+                    US_LOSS_BURST_COOLDOWN, US_CANDLE_CONFIRM_REENTRY,
+                    US_MAX_CONCURRENT_POSITIONS)
 from trading.alpaca_trader import AlpacaTrader
 from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
@@ -291,9 +292,8 @@ def run_us_scan():
         cprint(f"[US] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
         return
 
-    from config import MAX_CONCURRENT_POSITIONS
-    if len(us_trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
-        cprint(f"[US] Max concurrent positions ({MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
+    if len(us_trader.open_positions) >= US_MAX_CONCURRENT_POSITIONS:
+        cprint(f"[US] Max concurrent positions ({US_MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
         return
 
     if USE_MOOD_FILTER and not us_market_mood_ok():
@@ -367,8 +367,8 @@ def run_us_scan():
 
     buys_this_scan = 0
     for c in candidates:
-        if len(us_trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
-            cprint(f"  [US CONCUR]    {len(us_trader.open_positions)}/{MAX_CONCURRENT_POSITIONS} concurrent positions — scan done", YL)
+        if len(us_trader.open_positions) >= US_MAX_CONCURRENT_POSITIONS:
+            cprint(f"  [US CONCUR]    {len(us_trader.open_positions)}/{US_MAX_CONCURRENT_POSITIONS} concurrent positions — scan done", YL)
             break
         if buys_this_scan >= US_MAX_BUYS_PER_SCAN:
             cprint(f"  [US SCAN CAP]  Max {US_MAX_BUYS_PER_SCAN} buys per scan reached — holding back remaining candidates", YL)

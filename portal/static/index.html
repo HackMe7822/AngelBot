@@ -2110,8 +2110,12 @@ const _CONFIG_LABELS = {
   SL_CONFIRM_POLLS:'SL Confirmation Polls', MAX_DAILY_LOSS_PCT:'India Daily Loss Limit', MIN_STOCK_PRICE:'India Min Stock Price (₹)',
   ENTRY_START_MIN:'Entry Window Start (min)', ENTRY_END_MIN:'Entry Window End (min)',
   US_CAPITAL:'US Capital ($)', US_MAX_DAILY_TRADES:'US Daily Trade Limit', US_MAX_DAILY_LOSS_PCT:'US Daily Loss Limit',
+  US_MAX_CONCURRENT_POSITIONS:'US Max Open Positions',
   US_MAX_DEPLOYED_PCT:'US Max Capital Deployed %', US_PEAK_DRAWDOWN_PCT:'US Peak Drawdown Limit',
   US_SCALP_TARGET_PCT:'US Profit Target %', US_SCALP_SL_PCT:'US Stop Loss %', US_MIN_STOCK_PRICE:'US Min Stock Price ($)',
+  US_MAX_BUYS_PER_SCAN:'US Max Buys Per Scan', US_LOSS_BURST_COUNT:'US Loss Burst Count',
+  US_LOSS_BURST_WINDOW:'US Loss Burst Window (sec)', US_LOSS_BURST_COOLDOWN:'US Burst Cooldown (sec)',
+  US_CANDLE_CONFIRM_REENTRY:'US Candle Re-entry Gate',
   CRYPTO_CAPITAL:'Crypto Balance (USDT)', CRYPTO_MAX_DAILY_TRADES:'Crypto Daily Trade Limit',
   CRYPTO_MAX_CONCURRENT:'Crypto Max Open Positions', CRYPTO_MAX_DEPLOYED_PCT:'Crypto Max Capital Deployed %',
   CRYPTO_PEAK_DRAWDOWN_PCT:'Crypto Peak Drawdown Limit',
@@ -2132,8 +2136,11 @@ const _CONFIG_SECTIONS = {
   },
   us: {
     keys: ['US_CAPITAL','US_MAX_DAILY_TRADES','US_MAX_DAILY_LOSS_PCT',
+           'US_MAX_CONCURRENT_POSITIONS',
            'US_MAX_DEPLOYED_PCT','US_PEAK_DRAWDOWN_PCT',
-           'US_SCALP_TARGET_PCT','US_SCALP_SL_PCT','US_MIN_STOCK_PRICE']
+           'US_SCALP_TARGET_PCT','US_SCALP_SL_PCT','US_MIN_STOCK_PRICE',
+           'US_MAX_BUYS_PER_SCAN','US_LOSS_BURST_COUNT','US_LOSS_BURST_WINDOW',
+           'US_LOSS_BURST_COOLDOWN','US_CANDLE_CONFIRM_REENTRY']
   },
   crypto: {
     keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_MAX_CONCURRENT','CRYPTO_MAX_DEPLOYED_PCT','CRYPTO_PEAK_DRAWDOWN_PCT','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
@@ -2178,11 +2185,17 @@ const _CONFIG_HINTS = {
   US_CAPITAL:               'US Alpaca paper trading balance in $. Bot positions scale as % of this.',
   US_MAX_DAILY_TRADES:      'Stop new US buys after N completed trades today.',
   US_MAX_DAILY_LOSS_PCT:    'Stop all US buys for the day if total realized losses exceed this %.',
+  US_MAX_CONCURRENT_POSITIONS: '<strong>KEY SETTING.</strong> Hard cap on how many US stocks can be open at the same time. <strong>5–8</strong> = conservative, limits damage if market drops. <strong>20+</strong> = aggressive, big gains but big losses if market reverses.',
   US_MAX_DEPLOYED_PCT:      'Never have more than this fraction of US balance in open positions.',
   US_PEAK_DRAWDOWN_PCT:     'Pause US buys if actual losses from session peak hit this %.',
   US_SCALP_TARGET_PCT:      'Close US position for profit when it gains this %.',
   US_SCALP_SL_PCT:          'Close US position for loss when it drops this %.',
   US_MIN_STOCK_PRICE:       'Skip US stocks below this $ price. Default $10 — penny stocks are erratic and hard to scalp.',
+  US_MAX_BUYS_PER_SCAN:     'Max new positions opened in a single 1-min scan cycle. Set low (3–5) to stagger entries. Default 50 = unlimited.',
+  US_LOSS_BURST_COUNT:      'If this many positions hit SL within the burst window, all new US buys are paused.',
+  US_LOSS_BURST_WINDOW:     'Seconds to look back when counting burst SL hits. Default 300 = 5 minutes.',
+  US_LOSS_BURST_COOLDOWN:   'Seconds to pause all new US buys after a loss burst triggers. Default 1800 = 30 minutes.',
+  US_CANDLE_CONFIRM_REENTRY:'ON: require the last 1-min candle to be green before re-buying a stock that already hit SL today. Blocks choppy re-entries.',
   CRYPTO_CAPITAL:           'Binance paper trading balance in USDT. No real money ever spent.',
   CRYPTO_MAX_DAILY_TRADES:  'Stop new crypto buys after N completed trades today.',
   CRYPTO_TARGET_PCT:        'Close crypto position for profit when it gains this %.',
@@ -2349,7 +2362,7 @@ function _showRestartPrompt() {
       (!suggested || suggested !== 'AngelBot-India'   ? '<button class="btn" id="rs-india">Restart India Worker</button>' : '') +
       (!suggested || suggested !== 'AngelBot-US'      ? '<button class="btn" id="rs-us">Restart US Worker</button>' : '') +
       (!suggested || suggested !== 'AngelBot-Crypto'  ? '<button class="btn" id="rs-crypto">Restart Crypto Worker</button>' : '') +
-      '<button class="btn" style="background:rgba(9,105,218,.1);color:var(--blue);border-color:rgba(9,105,218,.3);" id="rs-all">Restart All Workers</button>' +
+      '<button class="btn" style="background:#e36209;color:#fff;border-color:#e36209;font-weight:600;" id="rs-all">&#9889; Restart All Workers</button>' +
       '<button class="btn" style="color:var(--muted);margin-top:4px;" id="rs-skip">Skip — restart later</button>' +
       '</div>';
     ov.appendChild(box);

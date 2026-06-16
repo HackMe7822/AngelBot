@@ -69,6 +69,7 @@ US_SCALP_TARGET_PCT = float(os.getenv("US_SCALP_TARGET_PCT",     "0.015"))  # ex
 US_SCALP_SL_PCT     = float(os.getenv("US_SCALP_SL_PCT",         "0.006"))  # exit on 0.6% loss
 US_MAX_DEPLOYED_PCT = float(os.getenv("US_MAX_DEPLOYED_PCT",     "0.70"))   # never deploy more than 70%
 US_PEAK_DRAWDOWN_PCT = float(os.getenv("US_PEAK_DRAWDOWN_PCT",   "0.03"))   # pause if drops 3% from high
+US_MAX_CONCURRENT_POSITIONS = int(os.getenv("US_MAX_CONCURRENT_POSITIONS", "8"))  # max simultaneous US positions
 
 # US loss cascade circuit breaker — stops buying when many SL hits happen in a short window
 US_MAX_BUYS_PER_SCAN      = int(os.getenv("US_MAX_BUYS_PER_SCAN",     "50"))   # max new positions per scan cycle (set low in Settings to throttle)
