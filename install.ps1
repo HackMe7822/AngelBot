@@ -616,7 +616,7 @@ if ($cfDest -and (Test-Path $cfDest)) {
             OK "AngelBot-Tunnel (quick) running -- URL printed in logs\AngelBot-Tunnel.log"
             Write-Host ""
             Write-Host "  Run this to see your public URL:" -ForegroundColor Yellow
-            Write-Host "      Get-Content '$cfLog' | Select-String 'trycloudflare'" -ForegroundColor White
+            Write-Host ("      Get-Content " + $cfLog + " | Select-String trycloudflare") -ForegroundColor White
         } else {
             Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log for URL"
         }
@@ -641,7 +641,7 @@ if ($cfDest -and (Test-Path $cfDest)) {
             # Step 2b: Create tunnel
             $tunnelName = "angelbot"
             Write-Host ""
-            Info "Creating tunnel '$tunnelName'..."
+            Info "Creating tunnel: $tunnelName ..."
             $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
             $createOut = & $cfDest tunnel create $tunnelName 2>&1
             $ErrorActionPreference = $oldPref2
