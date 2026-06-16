@@ -19,6 +19,24 @@ def _alert_enabled(key):
         pass
     return True
 
+def _alert_threshold(key):
+    """Read a numeric threshold from bot_settings. Returns 0.0 on missing/error."""
+    try:
+        from data.database import get_conn
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT setting_value FROM bot_settings WHERE setting_key=?", [key])
+        row = c.fetchone()
+        conn.close()
+        if row and row[0] is not None:
+            return float(row[0])
+    except Exception:
+        pass
+    return 0.0
+
+# Market key map: worker passes market string, we check the corresponding DB toggle
+_MARKET_KEY = {'india': 'TELEGRAM_ALERT_INDIA', 'us': 'TELEGRAM_ALERT_US', 'crypto': 'TELEGRAM_ALERT_CRYPTO'}
+
 def send(message):
     if not _alert_enabled('TELEGRAM_ALERTS_ENABLED'):
         return False
@@ -51,8 +69,11 @@ def _send_chunked(text):
     return True
 
 def send_buy_alert(symbol, entry, stop_loss, target, capital_used, quantity,
-                   reason, confidence, ml_prob=None, sentiment='neutral', score=None):
+                   reason, confidence, ml_prob=None, sentiment='neutral', score=None, market=None):
     if not _alert_enabled('TELEGRAM_ALERT_BUY'): return False
+    if market and not _alert_enabled(_MARKET_KEY.get(market, '')): return False
+    min_cap = _alert_threshold('TELEGRAM_MIN_BUY_CAPITAL')
+    if min_cap > 0 and capital_used < min_cap: return False
     sl_pct  = ((stop_loss - entry) / entry) * 100
     tgt_pct = ((target    - entry) / entry) * 100
     rr      = round(abs(tgt_pct / sl_pct), 2) if sl_pct != 0 else 0
@@ -103,8 +124,11 @@ def send_hold_alert(symbol, price, stop_loss, reason, balance):
 
 def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, reason,
                     exit_type='full', qty_sold=None, qty_remaining=0, new_target=None,
-                    day_pnl=None, day_trades=None):
+                    day_pnl=None, day_trades=None, market=None):
     if not _alert_enabled('TELEGRAM_ALERT_SELL'): return False
+    if market and not _alert_enabled(_MARKET_KEY.get(market, '')): return False
+    min_pnl = _alert_threshold('TELEGRAM_MIN_PNL_ALERT')
+    if min_pnl > 0 and abs(pnl) < min_pnl: return False
     emoji    = "✅" if pnl >= 0 else "🔴"
     result   = "PROFIT" if pnl >= 0 else "LOSS"
     sym_s    = html.escape(symbol)

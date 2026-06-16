@@ -124,6 +124,11 @@ TELEGRAM_ALERT_DAILY     = os.getenv("TELEGRAM_ALERT_DAILY",     "true").lower()
 TELEGRAM_ALERT_ERRORS    = os.getenv("TELEGRAM_ALERT_ERRORS",    "true").lower() == "true"
 TELEGRAM_ALERT_BOT_START = os.getenv("TELEGRAM_ALERT_BOT_START", "true").lower() == "true"
 TELEGRAM_ALERT_BURST     = os.getenv("TELEGRAM_ALERT_BURST",     "true").lower() == "true"
+TELEGRAM_ALERT_INDIA     = os.getenv("TELEGRAM_ALERT_INDIA",     "true").lower() == "true"
+TELEGRAM_ALERT_US        = os.getenv("TELEGRAM_ALERT_US",        "true").lower() == "true"
+TELEGRAM_ALERT_CRYPTO    = os.getenv("TELEGRAM_ALERT_CRYPTO",    "true").lower() == "true"
+TELEGRAM_MIN_BUY_CAPITAL = float(os.getenv("TELEGRAM_MIN_BUY_CAPITAL", "0"))   # skip buy alerts below this capital deployed
+TELEGRAM_MIN_PNL_ALERT   = float(os.getenv("TELEGRAM_MIN_PNL_ALERT",   "0"))   # skip sell alerts below this |P&L| value
 
 # ── Portal UI refresh intervals (seconds) ────────────────────────────────────
 PORTAL_DASH_REFRESH    = int(os.getenv("PORTAL_DASH_REFRESH",    "30"))
