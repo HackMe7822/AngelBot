@@ -167,6 +167,42 @@ def _build_date_clause(date_filter: Optional[str], col: str = "entry_time") -> t
     return "", []
 
 
+def _build_us_date_clause(date_filter: Optional[str]) -> tuple:
+    """Build date clause for US closed trades using Eastern Time (ET) calendar day.
+    Stored exit_time is IST. IST→EDT = -570 min, IST→EST = -630 min.
+    Uses SQL: CAST(DATEADD(minute, offset, TRY_CAST(exit_time AS DATETIME2)) AS DATE)
+    so 'today' means the current US trading day regardless of IST midnight boundaries.
+    """
+    utc_now = datetime.now(timezone.utc)
+    y = utc_now.year
+    # DST starts 2nd Sunday of March at 2 AM UTC, ends 1st Sunday of Nov at 2 AM UTC
+    mar = datetime(y, 3, 1, tzinfo=timezone.utc)
+    nov = datetime(y, 11, 1, tzinfo=timezone.utc)
+    dst_start = mar + timedelta(days=(6 - mar.weekday()) % 7) + timedelta(weeks=1, hours=7)
+    dst_end   = nov + timedelta(days=(6 - nov.weekday()) % 7) + timedelta(hours=6)
+    is_dst = dst_start <= utc_now < dst_end
+    ist_to_et = -570 if is_dst else -630  # IST→ET offset in minutes
+
+    # Compute current ET date and neighbours
+    now_et       = utc_now + timedelta(minutes=(60 * (-4 if is_dst else -5)))
+    today_et     = now_et.strftime("%Y-%m-%d")
+    yesterday_et = (now_et - timedelta(days=1)).strftime("%Y-%m-%d")
+    week_et      = (now_et - timedelta(days=7)).strftime("%Y-%m-%d")
+    month_et     = (now_et - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    conv = f"CAST(DATEADD(minute,{ist_to_et},TRY_CAST(exit_time AS DATETIME2)) AS DATE)"
+
+    if date_filter == 'today':
+        return f"AND {conv} = ?", [today_et]
+    elif date_filter == 'yesterday':
+        return f"AND {conv} = ?", [yesterday_et]
+    elif date_filter == 'week':
+        return f"AND {conv} >= ?", [week_et]
+    elif date_filter == 'month':
+        return f"AND {conv} >= ?", [month_et]
+    return "", []
+
+
 _watchlist_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'watchlist.json')
 
 class SymbolsUpdate(BaseModel):
@@ -196,16 +232,18 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
     c    = conn.cursor()
     today_ist = datetime.now(_IST).strftime("%Y-%m-%d")
 
-    # Filter closed trades by exit_time — "today" = trades that CLOSED today, not entered today
-    closed_date_sql, closed_date_params = _build_date_clause(date_filter, col="exit_time")
+    # India/Crypto: filter closed trades by exit_time using IST calendar day
+    ist_closed_sql, ist_closed_params = _build_date_clause(date_filter, col="exit_time")
+    # US: filter closed trades by exit_time converted to ET calendar day
+    us_closed_sql, us_closed_params = _build_us_date_clause(date_filter)
 
-    def _market_summary(source_clause, cur_sym, dec):
-        # Period data — filtered by exit_time so "today" = trades that CLOSED today
+    def _market_summary(source_clause, cur_sym, dec, period_sql, period_params):
+        # Period data — caller supplies the right date clause for this market's timezone
         c.execute(
             f"SELECT COUNT(*), COALESCE(SUM(pnl),0), "
             f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) FROM trades "
-            f"WHERE status='closed' AND {source_clause} {closed_date_sql}",
-            closed_date_params
+            f"WHERE status='closed' AND {source_clause} {period_sql}",
+            period_params
         )
         trades, day_pnl, wins = c.fetchone()
 
@@ -231,15 +269,15 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
         }
 
     import config as _cfg
-    india  = _market_summary("(source='paper' OR source IS NULL)", "₹", 2)
+    india  = _market_summary("(source='paper' OR source IS NULL)", "₹", 2, ist_closed_sql, ist_closed_params)
     india["capital"]   = _cfg.CAPITAL
     india["balance"]   = round(_cfg.CAPITAL + india["total_pnl"] - india["deployed"], 2)
 
-    us     = _market_summary("source='us_paper'",  "$", 2)
+    us     = _market_summary("source='us_paper'", "$", 2, us_closed_sql, us_closed_params)
     us["capital"]      = _cfg.US_CAPITAL
     us["balance"]      = round(_cfg.US_CAPITAL + us["total_pnl"] - us["deployed"], 2)
 
-    crypto = _market_summary("source='crypto_paper'", "$", 4)
+    crypto = _market_summary("source='crypto_paper'", "$", 4, ist_closed_sql, ist_closed_params)
     crypto["capital"]  = _cfg.CRYPTO_CAPITAL
     crypto["balance"]  = round(_cfg.CRYPTO_CAPITAL + crypto["total_pnl"] - crypto["deployed"], 4)
 
