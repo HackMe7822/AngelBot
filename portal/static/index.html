@@ -2103,7 +2103,7 @@ function renderLeaderboard() {
 // ── Config ────────────────────────────────────────────────────────────────
 const _CONFIG_LABELS = {
   MIN_SIGNAL_SCORE:'Signal Quality Gate', USE_MOOD_FILTER:'Market Mood Filter', MOOD_FILTER_THRESHOLD:'Mood Filter Threshold',
-  USE_SECTOR_CAP:'Sector Concentration Cap', MAX_SECTOR_POSITIONS:'Max Stocks Per Sector', MAX_CONCURRENT_POSITIONS:'Max Open Positions',
+  USE_SECTOR_CAP:'Sector Concentration Cap', MAX_SECTOR_POSITIONS:'Max Stocks Per Sector', MAX_CONCURRENT_POSITIONS:'India Max Open Positions',
   USE_TIME_EXIT:'Force Time Exit', MAX_HOLD_MINUTES:'Max Hold Time (minutes)',
   CAPITAL:'India Capital (₹)', MAX_DAILY_TRADES:'India Daily Trade Limit', MAX_DEPLOYED_PCT:'India Max Capital Deployed %',
   PEAK_DRAWDOWN_PCT:'India Peak Drawdown Limit', SCALP_TARGET_PCT:'India Profit Target %', SCALP_SL_PCT:'India Stop Loss %',
@@ -2168,7 +2168,7 @@ const _CONFIG_HINTS = {
   MOOD_FILTER_THRESHOLD:    'Index drop % that triggers the block (negative). <strong>-0.5</strong> = very strict. <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Only active when Mood Filter is ON.',
   USE_SECTOR_CAP:           '<strong>ON:</strong> Max N stocks per sector (IT, Banks, etc). <strong>OFF:</strong> No sector limit — buys best setups regardless of sector. <em>OFF matches the original profitable session.</em>',
   MAX_SECTOR_POSITIONS:     'Max open positions per sector at once. Only applies when Sector Cap is ON.',
-  MAX_CONCURRENT_POSITIONS: 'Hard cap on total open positions across all stocks at the same time. <strong>5</strong> = conservative. <strong>15–20</strong> = high volume.',
+  MAX_CONCURRENT_POSITIONS: 'Hard cap on simultaneous India open positions. Does NOT affect US (use US Max Open Positions in the US section). <strong>5</strong> = conservative. <strong>20+</strong> = high volume.',
   USE_TIME_EXIT:            '<strong>ON:</strong> Force-close stagnating positions after MAX_HOLD_MINUTES — frees slots for new opportunities. <strong>OFF:</strong> Hold until target or stop-loss naturally.',
   MAX_HOLD_MINUTES:         'Minutes before a stuck position is force-closed. Only active when Time Exit is ON. India session is 6 hours — 30 min recommended for high volume.',
   CAPITAL:                  'India paper trading starting balance in ₹. Position sizes scale as a % of this. Update when you add funds.',
