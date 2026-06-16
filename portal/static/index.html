@@ -611,7 +611,7 @@
         <option value="0">All lines</option>
       </select>
       <button class="btn" onclick="loadLog()">↻ Refresh</button>
-      <button class="btn" onclick="downloadLog()" title="Download full log file">⬇ Download</button>
+      <button id="btn-log-download" class="btn" onclick="downloadLog()" title="Download full log file">⬇ Download</button>
       <label style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px;">
         <input type="checkbox" id="log-auto" onchange="toggleAutoRefresh()"> Auto-refresh (5s)
       </label>
@@ -1813,11 +1813,12 @@ async function loadLog() {
   const market = document.getElementById('log-market').value;
   const lines  = document.getElementById('log-lines').value;
   const date   = document.getElementById('log-date').value;
+  const box    = document.getElementById('log-box');
+  box.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;letter-spacing:.5px;">&#8635; Loading logs&hellip;</div>';
   const params = `lines=${lines}` + (date ? `&date=${date}` : '');
   const r = await apiFetch(`/api/logs/${market}?${params}`);
-  if (!r) return;
+  if (!r) { box.innerHTML = '<div style="color:#e55;padding:12px;">Failed to load log.</div>'; return; }
   const d = await r.json();
-  const box = document.getElementById('log-box');
   const showing = d.lines.length;
   const total   = d.total || showing;
   const header  = `<div style="color:var(--muted);font-size:11px;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px;">` +
@@ -1827,19 +1828,29 @@ async function loadLog() {
 }
 
 async function downloadLog() {
+  const btn  = document.getElementById('btn-log-download');
+  const orig = btn ? btn.innerHTML : '⬇ Download';
+  if (btn) { btn.innerHTML = '&#8635; Downloading&hellip;'; btn.disabled = true; }
   const market = document.getElementById('log-market').value;
   const date   = document.getElementById('log-date').value;
   const url    = `/api/logs/download/${market}` + (date ? `?date=${date}` : '');
-  const r = await apiFetch(url);
-  if (!r || !r.ok) return;
-  const blob = await r.blob();
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = market + (date ? '_' + date : '') + '.log';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(a.href);
+  try {
+    const r = await apiFetch(url);
+    if (!r || !r.ok) throw new Error('fetch failed');
+    const blob = await r.blob();
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = market + (date ? '_' + date : '') + '.log';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    if (btn) { btn.innerHTML = '&#10003; Downloaded'; }
+    setTimeout(() => { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
+  } catch(e) {
+    if (btn) { btn.innerHTML = '&#10007; Failed'; }
+    setTimeout(() => { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
+  }
 }
 
 function toggleAutoRefresh() {
