@@ -549,9 +549,9 @@ New-NetFirewallRule -DisplayName "AngelBot IIS 80"      -Direction Inbound -Prot
 New-NetFirewallRule -DisplayName "SQL Server 1433"      -Direction Inbound -Protocol TCP -LocalPort 1433 -Action Allow -ErrorAction SilentlyContinue | Out-Null
 OK "Firewall rules added (8080, 80, 1433)"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # STEP 10 -- Cloudflare Tunnel  (free public URL, no port-forwarding needed)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 10 "Cloudflare Tunnel (free remote access from anywhere)"
 
 $cfDest     = "C:\Windows\cloudflared.exe"
@@ -578,23 +578,23 @@ $script:cfPublicUrl = $null
 if ($cfDest -and (Test-Path $cfDest)) {
 
     Write-Host ""
-    Write-Host "  ┌─────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
-    Write-Host "  │  Cloudflare Tunnel — choose setup mode                  │" -ForegroundColor Cyan
-    Write-Host "  │                                                         │" -ForegroundColor Cyan
-    Write-Host "  │  [1] Quick tunnel  — instant random URL, no account     │" -ForegroundColor Cyan
-    Write-Host "  │      Example: https://abc-xyz.trycloudflare.com         │" -ForegroundColor Cyan
-    Write-Host "  │      Note: URL changes every restart                    │" -ForegroundColor Cyan
-    Write-Host "  │                                                         │" -ForegroundColor Cyan
-    Write-Host "  │  [2] Named tunnel  — stable URL, free Cloudflare acct   │" -ForegroundColor Cyan
-    Write-Host "  │      Example: https://portal.yourdomain.com             │" -ForegroundColor Cyan
-    Write-Host "  │      Requires: domain on Cloudflare (free plan OK)      │" -ForegroundColor Cyan
-    Write-Host "  │                                                         │" -ForegroundColor Cyan
-    Write-Host "  │  [N] Skip tunnel setup                                  │" -ForegroundColor Cyan
-    Write-Host "  └─────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "  |  Cloudflare Tunnel - choose setup mode                   |" -ForegroundColor Cyan
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [1] Quick tunnel  - instant random URL, no account      |" -ForegroundColor Cyan
+    Write-Host "  |      Example: https://abc-xyz.trycloudflare.com          |" -ForegroundColor Cyan
+    Write-Host "  |      Note: URL changes every restart                     |" -ForegroundColor Cyan
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [2] Named tunnel  - stable URL, free Cloudflare acct    |" -ForegroundColor Cyan
+    Write-Host "  |      Example: https://portal.yourdomain.com              |" -ForegroundColor Cyan
+    Write-Host "  |      Requires: domain on Cloudflare (free plan OK)       |" -ForegroundColor Cyan
+    Write-Host "  |                                                          |" -ForegroundColor Cyan
+    Write-Host "  |  [N] Skip tunnel setup                                   |" -ForegroundColor Cyan
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host ""
     $cfChoice = Read-Host "  Choice (1/2/N)"
 
-    # ── OPTION 1: Quick tunnel ─────────────────────────────────────────────────
+    # -- OPTION 1: Quick tunnel -----------------------------------------------
     if ($cfChoice -eq "1") {
         $cfSvcName = "AngelBot-Tunnel"
         $cfLog     = "$BOT_DIR\logs\AngelBot-Tunnel.log"
@@ -620,7 +620,7 @@ if ($cfDest -and (Test-Path $cfDest)) {
         } else {
             Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log for URL"
         }
-    # ── OPTION 2: Named tunnel ─────────────────────────────────────────────────
+    # -- OPTION 2: Named tunnel -----------------------------------------------
     } elseif ($cfChoice -eq "2") {
 
         # Step 2a: Login (opens browser or prints auth URL)
