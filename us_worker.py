@@ -171,6 +171,18 @@ def _on_exit(pos, price, pnl, pnl_pct, reason, *_):
             _loss_burst_pause_until = datetime.now(IST) + timedelta(seconds=US_LOSS_BURST_COOLDOWN)
             mins = US_LOSS_BURST_COOLDOWN // 60
             cprint(f"[US BURST] {len(recent)} SL hits in {US_LOSS_BURST_WINDOW//60}min — buying paused for {mins}min", RD)
+            # Persist so restarts honour the cooldown
+            try:
+                from data.database import get_conn as _gc
+                conn = _gc(); c2 = conn.cursor()
+                c2.execute("IF EXISTS (SELECT 1 FROM bot_settings WHERE setting_key='US_BURST_PAUSE_UNTIL') "
+                           "  UPDATE bot_settings SET setting_value=?, updated_at=GETDATE(), updated_by='burst' WHERE setting_key='US_BURST_PAUSE_UNTIL' "
+                           "ELSE INSERT INTO bot_settings (setting_key, setting_value, updated_by) VALUES ('US_BURST_PAUSE_UNTIL',?,'burst')",
+                           (_loss_burst_pause_until.strftime('%Y-%m-%d %H:%M:%S'),
+                            _loss_burst_pause_until.strftime('%Y-%m-%d %H:%M:%S')))
+                conn.commit(); conn.close()
+            except Exception:
+                pass
 
 # ── US scan ───────────────────────────────────────────────────────────────────
 def run_us_scan():
@@ -355,6 +367,9 @@ def run_us_scan():
 
     buys_this_scan = 0
     for c in candidates:
+        if len(us_trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
+            cprint(f"  [US CONCUR]    {len(us_trader.open_positions)}/{MAX_CONCURRENT_POSITIONS} concurrent positions — scan done", YL)
+            break
         if buys_this_scan >= US_MAX_BUYS_PER_SCAN:
             cprint(f"  [US SCAN CAP]  Max {US_MAX_BUYS_PER_SCAN} buys per scan reached — holding back remaining candidates", YL)
             break
@@ -410,6 +425,23 @@ def main():
         sys.exit(1)
 
     us_trader  = AlpacaTrader()
+
+    # Restore burst pause state from DB (survives restarts)
+    global _loss_burst_pause_until
+    try:
+        from data.database import get_conn as _gc
+        conn = _gc(); c2 = conn.cursor()
+        c2.execute("SELECT setting_value FROM bot_settings WHERE setting_key='US_BURST_PAUSE_UNTIL'")
+        row = c2.fetchone(); conn.close()
+        if row and row[0]:
+            saved = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=IST)
+            if saved > datetime.now(IST):
+                _loss_burst_pause_until = saved
+                mins = int((saved - datetime.now(IST)).total_seconds() / 60)
+                cprint(f"  [US BURST] Burst cooldown restored — buying paused for ~{mins}min more", RD)
+    except Exception:
+        pass
+
     us_monitor = start_monitor(
         us_trader, _on_exit,
         live_feed=None, price_fn=get_us_live_price,
