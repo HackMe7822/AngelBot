@@ -190,11 +190,16 @@ class AlpacaTrader:
     def get_daily_stats(self, date_str=None):
         if not date_str:
             date_str = datetime.now(_ET()).strftime("%Y-%m-%d")  # use ET so day aligns with NYSE session
+        # Trades are stored with IST timestamps. US EOD closes at 3:55 PM EDT = 1:25 AM IST next day,
+        # so a naive DATE(exit_time) in IST always falls on the wrong ET calendar day.
+        # Fix: subtract the IST→ET offset before taking the date.
+        ist_to_et = -570 if _is_dst() else -630   # EDT=UTC-4 → IST-EDT=9h30m; EST=UTC-5 → 10h30m
         conn = get_conn()
         c    = conn.cursor()
         c.execute(
-            "SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
-            "WHERE status='closed' AND source=? AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)=?",
+            f"SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
+            f"WHERE status='closed' AND source=? "
+            f"AND CAST(DATEADD(minute, {ist_to_et}, TRY_CAST(exit_time AS DATETIME2)) AS DATE)=?",
             (self.SOURCE, date_str)
         )
         rows = c.fetchall()
