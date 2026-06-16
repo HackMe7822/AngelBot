@@ -355,6 +355,7 @@
         <span class="pill" data-val="yesterday" onclick="setDashFilter(this,'yesterday')">Yesterday</span>
         <span class="pill" data-val="week" onclick="setDashFilter(this,'week')">7 Days</span>
       </div>
+      <button class="btn" style="font-size:12px;" onclick="saveDefault('dash')" title="Save current filter as default">&#9733; Save Default</button>
     </div>
 
     <div class="grid grid-3" id="market-cards" style="margin-bottom:16px;">
@@ -454,8 +455,8 @@
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <div class="pill-group">
-          <span class="pill active" id="dash-view-closed" onclick="setDashView('closed')">Closed Trades</span>
-          <span class="pill" id="dash-view-buys" onclick="setDashView('buys')">Open Positions</span>
+          <span class="pill" id="dash-view-closed" onclick="setDashView('closed')">Closed Trades</span>
+          <span class="pill active" id="dash-view-buys" onclick="setDashView('buys')">Open Positions</span>
         </div>
         <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
       </div>
@@ -997,6 +998,7 @@
           <span class="pill"       data-mkt="watchdog" onclick="setLogMarket(this,'watchdog')">Watchdog</span>
           <span class="pill"       data-mkt="portal"   onclick="setLogMarket(this,'portal')">Portal</span>
         </div>
+        <button class="btn" style="font-size:12px;" onclick="saveDefault('logs')" title="Save current log market as default">&#9733; Save Default</button>
         <select id="log-date" onchange="loadLog()" style="min-width:130px;font-size:12px;"><option value="">Latest</option></select>
         <select id="log-lines" onchange="loadLog()" style="font-size:12px;">
           <option value="100">100 lines</option>
@@ -1329,9 +1331,15 @@ function saveDefault(page) {
     var statusEl = document.getElementById('trade-status');
     if (mktEl2)   state.market = mktEl2.value;
     if (statusEl) state.status = statusEl.value;
+    state.dateFilter = _tradeDateFilter;
     state.sort = {col: _sort.trades.col, dir: _sort.trades.dir};
   } else if (page === 'lb') {
     state.sort = {col: _sort.lb.col, dir: _sort.lb.dir};
+  } else if (page === 'dash') {
+    state.dateFilter = _dashDateFilter;
+    state.view = _dashView;
+  } else if (page === 'logs') {
+    state.market = _logMarket;
   }
   try { localStorage.setItem('angelbot_default_' + page, JSON.stringify(state)); } catch(e) {}
   toast('Default saved');
@@ -1351,9 +1359,28 @@ function applyDefault(page) {
     var statusEl = document.getElementById('trade-status');
     if (mktEl2   && state.market !== undefined) mktEl2.value   = state.market;
     if (statusEl && state.status !== undefined) statusEl.value = state.status;
+    if (state.dateFilter !== undefined) {
+      _tradeDateFilter = state.dateFilter;
+      document.querySelectorAll('#trade-date-pills .pill').forEach(function(p) {
+        p.classList.toggle('active', p.dataset.val === _tradeDateFilter);
+      });
+    }
     if (state.sort) { _sort.trades.col = state.sort.col || 'date'; _sort.trades.dir = state.sort.dir || 'desc'; }
   } else if (page === 'lb') {
     if (state.sort) { _sort.lb.col = state.sort.col || 'pnl'; _sort.lb.dir = state.sort.dir || 'desc'; }
+  } else if (page === 'dash') {
+    if (state.dateFilter !== undefined) {
+      _dashDateFilter = state.dateFilter;
+      document.querySelectorAll('#dash-date-pills .pill').forEach(function(p) {
+        p.classList.toggle('active', p.dataset.val === _dashDateFilter);
+      });
+    }
+    if (state.view !== undefined) setDashView(state.view);
+  } else if (page === 'logs') {
+    if (state.market !== undefined) {
+      var pill = document.querySelector('#log-market-pills .pill[data-mkt="' + state.market + '"]');
+      if (pill) setLogMarket(pill, state.market);
+    }
   }
 }
 
@@ -1365,14 +1392,14 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
   _stopPageTimer();
-  if (name === 'dashboard')   refreshDashboard();
+  if (name === 'dashboard')   { applyDefault('dash'); refreshDashboard(); }
   if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 30000); }
-  if (name === 'trades')      { document.getElementById('trade-status').value = 'open'; applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
+  if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
   if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
   if (name === 'config') { loadConfig(); var t = (function(){ try { return sessionStorage.getItem('cfg_tab'); } catch(e){ return null; } })(); if (t) showSettingsTab(t); }
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
-  if (name === 'logs')        loadLogDates();
+  if (name === 'logs')        { applyDefault('logs'); loadLogDates(); }
   if (name === 'symbols')     loadSymbols();
   if (name === 'monitor')     startMonitor();
   if (name !== 'monitor')     stopMonitor();
@@ -1530,7 +1557,7 @@ async function fetchLivePrices(positions, callback) {
 }
 
 // ── Dashboard recent section ───────────────────────────────────────────────
-var _dashView = 'closed';
+var _dashView = 'buys';
 function setDashView(view) {
   _dashView = view;
   document.getElementById('dash-view-closed').classList.toggle('active', view === 'closed');

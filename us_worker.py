@@ -137,7 +137,9 @@ def _next_us_open():
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAILY_TRADES,
                     US_MAX_DEPLOYED_PCT, US_PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE,
-                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP)
+                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP,
+                    US_MAX_BUYS_PER_SCAN, US_LOSS_BURST_COUNT, US_LOSS_BURST_WINDOW,
+                    US_LOSS_BURST_COOLDOWN, US_CANDLE_CONFIRM_REENTRY)
 from trading.alpaca_trader import AlpacaTrader
 from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
@@ -150,15 +152,29 @@ us_trader      = None
 us_monitor     = None
 _eod_done_date = None
 
+# ── Loss cascade circuit breaker state ───────────────────────────────────────
+_sl_hit_times          = []   # timestamps of recent SL exits
+_loss_burst_pause_until = None  # datetime; new buys blocked until this time
+
 # ── Exit callback ─────────────────────────────────────────────────────────────
 def _on_exit(pos, price, pnl, pnl_pct, reason, *_):
+    global _sl_hit_times, _loss_burst_pause_until
     sign = '+' if pnl >= 0 else ''
     cprint(f"[US EXIT] {pos['symbol']} @ ${price:.4f}  P&L: {sign}${pnl:.4f} ({sign}{pnl_pct:.2f}%)  {reason}",
            G if pnl >= 0 else RD)
+    if pnl < 0:
+        _sl_hit_times.append(datetime.now(IST))
+        # Check if this loss triggers the burst threshold
+        cutoff = datetime.now(IST) - timedelta(seconds=US_LOSS_BURST_WINDOW)
+        recent = [t for t in _sl_hit_times if t >= cutoff]
+        if len(recent) >= US_LOSS_BURST_COUNT and _loss_burst_pause_until is None:
+            _loss_burst_pause_until = datetime.now(IST) + timedelta(seconds=US_LOSS_BURST_COOLDOWN)
+            mins = US_LOSS_BURST_COOLDOWN // 60
+            cprint(f"[US BURST] {len(recent)} SL hits in {US_LOSS_BURST_WINDOW//60}min — buying paused for {mins}min", RD)
 
 # ── US scan ───────────────────────────────────────────────────────────────────
 def run_us_scan():
-    global _eod_done_date
+    global _eod_done_date, _sl_hit_times, _loss_burst_pause_until
     if is_paused():
         return
 
@@ -242,6 +258,17 @@ def run_us_scan():
         cprint(f"[US] Daily trade cap reached ({stats['trades']}/{US_MAX_DAILY_TRADES}) — no new buys", YL)
         return
 
+    # ── Loss cascade circuit breaker ─────────────────────────────────────────
+    now_ist_ts = datetime.now(IST)
+    if _loss_burst_pause_until and now_ist_ts < _loss_burst_pause_until:
+        remaining = int((_loss_burst_pause_until - now_ist_ts).total_seconds() / 60)
+        cprint(f"[US BURST] Buying paused after loss cascade — resumes in ~{remaining}min", RD)
+        return
+    elif _loss_burst_pause_until and now_ist_ts >= _loss_burst_pause_until:
+        _loss_burst_pause_until = None
+        _sl_hit_times.clear()
+        cprint("[US BURST] Loss cascade cooldown expired — resuming buys", YL)
+
     dd = us_trader.get_drawdown_pct()
     if dd >= US_PEAK_DRAWDOWN_PCT:
         cprint(f"[US] Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
@@ -300,12 +327,14 @@ def run_us_scan():
             confidence = min(95, max(30, total * 12 + 20))
             reason     = " + ".join(tech['reasons'])
             wscore, ml = get_weighted_score(total, tech['signals'], confidence)
+            last_candle_bullish = bool(len(df) > 0 and df.iloc[-1]['close'] >= df.iloc[-1]['open'])
             cprint(f"  [CANDIDATE] {sym}  score={total}  ml={ml:.0f}%  ${price:.2f}", BL)
             return {
                 'symbol': sym, 'score': total, 'weighted_score': wscore, 'ml_prob': ml,
                 'confidence': confidence, 'price': price,
                 'stop_loss': calc_stop_loss(price, sl_pct=US_SCALP_SL_PCT), 'target': calc_target(price, target_pct=US_SCALP_TARGET_PCT),
                 'signals': tech['signals'], 'reason': reason,
+                'last_candle_bullish': last_candle_bullish,
             }
         except Exception as e:
             cprint(f"  US SKIP {sym}: {e}", DIM)
@@ -324,7 +353,11 @@ def run_us_scan():
 
     candidates.sort(key=lambda x: (x['ml_prob'], x['weighted_score']), reverse=True)
 
+    buys_this_scan = 0
     for c in candidates:
+        if buys_this_scan >= US_MAX_BUYS_PER_SCAN:
+            cprint(f"  [US SCAN CAP]  Max {US_MAX_BUYS_PER_SCAN} buys per scan reached — holding back remaining candidates", YL)
+            break
         if not us_trader.can_buy():
             break
         if c['symbol'] in open_syms:
@@ -343,13 +376,19 @@ def run_us_scan():
         if us_monitor and us_monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [US COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)
             continue
+        # Candle confirmation gate: if this symbol hit SL today, require bullish last candle before re-entry
+        if US_CANDLE_CONFIRM_REENTRY and us_monitor and us_monitor.had_sl_today(c['symbol']):
+            if not c.get('last_candle_bullish', True):
+                cprint(f"  [US CANDLE]    {c['symbol']} — last candle bearish, blocking re-entry after today's SL", YL)
+                continue
         pos, _ = us_trader.buy(
             c['symbol'], c['price'], c['stop_loss'], c['target'],
             c['signals'], c['reason'], c['confidence']
         )
         if pos:
+            buys_this_scan += 1
             cprint(f"  ▲ US BUY  {c['symbol']} @ ${c['price']:.2f}"
-                   f"  SL ${c['stop_loss']:.2f}  TGT ${c['target']:.2f}", BL)
+                   f"  SL ${c['stop_loss']:.2f}  TGT ${c['target']:.2f}  [{buys_this_scan}/{US_MAX_BUYS_PER_SCAN} this scan]", BL)
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────

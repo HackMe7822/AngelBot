@@ -217,6 +217,12 @@ class PositionMonitor:
                 return False   # momentum confirmed — allow re-entry before cooldown expires
         return True
 
+    def had_sl_today(self, symbol):
+        """Returns True if this symbol hit its stop-loss at least once today."""
+        today = datetime.now(_IST).date()
+        entry = self._daily_sl_hits.get(symbol)
+        return entry is not None and entry[0] == today
+
     # ── Main loop ─────────────────────────────────────────────────────────────
     def _loop(self):
         while self._running:
