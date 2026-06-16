@@ -91,7 +91,8 @@
   .config-section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
   .config-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .config-key { font-family: monospace; font-size: 13px; color: var(--purple); }
-  .config-val { font-family: monospace; }
+  .config-val { font-family: monospace; font-size: 13px; border: 1.5px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--bg); transition: border-color .15s, box-shadow .15s; width: 220px; }
+  .config-val:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px rgba(9,105,218,.1); }
   /* Redesigned config rows */
   .cfg-row { display:grid; grid-template-columns:280px 1fr; gap:20px; align-items:start; padding:14px 0; border-bottom:1px solid var(--border); }
   .cfg-row:last-child { border-bottom:none; }
@@ -223,7 +224,7 @@
     <a href="#" onclick="showPage('positions')" id="nav-positions">📋 Positions</a>
     <a href="#" onclick="showPage('trades')" id="nav-trades">📈 Trade History</a>
     <a href="#" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
-    <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Config</a>
+    <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Settings</a>
     <a href="#" onclick="showPage('apikeys')" id="nav-apikeys">🔑 API Keys</a>
     <a href="#" onclick="showPage('symbols')" id="nav-symbols">&#128279; Symbols</a>
     <a href="#" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
@@ -461,19 +462,27 @@
     </div>
   </div>
 
-  <!-- CONFIG -->
+  <!-- CONFIG (Settings) -->
   <div id="page-config" class="page">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div>
-        <h2 style="margin-bottom:4px;">Configuration</h2>
-        <div style="color:var(--muted);font-size:13px;">Settings saved to database and .env — restart workers to apply. &nbsp;<a href="#" onclick="showPage('help');return false;">❓ Help &amp; FAQ</a></div>
+        <h2 style="margin-bottom:4px;">Settings</h2>
+        <div style="color:var(--muted);font-size:13px;">Saved to database — restart workers to apply. &nbsp;<a href="#" onclick="showPage('help');return false;">❓ Help &amp; FAQ</a></div>
       </div>
-      <button id="btn-save-all" class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+        <button id="btn-save-all" class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap;">Quick preset:</span>
+          <button class="btn" onclick="fillPreset('volume')" style="font-size:12px;padding:5px 12px;" title="Signal 2, No filters, 20 positions, 30-min time exit">🚀 High Volume</button>
+          <button class="btn" onclick="fillPreset('balanced')" style="font-size:12px;padding:5px 12px;" title="Signal 3, Mood filter ON, 10 positions">⚖️ Balanced</button>
+          <button class="btn" onclick="fillPreset('conservative')" style="font-size:12px;padding:5px 12px;" title="Signal 4, Mood+Sector filter ON, 5 positions">🛡️ Conservative</button>
+        </div>
+      </div>
     </div>
 
     <!-- Strategy Quality -->
     <div class="config-section">
-      <div class="card" style="border-left:4px solid #0969da;">
+      <div class="card" style="border-left:4px solid #0969da;margin-bottom:20px;">
         <div class="cfg-section-hdr">
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="cfg-section-icon" style="background:rgba(9,105,218,.12);color:#0969da;">🎯</div>
@@ -492,58 +501,60 @@
       </div>
     </div>
 
-    <div class="grid grid-2" style="margin-bottom:24px;">
-      <div class="card" style="border-left:4px solid #e36209;">
-        <div class="cfg-section-hdr">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;">🇮🇳</div>
-            <div>
-              <div style="font-size:15px;font-weight:700;">India (NSE)</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:15 AM – 3:30 PM IST &middot; Paper mode</div>
-            </div>
+    <!-- India -->
+    <div class="card" style="border-left:4px solid #e36209;margin-bottom:20px;">
+      <div class="cfg-section-hdr">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;">🇮🇳</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;">India (NSE)</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:15 AM – 3:30 PM IST &middot; Paper mode</div>
           </div>
         </div>
-        <div id="config-india"></div>
       </div>
-      <div class="card" style="border-left:4px solid #1a7f37;">
-        <div class="cfg-section-hdr">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;">🇺🇸</div>
-            <div>
-              <div style="font-size:15px;font-weight:700;">US (NASDAQ / NYSE)</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
-            </div>
-          </div>
-        </div>
-        <div id="config-us"></div>
-      </div>
+      <div id="config-india"></div>
     </div>
 
-    <div class="grid grid-2" style="margin-bottom:24px;">
-      <div class="card" style="border-left:4px solid #8250df;">
-        <div class="cfg-section-hdr">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div class="cfg-section-icon" style="background:rgba(130,80,223,.12);color:#8250df;font-weight:900;">₿</div>
-            <div>
-              <div style="font-size:15px;font-weight:700;">Crypto (24/7)</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Binance paper &middot; BTC/ETH/USDT pairs</div>
-            </div>
+    <!-- US -->
+    <div class="card" style="border-left:4px solid #1a7f37;margin-bottom:20px;">
+      <div class="cfg-section-hdr">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;">🇺🇸</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;">US (NASDAQ / NYSE)</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
           </div>
         </div>
-        <div id="config-crypto"></div>
       </div>
-      <div class="card" style="border-left:4px solid var(--muted);">
-        <div class="cfg-section-hdr">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div class="cfg-section-icon" style="background:rgba(101,109,118,.12);color:var(--muted);">⚙️</div>
-            <div>
-              <div style="font-size:15px;font-weight:700;">General</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Paper modes and slippage simulation</div>
-            </div>
+      <div id="config-us"></div>
+    </div>
+
+    <!-- Crypto -->
+    <div class="card" style="border-left:4px solid #8250df;margin-bottom:20px;">
+      <div class="cfg-section-hdr">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="cfg-section-icon" style="background:rgba(130,80,223,.12);color:#8250df;font-weight:900;">₿</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;">Crypto (24/7)</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Binance paper &middot; BTC/ETH/USDT pairs</div>
           </div>
         </div>
-        <div id="config-general"></div>
       </div>
+      <div id="config-crypto"></div>
+    </div>
+
+    <!-- General -->
+    <div class="card" style="border-left:4px solid var(--muted);margin-bottom:20px;">
+      <div class="cfg-section-hdr">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="cfg-section-icon" style="background:rgba(101,109,118,.12);color:var(--muted);">⚙️</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;">General</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Paper modes and slippage simulation</div>
+          </div>
+        </div>
+      </div>
+      <div id="config-general"></div>
     </div>
 
     <div style="display:flex;justify-content:flex-end;padding-top:16px;border-top:2px solid var(--border);">
@@ -1948,6 +1959,43 @@ async function saveAllConfig() {
   setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
   if (!failed) toast(`&#10003; All ${saved} settings saved to database. Restart workers to apply.`);
   else toast(`&#9888; ${failed} setting(s) failed to save.`, 5000);
+}
+
+function fillPreset(name) {
+  const presets = {
+    volume:       { MIN_SIGNAL_SCORE:'2', USE_MOOD_FILTER:'false', USE_SECTOR_CAP:'false', MAX_CONCURRENT_POSITIONS:'20', USE_TIME_EXIT:'true',  MAX_HOLD_MINUTES:'30' },
+    balanced:     { MIN_SIGNAL_SCORE:'3', USE_MOOD_FILTER:'true',  MOOD_FILTER_THRESHOLD:'-1.5', USE_SECTOR_CAP:'false', MAX_CONCURRENT_POSITIONS:'10', USE_TIME_EXIT:'false', MAX_HOLD_MINUTES:'90' },
+    conservative: { MIN_SIGNAL_SCORE:'4', USE_MOOD_FILTER:'true',  MOOD_FILTER_THRESHOLD:'-0.5', USE_SECTOR_CAP:'true',  MAX_SECTOR_POSITIONS:'2',  MAX_CONCURRENT_POSITIONS:'5',  USE_TIME_EXIT:'false', MAX_HOLD_MINUTES:'90' },
+  };
+  const p = presets[name];
+  if (!p) return;
+  for (const [key, value] of Object.entries(p)) {
+    const el = document.getElementById('cfg-' + key);
+    if (!el) continue;
+    if (_CONFIG_SELECTS[key]) {
+      var container = el.closest ? el.closest('div') : el.parentElement;
+      var btn = container ? container.querySelector('button[data-val="' + value + '"]') : null;
+      if (!btn) { var all = document.querySelectorAll('button[data-val="' + value + '"]'); btn = all[0] || null; }
+      if (btn) selectConfig(key, btn, value);
+      else el.value = value;
+    } else if (_CONFIG_TOGGLES.has(key)) {
+      var isOn = value === 'true';
+      el.value = isOn;
+      var lbl = document.getElementById('cfg-lbl-' + key);
+      if (lbl) {
+        var tw = lbl.parentElement;
+        tw.dataset.val = isOn;
+        var track = tw.querySelector('.toggle-track');
+        if (track) track.className = 'toggle-track' + (isOn ? ' on' : '');
+        lbl.textContent = isOn ? 'ON' : 'OFF';
+        lbl.style.color = isOn ? '#00c853' : 'var(--muted)';
+      }
+    } else {
+      el.value = value;
+    }
+  }
+  var labels = { volume:'🚀 High Volume', balanced:'⚖️ Balanced', conservative:'🛡️ Conservative' };
+  toast('&#9889; ' + (labels[name] || name) + ' preset loaded. Review and click Save All Changes.');
 }
 
 async function applyPreset(name) {
