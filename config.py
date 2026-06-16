@@ -71,7 +71,7 @@ US_MAX_DEPLOYED_PCT = float(os.getenv("US_MAX_DEPLOYED_PCT",     "0.70"))   # ne
 US_PEAK_DRAWDOWN_PCT = float(os.getenv("US_PEAK_DRAWDOWN_PCT",   "0.03"))   # pause if drops 3% from high
 
 # US loss cascade circuit breaker — stops buying when many SL hits happen in a short window
-US_MAX_BUYS_PER_SCAN      = int(os.getenv("US_MAX_BUYS_PER_SCAN",     "5"))    # max new positions per scan cycle
+US_MAX_BUYS_PER_SCAN      = int(os.getenv("US_MAX_BUYS_PER_SCAN",     "50"))   # max new positions per scan cycle (set low in Settings to throttle)
 US_LOSS_BURST_COUNT       = int(os.getenv("US_LOSS_BURST_COUNT",      "5"))    # SL hits in window to trigger pause
 US_LOSS_BURST_WINDOW      = int(os.getenv("US_LOSS_BURST_WINDOW",     "300"))  # seconds to measure burst in
 US_LOSS_BURST_COOLDOWN    = int(os.getenv("US_LOSS_BURST_COOLDOWN",   "1800")) # seconds to pause buying after burst

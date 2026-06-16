@@ -327,7 +327,7 @@ def run_us_scan():
             confidence = min(95, max(30, total * 12 + 20))
             reason     = " + ".join(tech['reasons'])
             wscore, ml = get_weighted_score(total, tech['signals'], confidence)
-            last_candle_bullish = bool(len(df) > 0 and df.iloc[-1]['close'] >= df.iloc[-1]['open'])
+            last_candle_bullish = bool(len(df) > 0 and df.iloc[-1].get('Close', df.iloc[-1].get('close', 1)) >= df.iloc[-1].get('Open', df.iloc[-1].get('open', 0)))
             cprint(f"  [CANDIDATE] {sym}  score={total}  ml={ml:.0f}%  ${price:.2f}", BL)
             return {
                 'symbol': sym, 'score': total, 'weighted_score': wscore, 'ml_prob': ml,
