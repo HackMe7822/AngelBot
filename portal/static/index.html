@@ -93,6 +93,13 @@
   .config-key { font-family: monospace; font-size: 13px; color: var(--purple); }
   .config-val { font-family: monospace; font-size: 13px; border: 1.5px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--bg); transition: border-color .15s, box-shadow .15s; width: 220px; }
   .config-val:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px rgba(9,105,218,.1); }
+  /* Settings tabs */
+  .settings-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px; overflow-x:auto; flex-shrink:0; }
+  .settings-tab { padding:10px 20px; font-size:13px; font-weight:600; color:var(--muted); background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; margin-bottom:-2px; transition:color .15s,border-color .15s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .settings-tab:hover { color:var(--text); }
+  .settings-tab.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
   /* Redesigned config rows */
   .cfg-row { display:grid; grid-template-columns:280px 1fr; gap:20px; align-items:start; padding:14px 0; border-bottom:1px solid var(--border); }
   .cfg-row:last-child { border-bottom:none; }
@@ -464,6 +471,7 @@
 
   <!-- CONFIG (Settings) -->
   <div id="page-config" class="page">
+    <!-- Header -->
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
       <div>
         <h2 style="margin-bottom:4px;">Settings</h2>
@@ -480,9 +488,18 @@
       </div>
     </div>
 
-    <!-- Strategy Quality -->
-    <div class="config-section">
-      <div class="card" style="border-left:4px solid #0969da;margin-bottom:20px;">
+    <!-- Tabs -->
+    <div class="settings-tabs">
+      <button class="settings-tab active" data-tab="strategy" onclick="showSettingsTab('strategy')">🎯 Strategy</button>
+      <button class="settings-tab" data-tab="india" onclick="showSettingsTab('india')">🇮🇳 India</button>
+      <button class="settings-tab" data-tab="us" onclick="showSettingsTab('us')">🇺🇸 US</button>
+      <button class="settings-tab" data-tab="crypto" onclick="showSettingsTab('crypto')">₿ Crypto</button>
+      <button class="settings-tab" data-tab="general" onclick="showSettingsTab('general')">⚙️ General</button>
+    </div>
+
+    <!-- Tab: Strategy -->
+    <div id="tab-strategy" class="tab-panel active">
+      <div class="card" style="border-left:4px solid #0969da;">
         <div class="cfg-section-hdr">
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="cfg-section-icon" style="background:rgba(9,105,218,.12);color:#0969da;">🎯</div>
@@ -501,63 +518,72 @@
       </div>
     </div>
 
-    <!-- India -->
-    <div class="card" style="border-left:4px solid #e36209;margin-bottom:20px;">
-      <div class="cfg-section-hdr">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;">🇮🇳</div>
-          <div>
-            <div style="font-size:15px;font-weight:700;">India (NSE)</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:15 AM – 3:30 PM IST &middot; Paper mode</div>
+    <!-- Tab: India -->
+    <div id="tab-india" class="tab-panel">
+      <div class="card" style="border-left:4px solid #e36209;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;">🇮🇳</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">India (NSE)</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:15 AM – 3:30 PM IST &middot; Paper mode</div>
+            </div>
           </div>
         </div>
+        <div id="config-india"></div>
       </div>
-      <div id="config-india"></div>
     </div>
 
-    <!-- US -->
-    <div class="card" style="border-left:4px solid #1a7f37;margin-bottom:20px;">
-      <div class="cfg-section-hdr">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;">🇺🇸</div>
-          <div>
-            <div style="font-size:15px;font-weight:700;">US (NASDAQ / NYSE)</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
+    <!-- Tab: US -->
+    <div id="tab-us" class="tab-panel">
+      <div class="card" style="border-left:4px solid #1a7f37;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;">🇺🇸</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">US (NASDAQ / NYSE)</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
+            </div>
           </div>
         </div>
+        <div id="config-us"></div>
       </div>
-      <div id="config-us"></div>
     </div>
 
-    <!-- Crypto -->
-    <div class="card" style="border-left:4px solid #8250df;margin-bottom:20px;">
-      <div class="cfg-section-hdr">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div class="cfg-section-icon" style="background:rgba(130,80,223,.12);color:#8250df;font-weight:900;">₿</div>
-          <div>
-            <div style="font-size:15px;font-weight:700;">Crypto (24/7)</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Binance paper &middot; BTC/ETH/USDT pairs</div>
+    <!-- Tab: Crypto -->
+    <div id="tab-crypto" class="tab-panel">
+      <div class="card" style="border-left:4px solid #8250df;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(130,80,223,.12);color:#8250df;font-weight:900;">₿</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Crypto (24/7)</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Binance paper &middot; BTC/ETH/USDT pairs</div>
+            </div>
           </div>
         </div>
+        <div id="config-crypto"></div>
       </div>
-      <div id="config-crypto"></div>
     </div>
 
-    <!-- General -->
-    <div class="card" style="border-left:4px solid var(--muted);margin-bottom:20px;">
-      <div class="cfg-section-hdr">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div class="cfg-section-icon" style="background:rgba(101,109,118,.12);color:var(--muted);">⚙️</div>
-          <div>
-            <div style="font-size:15px;font-weight:700;">General</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">Paper modes and slippage simulation</div>
+    <!-- Tab: General -->
+    <div id="tab-general" class="tab-panel">
+      <div class="card" style="border-left:4px solid var(--muted);">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(101,109,118,.12);color:var(--muted);">⚙️</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">General</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Paper modes and slippage simulation</div>
+            </div>
           </div>
         </div>
+        <div id="config-general"></div>
       </div>
-      <div id="config-general"></div>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;padding-top:16px;border-top:2px solid var(--border);">
+    <!-- Bottom save -->
+    <div style="display:flex;justify-content:flex-end;padding-top:20px;margin-top:4px;border-top:2px solid var(--border);">
       <button class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
     </div>
   </div>
@@ -1149,7 +1175,7 @@ function showPage(name) {
   if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 30000); }
   if (name === 'trades')      { document.getElementById('trade-status').value = 'open'; applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
   if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
-  if (name === 'config')      loadConfig();
+  if (name === 'config') { loadConfig(); var t = (function(){ try { return sessionStorage.getItem('cfg_tab'); } catch(e){ return null; } })(); if (t) showSettingsTab(t); }
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
   if (name === 'logs')        loadLogDates();
@@ -1959,6 +1985,16 @@ async function saveAllConfig() {
   setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
   if (!failed) toast(`&#10003; All ${saved} settings saved to database. Restart workers to apply.`);
   else toast(`&#9888; ${failed} setting(s) failed to save.`, 5000);
+}
+
+function showSettingsTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.settings-tab').forEach(function(t) { t.classList.remove('active'); });
+  var panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+  var tab = document.querySelector('.settings-tab[data-tab="' + name + '"]');
+  if (tab) tab.classList.add('active');
+  try { sessionStorage.setItem('cfg_tab', name); } catch(e) {}
 }
 
 function fillPreset(name) {
