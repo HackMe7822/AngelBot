@@ -154,21 +154,72 @@
   .preset-card p { font-size:12px; color:var(--muted); line-height:1.6; }
   .preset-badge { display:inline-block; background:rgba(9,105,218,.1); color:var(--blue); border-radius:4px; padding:2px 7px; font-size:11px; margin:2px 2px 0 0; }
 
-  /* Log viewer */
-  .log-box { background: #f6f8fa; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; height: 500px; overflow-y: auto; white-space: pre-wrap; color: #24292f; }
-  .log-box .err { color: var(--red); }
-  .log-box .warn { color: var(--yellow); }
-  .log-box .ok { color: var(--green); }
-  .log-box .sell { color: #e36209; }
-
-  /* Live monitor terminal */
-  .monitor-terminal { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 12px; height: calc(100vh - 220px); min-height: 400px; overflow-y: auto; white-space: pre-wrap; color: #c9d1d9; }
-  .monitor-terminal .t-err  { color: #ff7b72; }
-  .monitor-terminal .t-warn { color: #e3b341; }
-  .monitor-terminal .t-buy  { color: #56d364; }
-  .monitor-terminal .t-sell { color: #f78166; }
-  .monitor-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-  .monitor-ts { font-size: 11px; color: var(--muted); margin-left: auto; }
+  /* ── Log & Monitor Redesign ───────────────────────────────────────────── */
+  .log-terminal { background:#0d1117; border:1px solid #30363d; border-radius:8px; font-family:'Courier New',Courier,monospace; font-size:12px; height:calc(100vh - 290px); min-height:420px; overflow-y:auto; color:#c9d1d9; position:relative; }
+  .monitor-terminal { background:#0d1117; border:2px solid #30363d; border-radius:8px; font-family:'Courier New',Courier,monospace; font-size:12px; height:calc(100vh - 185px); min-height:440px; overflow-y:auto; color:#c9d1d9; position:relative; transition:border-color .3s; }
+  .monitor-terminal.mkt-india  { border-color:#e36209; }
+  .monitor-terminal.mkt-us     { border-color:#1a7f37; }
+  .monitor-terminal.mkt-crypto { border-color:#8250df; }
+  .monitor-terminal.mkt-portal { border-color:#0969da; }
+  .log-lines { padding:4px 0 8px; }
+  .log-line { display:flex; align-items:flex-start; line-height:1.65; border-bottom:1px solid transparent; }
+  .log-line:hover { background:rgba(255,255,255,.035); }
+  .log-line[data-cat="err"]  { border-left:2px solid #f8514980; }
+  .log-line[data-cat="warn"] { border-left:2px solid #e3b34160; }
+  .log-line[data-cat="buy"]  { border-left:2px solid #3fb95060; }
+  .log-line[data-cat="sell"] { border-left:2px solid #ffa65760; }
+  .log-ln  { color:#373e47; font-size:10px; text-align:right; min-width:40px; padding:2px 8px 2px 6px; user-select:none; flex-shrink:0; border-right:1px solid #21262d; }
+  .log-ts  { color:#6e7681; font-size:10px; padding:2px 8px; flex-shrink:0; white-space:nowrap; min-width:72px; }
+  .log-badge { font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; line-height:16px; flex-shrink:0; margin:2px 8px 0 0; letter-spacing:.4px; min-width:38px; text-align:center; }
+  .log-msg { flex:1; white-space:pre-wrap; word-break:break-all; padding:2px 10px 2px 0; }
+  /* level badge colors */
+  .lvl-fatal  { background:#b62324; color:#fff; }
+  .lvl-error  { background:rgba(248,81,73,.2);   color:#ff7b72; }
+  .lvl-warn   { background:rgba(227,179,65,.2);  color:#e3b341; }
+  .lvl-skip   { background:rgba(110,118,129,.15);color:#8b949e; }
+  .lvl-buy    { background:rgba(63,185,80,.18);  color:#3fb950; }
+  .lvl-profit { background:rgba(63,185,80,.25);  color:#56d364; }
+  .lvl-sell   { background:rgba(247,129,102,.2); color:#f78166; }
+  .lvl-loss   { background:rgba(248,81,73,.22);  color:#ff7b72; }
+  .lvl-signal { background:rgba(188,140,255,.18);color:#d2a8ff; }
+  .lvl-sys    { background:rgba(121,192,255,.15);color:#79c0ff; }
+  .lvl-info   { background:rgba(139,148,158,.12);color:#8b949e; }
+  /* message colors */
+  .msg-fatal  { color:#ffa198; font-weight:700; }
+  .msg-error  { color:#ff7b72; }
+  .msg-warn   { color:#e3b341; }
+  .msg-skip   { color:#6e7681; }
+  .msg-buy    { color:#56d364; font-weight:600; }
+  .msg-profit { color:#3fb950; font-weight:600; }
+  .msg-sell   { color:#ffa657; font-weight:600; }
+  .msg-loss   { color:#f85149; }
+  .msg-signal { color:#d2a8ff; }
+  .msg-sys    { color:#79c0ff; }
+  .msg-info   { color:#c9d1d9; }
+  /* stat chips */
+  .stat-chip { display:inline-flex; align-items:center; gap:3px; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid transparent; user-select:none; }
+  .stat-chip.c-all  { background:rgba(139,148,158,.12); color:#8b949e; }
+  .stat-chip.c-err  { background:rgba(248,81,73,.12);   color:#ff7b72; }
+  .stat-chip.c-warn { background:rgba(227,179,65,.12);  color:#e3b341; }
+  .stat-chip.c-buy  { background:rgba(63,185,80,.12);   color:#3fb950; }
+  .stat-chip.c-sell { background:rgba(247,129,102,.12); color:#f78166; }
+  .stat-chip.active { border-color:currentColor; }
+  /* log search */
+  .log-search { background:#161b22; border:1px solid #30363d; border-radius:6px; padding:5px 10px; color:#c9d1d9; font-size:12px; width:160px; outline:none; }
+  .log-search:focus { border-color:#58a6ff; }
+  .log-search::placeholder { color:#484f58; }
+  /* jump button */
+  .log-jump-btn { position:absolute; bottom:12px; right:14px; background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:20px; padding:4px 12px; font-size:11px; cursor:pointer; z-index:5; }
+  .log-jump-btn:hover { background:#30363d; color:#c9d1d9; }
+  /* auto-refresh dot */
+  .ar-dot { width:7px; height:7px; border-radius:50%; background:#3fb950; animation:pulse 1.2s ease infinite; flex-shrink:0; }
+  /* monitor toolbar */
+  .monitor-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .monitor-ts { font-size:11px; color:var(--muted); }
+  .term-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .term-dot.green { background:#3fb950; box-shadow:0 0 5px #3fb950; }
+  .term-dot.amber { background:#e3b341; box-shadow:0 0 5px #e3b341; }
+  .term-dot.gray  { background:#484f58; }
 
   /* Services widget */
   .service-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -932,49 +983,90 @@
 
   <!-- LOGS -->
   <div id="page-logs" class="page">
-    <h2>Logs</h2>
-    <div class="toolbar">
-      <select id="log-market" onchange="loadLogDates()">
-        <option value="india">India</option>
-        <option value="us">US</option>
-        <option value="crypto">Crypto</option>
-        <option value="watchdog">Watchdog</option>
-        <option value="portal">Portal</option>
-      </select>
-      <select id="log-date" onchange="loadLog()" style="min-width:140px;">
-        <option value="">Latest</option>
-      </select>
-      <select id="log-lines" onchange="loadLog()">
-        <option value="100">Last 100 lines</option>
-        <option value="200" selected>Last 200 lines</option>
-        <option value="500">Last 500 lines</option>
-        <option value="1000">Last 1000 lines</option>
-        <option value="0">All lines</option>
-      </select>
-      <button class="btn" onclick="loadLog()">↻ Refresh</button>
-      <button id="btn-log-download" class="btn" onclick="downloadLog()" title="Download full log file">⬇ Download</button>
-      <label style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" id="log-auto" onchange="toggleAutoRefresh()"> Auto-refresh (5s)
-      </label>
+    <!-- hidden select kept for downloadLog compatibility -->
+    <select id="log-market" style="display:none;"></select>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">Logs</h2>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+        <div class="pill-group" id="log-market-pills">
+          <span class="pill active" data-mkt="india"   onclick="setLogMarket(this,'india')"><span class="mkt-badge mkt-in" style="font-size:9px;padding:0 4px;line-height:14px;">IN</span> India</span>
+          <span class="pill"       data-mkt="us"       onclick="setLogMarket(this,'us')"><span class="mkt-badge mkt-us" style="font-size:9px;padding:0 4px;line-height:14px;">US</span> US</span>
+          <span class="pill"       data-mkt="crypto"   onclick="setLogMarket(this,'crypto')"><span class="mkt-badge mkt-btc" style="font-size:9px;padding:0 4px;line-height:14px;">&#8383;</span> Crypto</span>
+          <span class="pill"       data-mkt="watchdog" onclick="setLogMarket(this,'watchdog')">Watchdog</span>
+          <span class="pill"       data-mkt="portal"   onclick="setLogMarket(this,'portal')">Portal</span>
+        </div>
+        <select id="log-date" onchange="loadLog()" style="min-width:130px;font-size:12px;"><option value="">Latest</option></select>
+        <select id="log-lines" onchange="loadLog()" style="font-size:12px;">
+          <option value="100">100 lines</option>
+          <option value="200" selected>200 lines</option>
+          <option value="500">500 lines</option>
+          <option value="1000">1000 lines</option>
+          <option value="0">All</option>
+        </select>
+        <input class="log-search" type="text" id="log-search" placeholder="&#128269; Filter…" oninput="filterLog(this.value)">
+        <button class="btn" onclick="loadLog()" title="Refresh">&#8635;</button>
+        <button id="btn-log-download" class="btn" onclick="downloadLog()" title="Download full log">&#8595; DL</button>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;" title="Auto-refresh every 5 seconds">
+          <input type="checkbox" id="log-auto" onchange="toggleAutoRefresh()">
+          <span id="ar-dot-span" style="display:none;" class="ar-dot"></span>
+          Auto 5s
+        </label>
+      </div>
     </div>
-    <div class="log-box" id="log-box">Select a market log above.</div>
+
+    <!-- Stats bar -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <span style="font-size:11px;color:var(--muted);" id="log-file-info"></span>
+      <span style="margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;">
+        <span class="stat-chip c-all active" id="sf-all"  onclick="setStatFilter('all')">All</span>
+        <span class="stat-chip c-err"        id="sf-err"  onclick="setStatFilter('err')">0 ERR</span>
+        <span class="stat-chip c-warn"       id="sf-warn" onclick="setStatFilter('warn')">0 WARN</span>
+        <span class="stat-chip c-buy"        id="sf-buy"  onclick="setStatFilter('buy')">0 BUY</span>
+        <span class="stat-chip c-sell"       id="sf-sell" onclick="setStatFilter('sell')">0 SELL</span>
+      </span>
+    </div>
+
+    <!-- Terminal -->
+    <div style="position:relative;">
+      <div class="log-terminal" id="log-box">
+        <div style="padding:48px;color:#484f58;text-align:center;font-size:13px;">Select a market to load logs.</div>
+      </div>
+      <button class="log-jump-btn" onclick="var b=document.getElementById('log-box');b.scrollTop=b.scrollHeight;">&#8595; Latest</button>
+    </div>
   </div>
 
   <!-- LIVE MONITOR -->
   <div id="page-monitor" class="page">
-    <h2>Live Monitor</h2>
-    <div class="monitor-bar">
+    <div class="monitor-toolbar">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h2 style="margin:0;font-size:16px;">Live Monitor</h2>
+        <span class="term-dot gray" id="monitor-status-dot"></span>
+        <span class="monitor-ts" id="monitor-ts">Idle</span>
+      </div>
       <div class="pill-group" id="monitor-market-pills">
-        <span class="pill active" data-val="india" onclick="setMonitorMarket(this,'india')">India</span>
-        <span class="pill" data-val="us" onclick="setMonitorMarket(this,'us')">US</span>
-        <span class="pill" data-val="crypto" onclick="setMonitorMarket(this,'crypto')">Crypto</span>
-        <span class="pill" data-val="portal" onclick="setMonitorMarket(this,'portal')">Portal</span>
+        <span class="pill active" data-val="india"   onclick="setMonitorMarket(this,'india')"><span class="mkt-badge mkt-in" style="font-size:9px;padding:0 4px;line-height:14px;">IN</span> India</span>
+        <span class="pill"        data-val="us"       onclick="setMonitorMarket(this,'us')"><span class="mkt-badge mkt-us" style="font-size:9px;padding:0 4px;line-height:14px;">US</span> US</span>
+        <span class="pill"        data-val="crypto"   onclick="setMonitorMarket(this,'crypto')"><span class="mkt-badge mkt-btc" style="font-size:9px;padding:0 4px;line-height:14px;">&#8383;</span> Crypto</span>
+        <span class="pill"        data-val="portal"   onclick="setMonitorMarket(this,'portal')">Portal</span>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;margin-left:auto;">
+        <span class="stat-chip c-err"  id="mon-cnt-err">0 ERR</span>
+        <span class="stat-chip c-warn" id="mon-cnt-warn">0 WARN</span>
+        <span class="stat-chip c-buy"  id="mon-cnt-buy">0 BUY</span>
+        <span class="stat-chip c-sell" id="mon-cnt-sell">0 SELL</span>
       </div>
       <button class="btn sm" onclick="clearMonitor()">Clear</button>
-      <button class="btn sm" id="monitor-pause-btn" onclick="toggleMonitorPause()">⏸ Pause</button>
-      <span class="monitor-ts" id="monitor-ts"></span>
+      <button class="btn sm" id="monitor-pause-btn" onclick="toggleMonitorPause()">&#9208; Pause</button>
     </div>
-    <div class="monitor-terminal" id="monitor-terminal">Connecting...</div>
+    <div style="position:relative;">
+      <div class="monitor-terminal mkt-india" id="monitor-terminal">
+        <div class="log-lines" id="monitor-lines">
+          <div style="padding:48px;color:#484f58;text-align:center;font-size:13px;">Connecting to live feed…</div>
+        </div>
+      </div>
+      <button class="log-jump-btn" id="monitor-jump-btn" onclick="var t=document.getElementById('monitor-terminal');t.scrollTop=t.scrollHeight;">&#8595; Latest</button>
+    </div>
   </div>
 
   <!-- USERS -->
@@ -1105,11 +1197,16 @@ function showConfirm(title, msg, okLabel) {
 let _dashDateFilter = 'today';
 let _tradeDateFilter = '';
 
+// Logs state
+let _logMarket = 'india';
+let _logStatFilter = 'all';
+let _logSearch = '';
 // Live monitor state
 let _monitorMarket = 'india';
 let _monitorLastSize = 0;
 let _monitorPaused = false;
 let _monitorInterval = null;
+let _monitorStats = {err:0, warn:0, buy:0, sell:0};
 
 // ── Auth (Basic) ───────────────────────────────────────────────────────────
 function showLogin(errMsg) {
@@ -2323,12 +2420,72 @@ async function saveCredential(key) {
   else toast('Error: ' + (d.detail || 'Unknown error'), 5000);
 }
 
+// ── Log line parser ───────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function parseLogLine(raw, lineNum) {
+  const l  = raw.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
+  const lc = l.toLowerCase();
+
+  // Extract timestamp
+  let ts = '', rest = escHtml(l);
+  const tsA = l.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+  const tsB = l.match(/\[(\d{2}:\d{2}:\d{2})\]/);
+  if (tsA) { ts = tsA[1].substring(11); rest = escHtml(l.substring(tsA[1].length).trimStart()); }
+  else if (tsB) { ts = tsB[1]; }
+
+  // Classify — order matters (most specific first)
+  let badgeCls, msgCls, badge, cat;
+  if (lc.includes('traceback') || lc.includes('fatal')) {
+    badgeCls='lvl-fatal'; msgCls='msg-fatal'; badge='FATAL'; cat='err';
+  } else if (lc.includes('error') || lc.includes('exception')) {
+    badgeCls='lvl-error'; msgCls='msg-error'; badge='ERROR'; cat='err';
+  } else if (lc.includes('[crypto sell]') || lc.includes('[sell]') || lc.includes('force sell') || lc.includes('sold at')) {
+    badgeCls='lvl-sell'; msgCls='msg-sell'; badge='SELL'; cat='sell';
+  } else if (lc.includes('stop loss') || lc.includes('sl hit') || (lc.includes('loss') && !lc.includes('daily loss'))) {
+    badgeCls='lvl-loss'; msgCls='msg-loss'; badge='LOSS'; cat='sell';
+  } else if (lc.includes('[crypto buy]') || lc.includes('[buy]') || lc.includes('buying')) {
+    badgeCls='lvl-buy'; msgCls='msg-buy'; badge='BUY'; cat='buy';
+  } else if (lc.includes('profit') || (lc.includes('p&l') && lc.includes('+'))) {
+    badgeCls='lvl-profit'; msgCls='msg-profit'; badge='WIN'; cat='buy';
+  } else if (lc.includes('warn') || lc.includes('warning')) {
+    badgeCls='lvl-warn'; msgCls='msg-warn'; badge='WARN'; cat='warn';
+  } else if (lc.includes('cooldown') || lc.includes('paused') || lc.includes('outside') || lc.includes('skip') || lc.includes('blocked') || lc.includes('cap reached')) {
+    badgeCls='lvl-skip'; msgCls='msg-skip'; badge='SKIP'; cat='warn';
+  } else if (lc.includes('signal') || lc.includes('score:')) {
+    badgeCls='lvl-signal'; msgCls='msg-signal'; badge='SIG'; cat='info';
+  } else if (lc.includes('start') || lc.includes('init') || lc.includes('connect') || lc.includes('reload') || lc.includes('restart')) {
+    badgeCls='lvl-sys'; msgCls='msg-sys'; badge='SYS'; cat='info';
+  } else {
+    badgeCls='lvl-info'; msgCls='msg-info'; badge='INFO'; cat='info';
+  }
+
+  return {
+    cat,
+    html: `<div class="log-line" data-cat="${cat}">` +
+      `<span class="log-ln">${lineNum}</span>` +
+      `<span class="log-ts">${ts}</span>` +
+      `<span class="log-badge ${badgeCls}">${badge}</span>` +
+      `<span class="log-msg ${msgCls}">${rest}</span>` +
+      `</div>`
+  };
+}
+
 // ── Logs (historical) ─────────────────────────────────────────────────────
+function setLogMarket(el, market) {
+  document.querySelectorAll('#log-market-pills .pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  _logMarket = market;
+  document.getElementById('log-market').value = market;
+  loadLogDates();
+}
+
 async function loadLogDates() {
-  const market = document.getElementById('log-market').value;
-  const sel    = document.getElementById('log-date');
+  const sel = document.getElementById('log-date');
   sel.innerHTML = '<option value="">Loading…</option>';
-  const r = await apiFetch(`/api/logs/dates/${market}`);
+  const r = await apiFetch(`/api/logs/dates/${_logMarket}`);
   if (!r) { sel.innerHTML = '<option value="">Latest</option>'; loadLog(); return; }
   const d = await r.json();
   sel.innerHTML = '';
@@ -2344,51 +2501,106 @@ async function loadLogDates() {
 }
 
 async function loadLog() {
-  const market = document.getElementById('log-market').value;
-  const lines  = document.getElementById('log-lines').value;
-  const date   = document.getElementById('log-date').value;
-  const box    = document.getElementById('log-box');
+  const lines = document.getElementById('log-lines').value;
+  const date  = document.getElementById('log-date').value;
+  const box   = document.getElementById('log-box');
   box.innerHTML = _LOADING_HTML;
   const params = `lines=${lines}` + (date ? `&date=${date}` : '');
-  const r = await apiFetch(`/api/logs/${market}?${params}`);
-  if (!r) { box.innerHTML = '<div style="color:#e55;padding:12px;">Failed to load log.</div>'; return; }
+  const r = await apiFetch(`/api/logs/${_logMarket}?${params}`);
+  if (!r) {
+    box.innerHTML = '<div style="color:#ff7b72;padding:32px;text-align:center;">Failed to load log.</div>';
+    return;
+  }
   const d = await r.json();
   const showing = d.lines.length;
   const total   = d.total || showing;
-  const header  = `<div style="color:var(--muted);font-size:11px;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px;">` +
-    `${d.path} &nbsp;|&nbsp; Showing <strong>${showing}</strong> of <strong>${total}</strong> lines</div>`;
-  box.innerHTML = header + (d.lines.map(l => colorLogLine(l, false)).join('\n') || 'No log data.');
+
+  // Parse lines + count categories
+  let errCnt=0, warnCnt=0, buyCnt=0, sellCnt=0;
+  const htmlParts = d.lines.map(function(l, i) {
+    const p = parseLogLine(l, i + 1);
+    if (p.cat === 'err')  errCnt++;
+    else if (p.cat === 'warn') warnCnt++;
+    else if (p.cat === 'buy')  buyCnt++;
+    else if (p.cat === 'sell') sellCnt++;
+    return p.html;
+  });
+
+  // File info
+  const fi = document.getElementById('log-file-info');
+  if (fi) fi.textContent = (d.path || '') + ' | ' + showing + ' / ' + total + ' lines';
+
+  // Update stat chips
+  document.getElementById('sf-err').textContent  = errCnt  + ' ERR';
+  document.getElementById('sf-warn').textContent = warnCnt + ' WARN';
+  document.getElementById('sf-buy').textContent  = buyCnt  + ' BUY';
+  document.getElementById('sf-sell').textContent = sellCnt + ' SELL';
+
+  box.innerHTML = '<div class="log-lines" id="log-lines-inner">' +
+    (htmlParts.join('') || '<div style="padding:40px;color:#484f58;text-align:center;">No log data.</div>') +
+    '</div>';
+
+  // Re-apply active filter + search
+  _applyStatFilter(_logStatFilter);
+  if (_logSearch) _applyLogSearch(_logSearch);
+
   box.scrollTop = box.scrollHeight;
+}
+
+function setStatFilter(cat) {
+  _logStatFilter = cat;
+  ['all','err','warn','buy','sell'].forEach(function(c) {
+    var el = document.getElementById('sf-' + c);
+    if (el) el.classList.toggle('active', c === cat);
+  });
+  _applyStatFilter(cat);
+}
+
+function _applyStatFilter(cat) {
+  document.querySelectorAll('#log-lines-inner .log-line').forEach(function(el) {
+    el.style.display = (cat === 'all' || el.dataset.cat === cat) ? '' : 'none';
+  });
+}
+
+function filterLog(val) {
+  _logSearch = val.toLowerCase();
+  _applyLogSearch(_logSearch);
+}
+
+function _applyLogSearch(q) {
+  document.querySelectorAll('#log-lines-inner .log-line').forEach(function(el) {
+    if (!q) { el.style.display = ''; return; }
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
 }
 
 async function downloadLog() {
   const btn  = document.getElementById('btn-log-download');
-  const orig = btn ? btn.innerHTML : '⬇ Download';
-  if (btn) { btn.innerHTML = '&#8635; Downloading&hellip;'; btn.disabled = true; }
-  const market = document.getElementById('log-market').value;
-  const date   = document.getElementById('log-date').value;
-  const url    = `/api/logs/download/${market}` + (date ? `?date=${date}` : '');
+  const orig = btn ? btn.innerHTML : '&#8595; DL';
+  if (btn) { btn.innerHTML = '&#8635;…'; btn.disabled = true; }
+  const date = document.getElementById('log-date').value;
+  const url  = `/api/logs/download/${_logMarket}` + (date ? `?date=${date}` : '');
   try {
     const r = await apiFetch(url);
-    if (!r || !r.ok) throw new Error('fetch failed');
+    if (!r || !r.ok) throw new Error('fail');
     const blob = await r.blob();
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = market + (date ? '_' + date : '') + '.log';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = _logMarket + (date ? '_' + date : '') + '.log';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-    if (btn) { btn.innerHTML = '&#10003; Downloaded'; }
-    setTimeout(() => { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
+    if (btn) btn.innerHTML = '&#10003; Done';
+    setTimeout(function() { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
   } catch(e) {
-    if (btn) { btn.innerHTML = '&#10007; Failed'; }
-    setTimeout(() => { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
+    if (btn) btn.innerHTML = '&#10007; Fail';
+    setTimeout(function() { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
   }
 }
 
 function toggleAutoRefresh() {
   const on = document.getElementById('log-auto').checked;
+  const dot = document.getElementById('ar-dot-span');
+  if (dot) dot.style.display = on ? 'inline-block' : 'none';
   if (on) {
     _autoRefreshInterval = setInterval(loadLog, 5000);
   } else {
@@ -2397,103 +2609,109 @@ function toggleAutoRefresh() {
   }
 }
 
-// ── Log line colorizer ────────────────────────────────────────────────────
-function colorLogLine(l, dark) {
-  l = l.replace(/\x1b\[[0-9;]*m/g, '');
-  const lc = l.toLowerCase();
-  const e  = escHtml(l);
-  const errCls  = dark ? 't-err'  : 'err';
-  const warnCls = dark ? 't-warn' : 'warn';
-  const buyCls  = dark ? 't-buy'  : 'ok';
-  const sellCls = dark ? 't-sell' : 'sell';
-  if (lc.includes('error') || lc.includes('exception') || lc.includes('fatal') || lc.includes('traceback'))
-    return `<span class="${errCls}">${e}</span>`;
-  if (lc.includes('warn') || lc.includes('cooldown') || lc.includes('paused'))
-    return `<span class="${warnCls}">${e}</span>`;
-  if (lc.includes('sell'))
-    return `<span class="${sellCls}">${e}</span>`;
-  if (lc.includes('buy') || lc.includes('profit') || lc.includes('ok'))
-    return `<span class="${buyCls}">${e}</span>`;
-  return e;
-}
-
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 // ── Live Monitor ──────────────────────────────────────────────────────────
+function _monitorSetDot(state) {
+  var dot = document.getElementById('monitor-status-dot');
+  if (!dot) return;
+  dot.className = 'term-dot ' + (state === 'live' ? 'green' : state === 'warn' ? 'amber' : 'gray');
+}
+
+function _monitorUpdateCounts() {
+  var s = _monitorStats;
+  var e = document.getElementById('mon-cnt-err');  if (e) e.textContent  = s.err  + ' ERR';
+  var w = document.getElementById('mon-cnt-warn'); if (w) w.textContent  = s.warn + ' WARN';
+  var b = document.getElementById('mon-cnt-buy');  if (b) b.textContent  = s.buy  + ' BUY';
+  var sl= document.getElementById('mon-cnt-sell'); if (sl) sl.textContent = s.sell + ' SELL';
+}
+
 function setMonitorMarket(el, market) {
   document.querySelectorAll('#monitor-market-pills .pill').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
   _monitorMarket = market;
   _monitorLastSize = 0;
+  // Update terminal border accent
+  var term = document.getElementById('monitor-terminal');
+  if (term) term.className = 'monitor-terminal mkt-' + market;
   clearMonitor();
-  // Immediately fetch
   pollMonitor();
 }
 
 function startMonitor() {
   stopMonitor();
   _monitorLastSize = 0;
-  document.getElementById('monitor-terminal').textContent = 'Connecting...';
+  _monitorStats = {err:0, warn:0, buy:0, sell:0};
+  _monitorUpdateCounts();
+  _monitorSetDot('gray');
+  var ml = document.getElementById('monitor-lines');
+  if (ml) ml.innerHTML = '<div style="padding:48px;color:#484f58;text-align:center;font-size:13px;">Connecting…</div>';
   pollMonitor();
   _monitorInterval = setInterval(pollMonitor, 2000);
 }
 
 function stopMonitor() {
-  if (_monitorInterval) {
-    clearInterval(_monitorInterval);
-    _monitorInterval = null;
-  }
+  if (_monitorInterval) { clearInterval(_monitorInterval); _monitorInterval = null; }
+  _monitorSetDot('gray');
 }
 
 function clearMonitor() {
-  document.getElementById('monitor-terminal').innerHTML = '';
+  var ml = document.getElementById('monitor-lines');
+  if (ml) ml.innerHTML = '';
   _monitorLastSize = 0;
+  _monitorStats = {err:0, warn:0, buy:0, sell:0};
+  _monitorUpdateCounts();
 }
 
 function toggleMonitorPause() {
   _monitorPaused = !_monitorPaused;
-  const btn = document.getElementById('monitor-pause-btn');
-  btn.textContent = _monitorPaused ? '▶ Resume' : '⏸ Pause';
+  var btn = document.getElementById('monitor-pause-btn');
+  btn.innerHTML   = _monitorPaused ? '&#9654; Resume' : '&#9208; Pause';
   btn.className   = _monitorPaused ? 'btn sm success' : 'btn sm';
+  _monitorSetDot(_monitorPaused ? 'amber' : 'green');
 }
 
 async function pollMonitor() {
+  if (_monitorPaused) return;
   try {
     const r = await apiFetch(`/api/logs/live/${_monitorMarket}?lines=200`);
-    if (!r) return;
+    if (!r) { _monitorSetDot('gray'); return; }
     const d = await r.json();
-    const term = document.getElementById('monitor-terminal');
+    const ml  = document.getElementById('monitor-lines');
     const now = new Date().toLocaleTimeString();
-    document.getElementById('monitor-ts').textContent = 'Last update: ' + now;
+    const tsEl = document.getElementById('monitor-ts');
+    if (tsEl) tsEl.textContent = now;
 
     if (d.size === 0 && d.lines.length === 0) {
-      if (term.textContent === 'Connecting...' || term.innerHTML === '') {
-        term.textContent = 'No log file found.';
+      if (ml && !ml.children.length) {
+        ml.innerHTML = '<div style="padding:48px;color:#484f58;text-align:center;font-size:13px;">No log file found for this market.</div>';
       }
       _monitorLastSize = 0;
+      _monitorSetDot('gray');
       return;
     }
 
-    if (_monitorLastSize === 0) {
-      // First load — show all lines
-      term.innerHTML = d.lines.map(l => colorLogLine(l, true)).join('\n');
+    _monitorSetDot('green');
+
+    if (_monitorLastSize === 0 || d.size !== _monitorLastSize) {
+      // Re-render all lines, recount stats
+      _monitorStats = {err:0, warn:0, buy:0, sell:0};
+      const lineCount = ml ? ml.querySelectorAll('.log-line').length : 0;
+      // Parse with global line numbering
+      const html = d.lines.map(function(l, i) {
+        const p = parseLogLine(l, i + 1);
+        if (p.cat === 'err')  _monitorStats.err++;
+        else if (p.cat === 'warn') _monitorStats.warn++;
+        else if (p.cat === 'buy')  _monitorStats.buy++;
+        else if (p.cat === 'sell') _monitorStats.sell++;
+        return p.html;
+      }).join('');
+      if (ml) ml.innerHTML = html || '<div style="padding:48px;color:#484f58;text-align:center;">No data.</div>';
       _monitorLastSize = d.size;
-      if (!_monitorPaused) term.scrollTop = term.scrollHeight;
-    } else if (d.size !== _monitorLastSize) {
-      // File changed — append new lines
-      // We re-fetch to get the diff; since the backend returns last N lines,
-      // we detect change by size and append all returned lines that aren't already shown.
-      // Simple approach: append all lines returned (the backend already tails the file).
-      // To avoid duplicates, we track which content was last shown via size comparison.
-      // Re-show all lines to keep it simple and accurate for a 200-line tail.
-      term.innerHTML = d.lines.map(l => colorLogLine(l, true)).join('\n');
-      _monitorLastSize = d.size;
-      if (!_monitorPaused) term.scrollTop = term.scrollHeight;
+      _monitorUpdateCounts();
+      var term = document.getElementById('monitor-terminal');
+      if (term) term.scrollTop = term.scrollHeight;
     }
   } catch(e) {
-    // Silently ignore poll errors
+    _monitorSetDot('gray');
   }
 }
 
