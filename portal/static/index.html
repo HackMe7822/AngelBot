@@ -593,12 +593,15 @@
   <div id="page-logs" class="page">
     <h2>Logs</h2>
     <div class="toolbar">
-      <select id="log-market" onchange="loadLog()">
+      <select id="log-market" onchange="loadLogDates()">
         <option value="india">India</option>
         <option value="us">US</option>
         <option value="crypto">Crypto</option>
         <option value="watchdog">Watchdog</option>
         <option value="portal">Portal</option>
+      </select>
+      <select id="log-date" onchange="loadLog()" style="min-width:140px;">
+        <option value="">Latest</option>
       </select>
       <select id="log-lines" onchange="loadLog()">
         <option value="100">Last 100 lines</option>
@@ -930,7 +933,7 @@ function showPage(name) {
   if (name === 'config')      loadConfig();
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
-  if (name === 'logs')        loadLog();
+  if (name === 'logs')        loadLogDates();
   if (name === 'symbols')     loadSymbols();
   if (name === 'monitor')     startMonitor();
   if (name !== 'monitor')     stopMonitor();
@@ -1787,10 +1790,31 @@ async function saveCredential(key) {
 }
 
 // ── Logs (historical) ─────────────────────────────────────────────────────
+async function loadLogDates() {
+  const market = document.getElementById('log-market').value;
+  const sel    = document.getElementById('log-date');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  const r = await apiFetch(`/api/logs/dates/${market}`);
+  if (!r) { sel.innerHTML = '<option value="">Latest</option>'; loadLog(); return; }
+  const d = await r.json();
+  sel.innerHTML = '';
+  (d.dates || []).forEach(function(item, i) {
+    const opt = document.createElement('option');
+    opt.value = item.date || '';
+    opt.textContent = i === 0 ? item.label + ' (latest)' : item.label;
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  if (!d.dates || !d.dates.length) sel.innerHTML = '<option value="">Latest</option>';
+  loadLog();
+}
+
 async function loadLog() {
   const market = document.getElementById('log-market').value;
   const lines  = document.getElementById('log-lines').value;
-  const r = await apiFetch(`/api/logs/${market}?lines=${lines}`);
+  const date   = document.getElementById('log-date').value;
+  const params = `lines=${lines}` + (date ? `&date=${date}` : '');
+  const r = await apiFetch(`/api/logs/${market}?${params}`);
   if (!r) return;
   const d = await r.json();
   const box = document.getElementById('log-box');
@@ -1804,7 +1828,8 @@ async function loadLog() {
 
 function downloadLog() {
   const market = document.getElementById('log-market').value;
-  window.location = `/api/logs/download/${market}`;
+  const date   = document.getElementById('log-date').value;
+  window.location = `/api/logs/download/${market}` + (date ? `?date=${date}` : '');
 }
 
 function toggleAutoRefresh() {

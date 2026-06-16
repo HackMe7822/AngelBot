@@ -26,6 +26,66 @@ from data.database import get_conn, init_db
 
 app = FastAPI(title="AngelBot Portal", version="1.0.0")
 
+_BOT_DIR = Path(__file__).parent.parent  # C:\AngelBot in production
+
+
+def _ensure_settings_table():
+    """Create bot_settings table in SQL Server if it doesn't already exist."""
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("""
+            IF NOT EXISTS (
+                SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='bot_settings'
+            )
+            CREATE TABLE bot_settings (
+                setting_key   NVARCHAR(200) NOT NULL,
+                setting_value NVARCHAR(MAX),
+                updated_at    DATETIME2     DEFAULT GETDATE(),
+                updated_by    NVARCHAR(100) DEFAULT 'portal',
+                CONSTRAINT PK_bot_settings PRIMARY KEY (setting_key)
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Portal] bot_settings init: {e}")
+
+
+def _sync_db_to_env():
+    """Restore DB-stored settings to .env on every portal start.
+    Workers pick up changes after their next restart — even if .env was reset by git or setup."""
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT setting_key, setting_value FROM bot_settings")
+        rows = c.fetchall()
+        conn.close()
+        if not rows:
+            return
+        env_path = _BOT_DIR / '.env'
+        lines = env_path.read_text(encoding='utf-8').splitlines() if env_path.exists() else []
+        for key, value in rows:
+            if value is None:
+                continue
+            for i, line in enumerate(lines):
+                if line.split('#')[0].strip().startswith(f"{key}="):
+                    lines[i] = f"{key}={value}"
+                    break
+            else:
+                lines.append(f"{key}={value}")
+        env_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        print(f"[Portal] Synced {len(rows)} setting(s) from DB → .env")
+    except Exception as e:
+        print(f"[Portal] DB→.env sync: {e}")
+
+
+@app.on_event("startup")
+async def _on_startup():
+    _ensure_settings_table()
+    _sync_db_to_env()
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 _security = HTTPBasic()
 
@@ -473,7 +533,7 @@ def force_sell_all(market: Optional[str] = None, user: str = Depends(require_aut
 # ── Config ────────────────────────────────────────────────────────────────────
 @app.get("/api/config")
 def get_config(user: str = Depends(require_auth)):
-    """Return editable config values from config.py."""
+    """Return editable config values — DB values take precedence over config.py defaults."""
     import config as cfg
     editable = [
         'CAPITAL', 'MAX_DAILY_TRADES', 'MAX_DEPLOYED_PCT', 'PEAK_DRAWDOWN_PCT',
@@ -485,15 +545,29 @@ def get_config(user: str = Depends(require_auth)):
         'CRYPTO_CAPITAL', 'CRYPTO_MAX_DAILY_TRADES', 'CRYPTO_TARGET_PCT', 'CRYPTO_SL_PCT',
         'CRYPTO_BTC_MIN_CHANGE', 'SLIPPAGE_PCT',
         'PAPER_MODE', 'ALPACA_PAPER', 'BINANCE_PAPER',
-        # Strategy quality controls
         'MIN_SIGNAL_SCORE', 'MAX_CONCURRENT_POSITIONS', 'USE_TIME_EXIT', 'MAX_HOLD_MINUTES',
         'USE_MOOD_FILTER', 'MOOD_FILTER_THRESHOLD', 'USE_SECTOR_CAP', 'MAX_SECTOR_POSITIONS',
     ]
+    # DB values override config.py (DB = user's last saved choice, survives git pulls)
+    db = {}
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT setting_key, setting_value FROM bot_settings")
+        for row in c.fetchall():
+            if row[1] is not None:
+                db[row[0]] = row[1]
+        conn.close()
+    except Exception:
+        pass
     result = {}
     for key in editable:
-        val = getattr(cfg, key, None)
-        if val is not None:
-            result[key] = val
+        if key in db:
+            result[key] = db[key]
+        else:
+            val = getattr(cfg, key, None)
+            if val is not None:
+                result[key] = val
     return result
 
 
@@ -503,32 +577,46 @@ class ConfigUpdate(BaseModel):
 
 @app.post("/api/config")
 def update_config(update: ConfigUpdate, user: str = Depends(require_auth)):
-    """Update a value in the .env file. Restarts are required for changes to take effect."""
-    _BOT_DIR = Path(__file__).parent.parent
-    env_path = _BOT_DIR / '.env'
-
+    """Save a setting to the database (primary) and .env (so workers read it on restart).
+    DB storage survives git pulls and .env resets; portal syncs DB→.env on every startup."""
     key   = update.key.strip()
     value = update.value.strip()
 
-    # Safety: never allow disabling paper mode via API
     if key in ('PAPER_MODE', 'ALPACA_PAPER', 'BINANCE_PAPER') and value.lower() == 'false':
         raise HTTPException(400, "Cannot disable paper mode via the portal. Edit .env manually.")
 
-    # Read current .env
+    # Primary: save to DB so setting survives git pulls and .env resets
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute(
+            "IF EXISTS (SELECT 1 FROM bot_settings WHERE setting_key=?) "
+            "  UPDATE bot_settings SET setting_value=?, updated_at=GETDATE(), updated_by=? WHERE setting_key=? "
+            "ELSE "
+            "  INSERT INTO bot_settings (setting_key, setting_value, updated_by) VALUES (?,?,?)",
+            (key, value, user, key,  key, value, user)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"Database save failed: {e}")
+
+    # Secondary: write to .env so workers pick it up on next restart
+    env_path = _BOT_DIR / '.env'
     lines = env_path.read_text(encoding='utf-8').splitlines() if env_path.exists() else []
     found = False
     new_lines = []
     for line in lines:
-        if line.startswith(f"{key}="):
+        if line.split('#')[0].strip().startswith(f"{key}="):
             new_lines.append(f"{key}={value}")
             found = True
         else:
             new_lines.append(line)
     if not found:
         new_lines.append(f"{key}={value}")
-
     env_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
-    return {"ok": True, "message": f"{key} updated. Restart bot workers for changes to take effect."}
+
+    return {"ok": True, "message": f"{key} saved to database + .env. Restart workers to apply."}
 
 
 # ── Auth management ───────────────────────────────────────────────────────────
@@ -663,30 +751,55 @@ def bot_status(user: str = Depends(require_auth)):
     return {"paused": flag.exists()}
 
 
-def _resolve_log_path(market: str) -> Path:
-    """Find the most recent log file for a market — falls back if today's file not yet created."""
+def _resolve_log_path(market: str, date: str = '') -> Path:
+    """Return path to a market's log file.
+    If date (YYYYMMDD) given, returns that specific file.
+    Otherwise returns the most-recently-modified file — avoids EST/IST date confusion."""
     log_dir = Path(__file__).parent.parent / 'logs'
     if market == 'watchdog':
         return log_dir / 'watchdog.log'
     if market == 'portal':
         return log_dir / 'AngelBot-Portal.log'
-    # Try today then the 3 previous days (service may have started before midnight)
-    for days_ago in range(4):
-        d = (datetime.now() - timedelta(days=days_ago)).strftime('%Y%m%d')
-        p = log_dir / f'{market}_{d}.log'
-        if p.exists():
-            return p
+    if date:
+        return log_dir / f'{market}_{date}.log'
+    files = sorted(log_dir.glob(f'{market}_*.log'), key=lambda f: f.stat().st_mtime, reverse=True)
+    if files:
+        return files[0]
     return log_dir / f'{market}_{datetime.now().strftime("%Y%m%d")}.log'
 
 
 # ── Logs (historical) ─────────────────────────────────────────────────────────
+@app.get("/api/logs/dates/{market}")
+def get_log_dates(market: str, user: str = Depends(require_auth)):
+    """Return all available log dates for a market, newest first."""
+    if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
+        raise HTTPException(400, "Invalid market")
+    log_dir = Path(__file__).parent.parent / 'logs'
+    if market in ('watchdog', 'portal'):
+        fname = 'watchdog.log' if market == 'watchdog' else 'AngelBot-Portal.log'
+        p = log_dir / fname
+        size = p.stat().st_size if p.exists() else 0
+        return {"dates": [{"date": "", "label": "Current log", "size": size}]}
+    files = sorted(log_dir.glob(f'{market}_*.log'), key=lambda f: f.stat().st_mtime, reverse=True)
+    dates = []
+    for f in files:
+        parts = f.stem.split('_', 1)
+        if len(parts) == 2:
+            try:
+                dt = datetime.strptime(parts[1], '%Y%m%d')
+                dates.append({"date": parts[1], "label": dt.strftime('%d %b %Y'), "size": f.stat().st_size})
+            except ValueError:
+                pass
+    return {"dates": dates}
+
+
 @app.get("/api/logs/{market}")
-def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
+def get_log(market: str, lines: int = 200, date: str = '', user: str = Depends(require_auth)):
     if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
         raise HTTPException(400, "Invalid market. Use: india, us, crypto, watchdog, portal")
-    log_path = _resolve_log_path(market)
+    log_path = _resolve_log_path(market, date)
     if not log_path.exists():
-        return {"lines": [], "path": str(log_path)}
+        return {"lines": [], "path": str(log_path), "total": 0}
     with open(log_path, encoding='utf-8', errors='replace') as f:
         all_lines = f.readlines()
     tail = all_lines if lines <= 0 else all_lines[-lines:]
@@ -694,10 +807,10 @@ def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
 
 
 @app.get("/api/logs/download/{market}")
-def download_log(market: str, user: str = Depends(require_auth)):
+def download_log(market: str, date: str = '', user: str = Depends(require_auth)):
     if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
         raise HTTPException(400, "Invalid market")
-    log_path = _resolve_log_path(market)
+    log_path = _resolve_log_path(market, date)
     if not log_path.exists():
         raise HTTPException(404, f"No log file found for {market}")
     return FileResponse(str(log_path), media_type='text/plain; charset=utf-8', filename=log_path.name)
@@ -844,8 +957,6 @@ def check_update(user: str = Depends(require_auth)):
 def apply_update(user: str = Depends(require_auth)):
     """Pull latest code from GitHub and restart all workers, then the portal.
     Streams NDJSON — one line per step — so the browser sees live progress."""
-    _BOT_DIR = str(Path(__file__).parent.parent)
-
     def _stream():
         def emit(step, ok, detail=""):
             yield json.dumps({"step": step, "ok": ok, "detail": detail}) + "\n"
