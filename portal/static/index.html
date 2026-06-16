@@ -1817,6 +1817,8 @@ const _CONFIG_LABELS = {
   US_MAX_DEPLOYED_PCT:'US Max Capital Deployed %', US_PEAK_DRAWDOWN_PCT:'US Peak Drawdown Limit',
   US_SCALP_TARGET_PCT:'US Profit Target %', US_SCALP_SL_PCT:'US Stop Loss %', US_MIN_STOCK_PRICE:'US Min Stock Price ($)',
   CRYPTO_CAPITAL:'Crypto Balance (USDT)', CRYPTO_MAX_DAILY_TRADES:'Crypto Daily Trade Limit',
+  CRYPTO_MAX_CONCURRENT:'Crypto Max Open Positions', CRYPTO_MAX_DEPLOYED_PCT:'Crypto Max Capital Deployed %',
+  CRYPTO_PEAK_DRAWDOWN_PCT:'Crypto Peak Drawdown Limit',
   CRYPTO_TARGET_PCT:'Crypto Profit Target %', CRYPTO_SL_PCT:'Crypto Stop Loss %', CRYPTO_BTC_MIN_CHANGE:'BTC Sentiment Gate',
   PAPER_MODE:'India Paper Mode (Safe)', ALPACA_PAPER:'US Paper Mode (Safe)', BINANCE_PAPER:'Crypto Paper Mode (Safe)', SLIPPAGE_PCT:'Slippage Simulation',
 };
@@ -1838,7 +1840,7 @@ const _CONFIG_SECTIONS = {
            'US_SCALP_TARGET_PCT','US_SCALP_SL_PCT','US_MIN_STOCK_PRICE']
   },
   crypto: {
-    keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
+    keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_MAX_CONCURRENT','CRYPTO_MAX_DEPLOYED_PCT','CRYPTO_PEAK_DRAWDOWN_PCT','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
   },
   general: {
     keys: ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','SLIPPAGE_PCT']
@@ -1889,6 +1891,9 @@ const _CONFIG_HINTS = {
   CRYPTO_MAX_DAILY_TRADES:  'Stop new crypto buys after N completed trades today.',
   CRYPTO_TARGET_PCT:        'Close crypto position for profit when it gains this %.',
   CRYPTO_SL_PCT:            'Close crypto position for loss when it drops this %.',
+  CRYPTO_MAX_CONCURRENT:    'Maximum number of crypto positions open at the same time. Default 8 (one per tradeable pair). Bot cannot hold two positions in the same coin.',
+  CRYPTO_MAX_DEPLOYED_PCT:  'Never have more than this fraction of crypto balance in open positions. <strong>0.80</strong> = 80% max deployed. Wider than stocks (70%) because crypto runs 24/7.',
+  CRYPTO_PEAK_DRAWDOWN_PCT: 'Pause new crypto buys if portfolio losses from today\'s peak hit this %. <strong>0.05</strong> = 5% (wider than stock 3% because crypto is more volatile). Only fires on real closed losses.',
   CRYPTO_BTC_MIN_CHANGE:    'Block all crypto buys if BTC dropped more than this % in the last hour. <strong>-0.4</strong> = block if BTC down 0.4% (alt coins usually follow BTC down).',
   PAPER_MODE:               'India paper trading — bot simulates trades, no real Angel One orders. Cannot be disabled from portal.',
   ALPACA_PAPER:             'US paper trading — Alpaca sandbox, no real money. Cannot be disabled from portal.',

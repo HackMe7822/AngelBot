@@ -63,7 +63,7 @@ def get_crypto_ohlcv(symbol, interval='5m', limit=100):
         except Exception as e:
             print(f"[Binance OHLCV] {symbol}: {e}")
 
-    return _yf_ohlcv_fallback(symbol)
+    return _yf_ohlcv_fallback(symbol, interval)
 
 
 def get_crypto_live_price(symbol):
@@ -80,14 +80,17 @@ def get_crypto_live_price(symbol):
     return _yf_price_fallback(symbol)
 
 
-def _yf_ohlcv_fallback(symbol):
-    """yfinance fallback for OHLCV data."""
+def _yf_ohlcv_fallback(symbol, interval='5m'):
+    """yfinance fallback for OHLCV data — respects interval param."""
     import yfinance as yf
     import pandas as pd
+    # Map Binance intervals to yfinance equivalents
+    _iv = {'1m':'1m','3m':'2m','5m':'5m','15m':'15m','30m':'30m','1h':'60m','4h':'60m','1d':'1d'}
+    yf_iv = _iv.get(interval, '5m')
     try:
         yf_sym = _binance_to_yf(symbol)
-        df = yf.Ticker(yf_sym).history(period='5d', interval='5m')
-        if df.empty or len(df) < 30:
+        df = yf.Ticker(yf_sym).history(period='5d', interval=yf_iv)
+        if df.empty or len(df) < 10:
             return None
         df.index = pd.to_datetime(df.index)
         return df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
@@ -96,13 +99,29 @@ def _yf_ohlcv_fallback(symbol):
 
 
 def _yf_price_fallback(symbol):
-    """yfinance fallback for live price."""
+    """yfinance fallback for live price — tries multiple attributes then history."""
     import yfinance as yf
     try:
         yf_sym = _binance_to_yf(symbol)
-        info = yf.Ticker(yf_sym).fast_info
-        price = float(getattr(info, 'last_price', 0) or 0)
-        return price if price > 0 else None
+        ticker = yf.Ticker(yf_sym)
+        # Try fast_info attributes (different yfinance versions use different names)
+        try:
+            info = ticker.fast_info
+            for attr in ('last_price', 'regularMarketPrice', 'lastPrice', 'previousClose'):
+                v = getattr(info, attr, None)
+                if v is not None:
+                    price = float(v)
+                    if price > 0:
+                        return price
+        except Exception:
+            pass
+        # Reliable fallback: most-recent 1-min bar close
+        hist = ticker.history(period='1d', interval='1m')
+        if not hist.empty:
+            price = float(hist['Close'].dropna().iloc[-1])
+            if price > 0:
+                return price
+        return None
     except Exception:
         return None
 

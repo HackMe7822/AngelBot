@@ -100,7 +100,7 @@ def now_ist(): return datetime.now(IST)
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (BINANCE_KEY, BINANCE_PAPER,
                     CRYPTO_MAX_DAILY_LOSS_PCT, CRYPTO_MAX_DAILY_TRADES,
-                    MAX_DEPLOYED_PCT, PEAK_DRAWDOWN_PCT,
+                    CRYPTO_MAX_DEPLOYED_PCT, CRYPTO_PEAK_DRAWDOWN_PCT, CRYPTO_MAX_CONCURRENT,
                     CRYPTO_SCAN_SKIP_START, CRYPTO_SCAN_SKIP_END,
                     CRYPTO_TARGET_PCT, CRYPTO_SL_PCT,
                     CRYPTO_HIGH_LIQ_START, CRYPTO_HIGH_LIQ_END,
@@ -192,18 +192,17 @@ def run_crypto_scan():
         return
 
     dd = crypto_trader.get_drawdown_pct()
-    if dd >= PEAK_DRAWDOWN_PCT:
+    if dd >= CRYPTO_PEAK_DRAWDOWN_PCT:
         cprint(f"[Crypto] Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
         return
 
     dep = crypto_trader.get_deployed_pct()
-    if dep >= MAX_DEPLOYED_PCT:
+    if dep >= CRYPTO_MAX_DEPLOYED_PCT:
         cprint(f"[Crypto] {dep*100:.0f}% capital deployed — waiting for positions to close", YL)
         return
 
-    from config import MAX_CONCURRENT_POSITIONS
-    if len(crypto_trader.open_positions) >= MAX_CONCURRENT_POSITIONS:
-        cprint(f"[Crypto] Max concurrent positions ({MAX_CONCURRENT_POSITIONS}) reached — waiting", YL)
+    if len(crypto_trader.open_positions) >= CRYPTO_MAX_CONCURRENT:
+        cprint(f"[Crypto] Max concurrent positions ({CRYPTO_MAX_CONCURRENT}) reached — waiting", YL)
         return
 
     if not crypto_trader.can_buy():

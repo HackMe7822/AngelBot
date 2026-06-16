@@ -101,3 +101,8 @@ CRYPTO_BTC_MIN_CHANGE = -0.4      # if BTC dropped >0.4% in last 1h, skip all bu
 # Crypto scans 24/7 but skips the lowest-liquidity window to save resources
 CRYPTO_SCAN_SKIP_START  = (2, 0)   # skip 2:00 AM IST
 CRYPTO_SCAN_SKIP_END    = (5, 0)   # resume at 5:00 AM IST
+
+# Crypto-specific risk limits (separate from India/US so Settings changes don't bleed over)
+CRYPTO_MAX_DEPLOYED_PCT  = float(os.getenv("CRYPTO_MAX_DEPLOYED_PCT",  "0.80"))  # 80% deployed cap
+CRYPTO_PEAK_DRAWDOWN_PCT = float(os.getenv("CRYPTO_PEAK_DRAWDOWN_PCT", "0.05"))  # 5% drawdown limit (wider than stocks)
+CRYPTO_MAX_CONCURRENT    = int(os.getenv("CRYPTO_MAX_CONCURRENT",      "8"))     # max simultaneous positions (one per symbol)

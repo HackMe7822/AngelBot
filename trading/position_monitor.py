@@ -227,20 +227,23 @@ class PositionMonitor:
                 if self._always_active:
                     # 24/7 mode (crypto) — always monitor, never force-close
                     if self.trader.open_positions and not is_paused():
-                        # Subscribe new positions to live feed so ticks flow in
+                        # Subscribe new positions to live feed so WebSocket ticks flow in
                         if self._live_feed:
                             syms = [p['symbol'] for p in self.trader.open_positions]
                             self._live_feed.subscribe(syms)
 
-                        ws_up = self._live_feed and self._live_feed.is_connected
-                        if not ws_up:
-                            # No feed at all — fall back to POLL_SECONDS REST polling
-                            self._poll_positions()
+                        # Always poll directly every cycle — do NOT rely solely on feed callbacks.
+                        # In yfinance REST-polling fallback mode the feed marks itself as
+                        # is_connected=True but silently returns None prices when Yahoo throttles,
+                        # meaning _on_live_tick never fires and positions never close.
+                        # Direct polling every POLL_SECONDS is the reliable safety net.
+                        self._poll_positions()
 
                         self._poll_count += 1
                         if self._poll_count % (HEARTBEAT_MIN * 60 // POLL_SECONDS) == 0:
                             n      = len(self.trader.open_positions)
-                            source = "WebSocket live" if ws_up else "REST polling ⚠"
+                            ws_up  = self._live_feed and self._live_feed.is_connected
+                            source = "WebSocket" if (ws_up and getattr(self._live_feed, '_mode', '') == 'websocket') else "REST polling"
                             cur    = self._currency
                             print(f"{_CY}[{self._name}] ♥  {n} position(s)  {cur}{self.trader.balance:.2f}  [{source}]{_R}")
                 else:
