@@ -620,10 +620,8 @@ if ($cfDest -and (Test-Path $cfDest)) {
         } else {
             Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log for URL"
         }
-    }
-
     # ── OPTION 2: Named tunnel ─────────────────────────────────────────────────
-    elseif ($cfChoice -eq "2") {
+    } elseif ($cfChoice -eq "2") {
 
         # Step 2a: Login (opens browser or prints auth URL)
         Write-Host ""
@@ -715,10 +713,8 @@ ingress:
                 Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log"
             }
         }
-    }
-
-    else {
-        Info "Skipping tunnel -- run 'cloudflared tunnel --url http://localhost:8080' anytime for a quick URL"
+    } else {
+        Info "Skipping tunnel -- run: cloudflared tunnel --url http://localhost:8080 (for a quick public URL)"
     }
 }
 
