@@ -282,6 +282,71 @@
   #modal-overlay.open { display: flex !important; }
   #confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 2000; align-items: center; justify-content: center; }
   #confirm-overlay.open { display: flex; }
+
+  /* ── Mobile / Responsive ─────────────────────────────────────────────────── */
+  .hamburger { display: none; position: fixed; top: 12px; left: 12px; z-index: 200; background: var(--card); border: 1px solid var(--border); border-radius: 8px; width: 42px; height: 42px; cursor: pointer; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.12); transition: background .15s; }
+  .hamburger:hover { background: var(--bg); }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 99; -webkit-tap-highlight-color: transparent; }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: none; background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted); padding: 4px; line-height: 1; }
+  .sidebar-close:hover { color: var(--text); }
+
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .sidebar { transform: translateX(-210px); transition: transform .25s ease; z-index: 150; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.18); }
+    .sidebar h1 { padding-right: 48px; }
+    .sidebar-close { display: block; position: absolute; top: 14px; right: 14px; }
+    .main { margin-left: 0 !important; padding: 16px; padding-top: 64px; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .config-row { grid-template-columns: 1fr; gap: 8px; }
+    .cfg-row { grid-template-columns: 1fr !important; gap: 8px; }
+    .config-val { width: 100% !important; }
+    .toolbar { gap: 6px; }
+    .toolbar select, .toolbar input { font-size: 12px; max-width: 120px; }
+    h2 { font-size: 17px; margin-bottom: 14px; }
+    .card { padding: 12px; }
+    .mkt-pnl-big { font-size: 18px !important; }
+    .mkt-pnl-sm  { font-size: 14px !important; }
+    .mkt-pnl-half { padding: 10px 12px; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px; }
+    .log-terminal { height: calc(100vh - 310px); min-height: 280px; }
+    .monitor-terminal { height: calc(100vh - 210px); min-height: 280px; }
+    .update-banner { flex-direction: column; gap: 10px; align-items: flex-start; }
+    .pill { padding: 4px 9px; font-size: 11px; }
+    .pill-group { gap: 3px; }
+    .btn { padding: 7px 12px; font-size: 12px; }
+    .stat { font-size: 22px; }
+    .settings-tab { padding: 8px 12px; font-size: 12px; }
+    .settings-tabs { gap: 0; }
+    select, input[type=text], input[type=number] { font-size: 13px; }
+    .monitor-toolbar { gap: 6px; }
+    .toast { right: 12px; left: 12px; bottom: 16px; text-align: center; }
+    .log-jump-btn { bottom: 8px; right: 10px; }
+    .service-row { flex-wrap: wrap; gap: 6px; }
+  }
+
+  @media (max-width: 480px) {
+    .main { padding: 10px; padding-top: 60px; }
+    .grid { gap: 10px; }
+    .card { padding: 10px; border-radius: 6px; }
+    .mkt-pnl-big { font-size: 16px !important; }
+    .mkt-pnl-half { padding: 8px 10px; }
+    .stat { font-size: 20px; }
+    h2 { font-size: 16px; }
+    .pill { padding: 4px 8px; font-size: 11px; }
+    .toolbar { gap: 4px; }
+    .btn.sm { padding: 5px 8px; font-size: 11px; }
+    th, td { padding: 5px 6px; }
+    .settings-tab { padding: 8px 10px; font-size: 11px; }
+    .mkt-card-hdr { padding: 10px 12px 8px; }
+    .mkt-icon { width: 28px; height: 28px; font-size: 11px; }
+    .mkt-name { font-size: 13px; }
+    .mkt-hours { font-size: 10px; }
+    .badge { font-size: 10px; padding: 1px 6px; }
+  }
 </style>
 </head>
 <body>
@@ -309,7 +374,13 @@
   </div>
 </div>
 
-<aside class="sidebar">
+<!-- Mobile hamburger -->
+<button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+<!-- Sidebar overlay backdrop -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="main-sidebar">
+  <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">&#x2715;</button>
   <h1>🤖 AngelBot</h1>
   <nav>
     <a href="javascript:void(0)" onclick="showPage('dashboard')" id="nav-dashboard" class="active">📊 Dashboard</a>
@@ -1478,6 +1549,16 @@ function applyDefault(page) {
   }
 }
 
+// ── Mobile sidebar ─────────────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('main-sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('main-sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────────
 var _lbMarket = '';
 
@@ -1499,6 +1580,7 @@ function showPage(name, pushState) {
     var slug = _PAGE_TO_URL[name] || name;
     history.pushState({page: name}, '', '/' + slug);
   }
+  if (window.innerWidth <= 768) closeSidebar();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
