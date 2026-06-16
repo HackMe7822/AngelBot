@@ -2210,10 +2210,36 @@ const _CONFIG_HINTS = {
   SLIPPAGE_PCT:             'Added cost per paper trade to simulate real spread/slippage. <strong>0.001</strong> = 0.1% per trade. Makes paper results more realistic.',
 };
 
+// Track original loaded values to detect changes
+var _cfgOriginal = {};
+
+// Which workers need restart when a key changes
+const _KEY_WORKERS = {
+  MIN_SIGNAL_SCORE:['India','US','Crypto'], USE_MOOD_FILTER:['India','US'],
+  MOOD_FILTER_THRESHOLD:['India','US'], USE_SECTOR_CAP:['India','US'],
+  MAX_SECTOR_POSITIONS:['India','US'], MAX_CONCURRENT_POSITIONS:['India'],
+  USE_TIME_EXIT:['India'], MAX_HOLD_MINUTES:['India'],
+  CAPITAL:['India'], MAX_DAILY_TRADES:['India'], MAX_DEPLOYED_PCT:['India'],
+  PEAK_DRAWDOWN_PCT:['India'], SCALP_TARGET_PCT:['India'], SCALP_SL_PCT:['India'],
+  SL_CONFIRM_POLLS:['India'], MAX_DAILY_LOSS_PCT:['India'], MIN_STOCK_PRICE:['India'],
+  ENTRY_START_MIN:['India'], ENTRY_END_MIN:['India'],
+  US_CAPITAL:['US'], US_MAX_DAILY_TRADES:['US'], US_MAX_DAILY_LOSS_PCT:['US'],
+  US_MAX_CONCURRENT_POSITIONS:['US'], US_MAX_DEPLOYED_PCT:['US'], US_PEAK_DRAWDOWN_PCT:['US'],
+  US_SCALP_TARGET_PCT:['US'], US_SCALP_SL_PCT:['US'], US_MIN_STOCK_PRICE:['US'],
+  US_MAX_BUYS_PER_SCAN:['US'], US_LOSS_BURST_COUNT:['US'], US_LOSS_BURST_WINDOW:['US'],
+  US_LOSS_BURST_COOLDOWN:['US'], US_CANDLE_CONFIRM_REENTRY:['US'],
+  CRYPTO_CAPITAL:['Crypto'], CRYPTO_MAX_DAILY_TRADES:['Crypto'], CRYPTO_MAX_CONCURRENT:['Crypto'],
+  CRYPTO_MAX_DEPLOYED_PCT:['Crypto'], CRYPTO_PEAK_DRAWDOWN_PCT:['Crypto'],
+  CRYPTO_TARGET_PCT:['Crypto'], CRYPTO_SL_PCT:['Crypto'], CRYPTO_BTC_MIN_CHANGE:['Crypto'],
+  PAPER_MODE:['India'], ALPACA_PAPER:['US'], BINANCE_PAPER:['Crypto'],
+  SLIPPAGE_PCT:['India','US','Crypto'],
+};
+
 async function loadConfig() {
   const r = await apiFetch('/api/config');
   if (!r) return;
   const d = await r.json();
+  _cfgOriginal = {};
 
   function renderSection(containerId, keys) {
     const el = document.getElementById('config-' + containerId);
@@ -2222,10 +2248,12 @@ async function loadConfig() {
       const label = _CONFIG_LABELS[k] || k;
       const hint  = _CONFIG_HINTS[k] ? `<div class="cfg-hint">${_CONFIG_HINTS[k]}</div>` : '';
       let control = '';
+      const rawVal = String(d[k]);
+      _cfgOriginal[k] = rawVal;
 
       if (_CONFIG_SELECTS[k]) {
         const sel    = _CONFIG_SELECTS[k];
-        const curVal = String(d[k]);
+        const curVal = rawVal;
         const btns   = sel.options.map(function(o) {
           const active = o.val === curVal;
           return `<button class="btn${active?' primary':''}" style="${active?'':'background:var(--bg);color:var(--muted);border-color:var(--border);'}" onclick="selectConfig('${k}',this,'${o.val}')" data-val="${o.val}">${o.label}</button>`;
@@ -2236,7 +2264,7 @@ async function loadConfig() {
           <input type="hidden" id="cfg-${k}" value="${curVal}"/>`;
 
       } else if (_CONFIG_TOGGLES.has(k)) {
-        const isOn = String(d[k]).toLowerCase() === 'true';
+        const isOn = rawVal.toLowerCase() === 'true';
         const locked = ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER'].includes(k);
         control = `<label style="display:flex;align-items:center;gap:10px;cursor:${locked?'not-allowed':'pointer'}">
           <div class="toggle-wrap" ${locked?'':'onclick="toggleConfig(\''+k+'\',this)"'} data-val="${isOn}" ${locked?'title="Cannot disable paper mode from portal"':''}>
@@ -2248,10 +2276,10 @@ async function loadConfig() {
         </label>`;
 
       } else {
-        control = `<input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" style="width:200px;font-family:monospace;font-size:13px;"/>`;
+        control = `<input type="text" id="cfg-${k}" value="${rawVal}" class="config-val" style="width:200px;font-family:monospace;font-size:13px;" oninput="_markDirty('${k}',this)"/>`;
       }
 
-      return `<div class="cfg-row">
+      return `<div class="cfg-row" id="cfg-row-${k}">
         <div>
           <div class="cfg-label">${label}</div>
           <code class="cfg-key-badge">${k}</code>
@@ -2268,6 +2296,14 @@ async function loadConfig() {
   renderSection('us',       _CONFIG_SECTIONS.us.keys);
   renderSection('crypto',   _CONFIG_SECTIONS.crypto.keys);
   renderSection('general',  _CONFIG_SECTIONS.general.keys);
+}
+
+function _markDirty(key, el) {
+  const row = document.getElementById('cfg-row-' + key);
+  if (!row) return;
+  const changed = String(el.value) !== String(_cfgOriginal[key] || '');
+  row.style.background = changed ? 'rgba(9,105,218,.06)' : '';
+  row.style.borderLeft = changed ? '3px solid var(--blue)' : '';
 }
 
 function selectConfig(key, btn, val) {
@@ -2309,16 +2345,36 @@ async function saveAllConfig() {
   const orig = btn ? btn.innerHTML : '💾 Save All Changes';
   const spinner = '<span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;"></span>';
   if (btn) { btn.innerHTML = spinner + 'Saving&hellip;'; btn.disabled = true; }
+
+  // Only save keys that changed from their loaded values
   const allKeys = Object.values(_CONFIG_SECTIONS).flatMap(function(s){ return s.keys; });
+  const changedKeys = allKeys.filter(function(key) {
+    const el = document.getElementById('cfg-' + key);
+    if (!el) return false;
+    return String(el.value) !== String(_cfgOriginal[key] !== undefined ? _cfgOriginal[key] : '');
+  });
+
+  if (changedKeys.length === 0) {
+    if (btn) { btn.innerHTML = orig; btn.disabled = false; }
+    toast('No changes to save.');
+    return;
+  }
+
+  // Compute which workers are affected
+  const affectedWorkers = new Set();
+  changedKeys.forEach(function(k) {
+    (_KEY_WORKERS[k] || ['India','US','Crypto']).forEach(function(w){ affectedWorkers.add(w); });
+  });
+
   let saved = 0, failed = 0;
   try {
-    for (const key of allKeys) {
+    for (const key of changedKeys) {
       const el = document.getElementById('cfg-' + key);
       if (!el) continue;
       try {
         const r = await apiFetch('/api/config', { method:'POST', body:JSON.stringify({key, value:el.value}) });
         if (r) {
-          try { const d = await r.json(); if (d && d.ok) saved++; else failed++; }
+          try { const d = await r.json(); if (d && d.ok) { saved++; _cfgOriginal[key] = el.value; _markDirty(key, el); } else failed++; }
           catch(e) { failed++; }
         } else { failed++; }
       } catch(e) { failed++; }
@@ -2328,9 +2384,8 @@ async function saveAllConfig() {
     if (btn) { btn.innerHTML = msg; }
     setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
     if (failed) { toast(`&#9888; ${failed} setting(s) failed to save.`, 5000); return; }
-    toast(`&#10003; ${saved} settings saved.`);
-    // Ask user to restart
-    const choice = await _showRestartPrompt();
+    toast(`&#10003; ${saved} setting(s) saved.`);
+    const choice = await _showRestartPrompt(affectedWorkers);
     if (!choice) return;
     const toRestart = choice === 'all'
       ? ['AngelBot-India','AngelBot-US','AngelBot-Crypto']
@@ -2342,39 +2397,49 @@ async function saveAllConfig() {
   }
 }
 
-function _showRestartPrompt() {
-  return new Promise(function(resolve) {
-    // Detect active settings tab for a smart default
-    var activeTab = document.querySelector('.settings-tab.active');
-    var tab = activeTab ? activeTab.dataset.tab : null;
-    var svcMap = { india:'AngelBot-India', us:'AngelBot-US', crypto:'AngelBot-Crypto' };
-    var suggested = svcMap[tab] || null;
+function _showRestartPrompt(affectedWorkers) {
+  // affectedWorkers: Set of 'India'|'US'|'Crypto' that actually need restart
+  var needed = affectedWorkers && affectedWorkers.size ? affectedWorkers : new Set(['India','US','Crypto']);
+  var svcMap = { India:'AngelBot-India', US:'AngelBot-US', Crypto:'AngelBot-Crypto' };
 
+  return new Promise(function(resolve) {
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 28px 20px;max-width:400px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);';
+    box.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px 28px 20px;max-width:400px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);';
+
+    var workerBtns = '';
+    needed.forEach(function(w) {
+      var svc = svcMap[w];
+      var isPrimary = needed.size === 1;
+      workerBtns += '<button class="btn' + (isPrimary ? ' primary' : '') + '" data-svc="' + svc + '">&#9889; Restart ' + w + ' Worker' + (isPrimary ? ' (required)' : '') + '</button>';
+    });
+    if (needed.size > 1) {
+      workerBtns += '<button class="btn" style="background:#e36209;color:#fff;border-color:#e36209;font-weight:600;" data-svc="all">&#9889; Restart All ' + needed.size + ' Workers</button>';
+    }
+
     box.innerHTML =
-      '<div style="font-size:16px;font-weight:700;margin-bottom:6px;">&#9889; Restart Worker?</div>' +
-      '<div style="color:var(--muted);font-size:13px;margin-bottom:20px;">Settings saved. Restart a worker service to apply the new values immediately.</div>' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px;">&#9889; Restart Required</div>' +
+      '<div style="color:var(--muted);font-size:13px;margin-bottom:20px;">' +
+        (needed.size === 1
+          ? 'Your change affects the <strong>' + [...needed][0] + '</strong> worker. Restart it to apply immediately.'
+          : 'Your changes affect <strong>' + needed.size + ' workers</strong>. Restart them to apply immediately.') +
+      '</div>' +
       '<div style="display:flex;flex-direction:column;gap:8px;">' +
-      (suggested ? '<button class="btn primary" id="rs-suggested">Restart ' + suggested.replace('AngelBot-','') + ' Worker (recommended)</button>' : '') +
-      (!suggested || suggested !== 'AngelBot-India'   ? '<button class="btn" id="rs-india">Restart India Worker</button>' : '') +
-      (!suggested || suggested !== 'AngelBot-US'      ? '<button class="btn" id="rs-us">Restart US Worker</button>' : '') +
-      (!suggested || suggested !== 'AngelBot-Crypto'  ? '<button class="btn" id="rs-crypto">Restart Crypto Worker</button>' : '') +
-      '<button class="btn" style="background:#e36209;color:#fff;border-color:#e36209;font-weight:600;" id="rs-all">&#9889; Restart All Workers</button>' +
-      '<button class="btn" style="color:var(--muted);margin-top:4px;" id="rs-skip">Skip — restart later</button>' +
+      workerBtns +
+      '<button class="btn" style="color:var(--muted);margin-top:4px;" data-svc="skip">Skip — restart later</button>' +
       '</div>';
+
     ov.appendChild(box);
     document.body.appendChild(ov);
 
     function close(val) { document.body.removeChild(ov); resolve(val); }
-    if (suggested) { var b = box.querySelector('#rs-suggested'); if (b) b.onclick = function(){ close(suggested); }; }
-    var bi = box.querySelector('#rs-india');   if (bi) bi.onclick = function(){ close('AngelBot-India'); };
-    var bu = box.querySelector('#rs-us');      if (bu) bu.onclick = function(){ close('AngelBot-US'); };
-    var bc = box.querySelector('#rs-crypto');  if (bc) bc.onclick = function(){ close('AngelBot-Crypto'); };
-    var ba = box.querySelector('#rs-all');     if (ba) ba.onclick = function(){ close('all'); };
-    var bs = box.querySelector('#rs-skip');    if (bs) bs.onclick = function(){ close(null); };
+    box.querySelectorAll('[data-svc]').forEach(function(b) {
+      b.onclick = function() {
+        var s = b.dataset.svc;
+        close(s === 'skip' ? null : s);
+      };
+    });
     ov.addEventListener('click', function(e){ if (e.target === ov) close(null); });
   });
 }
