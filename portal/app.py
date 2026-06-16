@@ -300,6 +300,7 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
 def get_trades(
     market: Optional[str] = None,
     status_filter: Optional[str] = None,
+    pnl_filter: Optional[str] = None,
     date_filter: Optional[str] = None,
     sort_by: Optional[str] = None,
     limit: int = 100,
@@ -321,6 +322,11 @@ def get_trades(
     if status_filter in ('open', 'closed'):
         where.append("status=?")
         params.append(status_filter)
+
+    if pnl_filter == 'wins':
+        where.append("pnl > 0")
+    elif pnl_filter == 'losses':
+        where.append("pnl < 0")
 
     # Date filter
     date_sql, date_params = _build_date_clause(date_filter)

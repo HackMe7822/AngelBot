@@ -52,6 +52,8 @@
   .pnl-pos { color: #00c853; font-weight: 700; }
   .pnl-neg { color: #cf222e; font-weight: 700; }
   .pnl-badge { display: inline-block; border-radius: 5px; padding: 3px 9px; font-size: 12px; font-weight: 700; letter-spacing: .2px; line-height: 1.5; white-space: nowrap; }
+  .chip-click { cursor: pointer; transition: opacity .15s, transform .1s; }
+  .chip-click:hover { opacity: .75; transform: scale(1.07); }
   .pnl-badge.pos { background: rgba(0,200,83,.13); color: #00c853; border: 1px solid rgba(0,200,83,.3); }
   .pnl-badge.neg { background: rgba(207,34,46,.10); color: #cf222e; border: 1px solid rgba(207,34,46,.25); }
   .pnl-badge.flat { background: rgba(100,100,100,.08); color: var(--muted); border: 1px solid var(--border); }
@@ -505,6 +507,11 @@
         <option value="">All Status</option>
         <option value="closed">Closed</option>
         <option value="open">Open</option>
+      </select>
+      <select id="trade-pnl-filter" onchange="_tradeOffset=0;loadTrades()">
+        <option value="">Wins + Losses</option>
+        <option value="wins">Wins only</option>
+        <option value="losses">Losses only</option>
       </select>
       <button class="btn" style="font-size:12px;" onclick="saveDefault('trades')" title="Save current filter as default">&#9733; Save Default</button>
       <div class="pill-group" id="trade-date-pills">
@@ -1369,8 +1376,10 @@ function saveDefault(page) {
   } else if (page === 'trades') {
     var mktEl2   = document.getElementById('trade-market');
     var statusEl = document.getElementById('trade-status');
+    var pnlEl    = document.getElementById('trade-pnl-filter');
     if (mktEl2)   state.market = mktEl2.value;
     if (statusEl) state.status = statusEl.value;
+    if (pnlEl)    state.pnlFilter = pnlEl.value;
     state.dateFilter = _tradeDateFilter;
     state.sort = {col: _sort.trades.col, dir: _sort.trades.dir};
   } else if (page === 'lb') {
@@ -1397,8 +1406,10 @@ function applyDefault(page) {
   } else if (page === 'trades') {
     var mktEl2   = document.getElementById('trade-market');
     var statusEl = document.getElementById('trade-status');
-    if (mktEl2   && state.market !== undefined) mktEl2.value   = state.market;
-    if (statusEl && state.status !== undefined) statusEl.value = state.status;
+    var pnlEl2   = document.getElementById('trade-pnl-filter');
+    if (mktEl2   && state.market    !== undefined) mktEl2.value   = state.market;
+    if (statusEl && state.status    !== undefined) statusEl.value = state.status;
+    if (pnlEl2   && state.pnlFilter !== undefined) pnlEl2.value   = state.pnlFilter;
     if (state.dateFilter !== undefined) {
       _tradeDateFilter = state.dateFilter;
       document.querySelectorAll('#trade-date-pills .pill').forEach(function(p) {
@@ -1475,6 +1486,21 @@ function goToMarket(market) {
   showPage('trades');
 }
 
+// Navigate to trades page filtered by market + win/loss + date
+function goToTrades(market, pnlFilter) {
+  document.getElementById('trade-market').value = market || '';
+  document.getElementById('trade-status').value = 'closed';
+  document.getElementById('trade-pnl-filter').value = pnlFilter || '';
+  const targetPill = document.querySelector(`#trade-date-pills .pill[data-val="${_dashDateFilter}"]`);
+  if (targetPill) {
+    document.querySelectorAll('#trade-date-pills .pill').forEach(p => p.classList.remove('active'));
+    targetPill.classList.add('active');
+    _tradeDateFilter = _dashDateFilter;
+  }
+  _tradeOffset = 0;
+  showPage('trades');
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────
 function fmtPnl(pnl, cur) {
   const sign = pnl >= 0 ? '+' : '';
@@ -1519,12 +1545,12 @@ async function refreshDashboard() {
       '': 'All-Time P&L', 'today': "Today's P&L", 'yesterday': "Yesterday's P&L", 'week': "7-Day P&L"
     }[_dashDateFilter] || "Today's P&L");
 
-    // Period win/loss chips
+    // Period win/loss chips — all clickable
     document.getElementById(id + '-trades').innerHTML =
-      `<span class="chip-win">${data.today_wins}W</span>` +
-      `<span class="chip-loss">${data.today_losses}L</span>` +
+      `<span class="chip-win chip-click" onclick="goToTrades('${id}','wins')" title="View winning trades">${data.today_wins}W</span>` +
+      `<span class="chip-loss chip-click" onclick="goToTrades('${id}','losses')" title="View losing trades">${data.today_losses}L</span>` +
       `<span class="chip-rate">${wr}%</span>` +
-      `<span style="color:var(--muted);font-size:10px;">${data.today_trades} trades</span>`;
+      `<span class="chip-click" style="color:var(--muted);font-size:10px;" onclick="goToTrades('${id}','')" title="View all trades">${data.today_trades} trades</span>`;
 
     // All-time P&L
     const totalEl = document.getElementById(id + '-total-pnl');
@@ -1533,15 +1559,15 @@ async function refreshDashboard() {
       totalEl.textContent = fmtPnl(data.total_pnl || 0, cur);
     }
 
-    // All-time win/loss chips
+    // All-time win/loss chips — all clickable (no date filter = all-time)
     const totalWr  = data.total_trades > 0 ? Math.round((data.total_wins||0) / data.total_trades * 100) : 0;
     const totalLosses = (data.total_trades||0) - (data.total_wins||0);
     const ttEl = document.getElementById(id + '-total-trades');
     if (ttEl) ttEl.innerHTML =
-      `<span class="chip-win">${data.total_wins||0}W</span>` +
-      `<span class="chip-loss">${totalLosses}L</span>` +
+      `<span class="chip-win chip-click" onclick="goToTrades('${id}','wins')" title="View all winning trades">${data.total_wins||0}W</span>` +
+      `<span class="chip-loss chip-click" onclick="goToTrades('${id}','losses')" title="View all losing trades">${totalLosses}L</span>` +
       `<span class="chip-rate">${totalWr}%</span>` +
-      `<span style="color:var(--muted);font-size:10px;">${data.total_trades||0} trades</span>`;
+      `<span class="chip-click" style="color:var(--muted);font-size:10px;" onclick="goToTrades('${id}','')" title="View all trades">${data.total_trades||0} trades</span>`;
 
     // Detail rows — open positions (clickable), balance (clickable → trades), deployed
     const depPct  = (data.balance||0) + (data.deployed||0) > 0
@@ -2046,14 +2072,16 @@ async function loadTrades() {
   var _tcel = document.getElementById('trade-count'); if (_tcel) _tcel.textContent = '';
   var _tpel = document.getElementById('trade-total-pnl'); if (_tpel) _tpel.innerHTML = '';
   var _tpgl = document.getElementById('trade-pagination'); if (_tpgl) _tpgl.innerHTML = '';
-  const market = document.getElementById('trade-market').value;
-  const status = document.getElementById('trade-status').value;
-  const sort   = getTradeSort();
+  const market    = document.getElementById('trade-market').value;
+  const status    = document.getElementById('trade-status').value;
+  const pnlFilter = document.getElementById('trade-pnl-filter').value;
+  const sort      = getTradeSort();
   let url = `/api/trades?limit=${_tradeLimit}&offset=${_tradeOffset}`;
-  if (market) url += '&market=' + market;
-  if (status) url += '&status_filter=' + status;
+  if (market)    url += '&market=' + market;
+  if (status)    url += '&status_filter=' + status;
+  if (pnlFilter) url += '&pnl_filter=' + pnlFilter;
   if (_tradeDateFilter) url += '&date_filter=' + _tradeDateFilter;
-  if (sort) url += '&sort_by=' + sort;
+  if (sort)      url += '&sort_by=' + sort;
   const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
