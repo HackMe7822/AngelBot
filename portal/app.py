@@ -689,8 +689,18 @@ def get_log(market: str, lines: int = 200, user: str = Depends(require_auth)):
         return {"lines": [], "path": str(log_path)}
     with open(log_path, encoding='utf-8', errors='replace') as f:
         all_lines = f.readlines()
-    tail = all_lines[-lines:]
-    return {"lines": [l.rstrip() for l in tail], "path": str(log_path)}
+    tail = all_lines if lines <= 0 else all_lines[-lines:]
+    return {"lines": [l.rstrip() for l in tail], "path": str(log_path), "total": len(all_lines)}
+
+
+@app.get("/api/logs/download/{market}")
+def download_log(market: str, user: str = Depends(require_auth)):
+    if market not in ('india', 'us', 'crypto', 'watchdog', 'portal'):
+        raise HTTPException(400, "Invalid market")
+    log_path = _resolve_log_path(market)
+    if not log_path.exists():
+        raise HTTPException(404, f"No log file found for {market}")
+    return FileResponse(str(log_path), media_type='text/plain; charset=utf-8', filename=log_path.name)
 
 
 # ── Logs (live — returns size for change detection) ───────────────────────────

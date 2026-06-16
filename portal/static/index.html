@@ -604,8 +604,11 @@
         <option value="100">Last 100 lines</option>
         <option value="200" selected>Last 200 lines</option>
         <option value="500">Last 500 lines</option>
+        <option value="1000">Last 1000 lines</option>
+        <option value="0">All lines</option>
       </select>
       <button class="btn" onclick="loadLog()">↻ Refresh</button>
+      <button class="btn" onclick="downloadLog()" title="Download full log file">⬇ Download</button>
       <label style="color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px;">
         <input type="checkbox" id="log-auto" onchange="toggleAutoRefresh()"> Auto-refresh (5s)
       </label>
@@ -1791,8 +1794,17 @@ async function loadLog() {
   if (!r) return;
   const d = await r.json();
   const box = document.getElementById('log-box');
-  box.innerHTML = d.lines.map(l => colorLogLine(l, false)).join('\n') || 'No log data.';
+  const showing = d.lines.length;
+  const total   = d.total || showing;
+  const header  = `<div style="color:var(--muted);font-size:11px;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px;">` +
+    `${d.path} &nbsp;|&nbsp; Showing <strong>${showing}</strong> of <strong>${total}</strong> lines</div>`;
+  box.innerHTML = header + (d.lines.map(l => colorLogLine(l, false)).join('\n') || 'No log data.');
   box.scrollTop = box.scrollHeight;
+}
+
+function downloadLog() {
+  const market = document.getElementById('log-market').value;
+  window.location = `/api/logs/download/${market}`;
 }
 
 function toggleAutoRefresh() {
