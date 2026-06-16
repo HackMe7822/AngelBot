@@ -304,9 +304,11 @@ class PaperTrader:
             date_str = datetime.now(_IST).strftime("%Y-%m-%d")
         conn = get_conn()
         c = conn.cursor()
+        # Use entry_time date (IST) to classify trades — NSE exits are always same-day
+        # but this is more robust than exit_time if any position ever closes near midnight.
         c.execute(
             "SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
-            "WHERE status='closed' AND (source='paper' OR source IS NULL) AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)=?",
+            "WHERE status='closed' AND (source='paper' OR source IS NULL) AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE)=?",
             (date_str,)
         )
         rows = c.fetchall()

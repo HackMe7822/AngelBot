@@ -188,9 +188,13 @@ class CryptoTrader:
             date_str = datetime.now(_IST).strftime("%Y-%m-%d")
         conn = get_conn()
         c    = conn.cursor()
+        # Use entry_time date (IST) to classify trades. Crypto high-liq window runs until
+        # 1 AM IST — exits after midnight IST would land on the next day's exit_time date,
+        # causing yesterday's late trades to inflate today's cap. entry_time is always set
+        # when the position opens, so it cleanly maps to the IST session day.
         c.execute(
             "SELECT pnl, symbol, entry_price, exit_price, pnl_pct FROM trades "
-            "WHERE status='closed' AND source=? AND TRY_CAST(TRY_CAST(exit_time AS DATETIME2) AS DATE)=?",
+            "WHERE status='closed' AND source=? AND TRY_CAST(TRY_CAST(entry_time AS DATETIME2) AS DATE)=?",
             (self.SOURCE, date_str)
         )
         rows = c.fetchall()
