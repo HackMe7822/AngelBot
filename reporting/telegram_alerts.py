@@ -4,7 +4,24 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
+def _alert_enabled(key):
+    """Check bot_settings DB for an alert toggle. Returns True if missing/error (fail-safe)."""
+    try:
+        from data.database import get_conn
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT setting_value FROM bot_settings WHERE setting_key=?", [key])
+        row = c.fetchone()
+        conn.close()
+        if row and row[0] is not None:
+            return str(row[0]).lower() not in ('false', '0', 'no')
+    except Exception:
+        pass
+    return True
+
 def send(message):
+    if not _alert_enabled('TELEGRAM_ALERTS_ENABLED'):
+        return False
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
@@ -35,6 +52,7 @@ def _send_chunked(text):
 
 def send_buy_alert(symbol, entry, stop_loss, target, capital_used, quantity,
                    reason, confidence, ml_prob=None, sentiment='neutral', score=None):
+    if not _alert_enabled('TELEGRAM_ALERT_BUY'): return False
     sl_pct  = ((stop_loss - entry) / entry) * 100
     tgt_pct = ((target    - entry) / entry) * 100
     rr      = round(abs(tgt_pct / sl_pct), 2) if sl_pct != 0 else 0
@@ -66,6 +84,7 @@ def send_buy_alert(symbol, entry, stop_loss, target, capital_used, quantity,
 
 
 def send_hold_alert(symbol, price, stop_loss, reason, balance):
+    if not _alert_enabled('TELEGRAM_ALERT_SELL'): return False
     sl_pct  = ((price - stop_loss) / stop_loss) * 100
     sym_s   = html.escape(symbol)
     reason_s = html.escape(str(reason))
@@ -85,6 +104,7 @@ def send_hold_alert(symbol, price, stop_loss, reason, balance):
 def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, reason,
                     exit_type='full', qty_sold=None, qty_remaining=0, new_target=None,
                     day_pnl=None, day_trades=None):
+    if not _alert_enabled('TELEGRAM_ALERT_SELL'): return False
     emoji    = "✅" if pnl >= 0 else "🔴"
     result   = "PROFIT" if pnl >= 0 else "LOSS"
     sym_s    = html.escape(symbol)
@@ -119,6 +139,7 @@ def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, 
     return send(msg)
 
 def send_reload_alert(old_balance, new_balance, reload_count, total_invested, amount=None):
+    if not _alert_enabled('TELEGRAM_ALERT_SELL'): return False
     injected = amount if amount is not None else (new_balance - old_balance)
     msg = (
         f"💰 <b>Auto-Reload #{reload_count}</b>\n"
@@ -135,6 +156,7 @@ def send_reload_alert(old_balance, new_balance, reload_count, total_invested, am
 def send_daily_summary(date, trades, wins, losses, day_pnl, balance,
                         best, worst, win_rate, total_trades, trade_list=None):
     """India (NSE/Angel One) EOD report — amounts in ₹."""
+    if not _alert_enabled('TELEGRAM_ALERT_DAILY'): return False
     emoji = "📈" if day_pnl >= 0 else "📉"
     sign  = "+" if day_pnl >= 0 else ""
 
@@ -168,6 +190,7 @@ def send_daily_summary(date, trades, wins, losses, day_pnl, balance,
 def send_us_daily_summary(date, trades, wins, losses, day_pnl, balance,
                            best, worst, win_rate, total_trades, trade_list=None):
     """US (Alpaca) EOD report — amounts in $."""
+    if not _alert_enabled('TELEGRAM_ALERT_DAILY'): return False
     emoji = "📈" if day_pnl >= 0 else "📉"
     sign  = "+" if day_pnl >= 0 else ""
 
@@ -201,6 +224,7 @@ def send_us_daily_summary(date, trades, wins, losses, day_pnl, balance,
 def send_crypto_daily_summary(date, trades, wins, losses, day_pnl, balance,
                                best, worst, win_rate, total_trades, trade_list=None):
     """Crypto (Binance simulated) daily report — amounts in $."""
+    if not _alert_enabled('TELEGRAM_ALERT_DAILY'): return False
     emoji = "📈" if day_pnl >= 0 else "📉"
     sign  = "+" if day_pnl >= 0 else ""
 

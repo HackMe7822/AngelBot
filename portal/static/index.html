@@ -644,6 +644,8 @@
       <button class="settings-tab" data-tab="us" onclick="showSettingsTab('us')"><span class="mkt-badge mkt-us">US</span> US</button>
       <button class="settings-tab" data-tab="crypto" onclick="showSettingsTab('crypto')"><span class="mkt-badge mkt-btc">₿</span> Crypto</button>
       <button class="settings-tab" data-tab="general" onclick="showSettingsTab('general')">⚙️ General</button>
+      <button class="settings-tab" data-tab="telegram" onclick="showSettingsTab('telegram')">📨 Telegram</button>
+      <button class="settings-tab" data-tab="portal" onclick="showSettingsTab('portal')">🖥️ Portal</button>
     </div>
 
     <!-- Tab: Strategy -->
@@ -728,6 +730,39 @@
           </div>
         </div>
         <div id="config-general"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Telegram -->
+    <div id="tab-telegram" class="tab-panel">
+      <div class="card" style="border-left:4px solid #2b9bd1;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(43,155,209,.12);color:#2b9bd1;">📨</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Telegram Alerts</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Control which events send Telegram notifications</div>
+            </div>
+          </div>
+          <button class="btn" style="font-size:12px;" onclick="testTelegram()">📡 Test Connection</button>
+        </div>
+        <div id="config-telegram"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Portal -->
+    <div id="tab-portal" class="tab-panel">
+      <div class="card" style="border-left:4px solid #8250df;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(130,80,223,.12);color:#8250df;">🖥️</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Portal Settings</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Auto-refresh intervals for each dashboard widget (seconds)</div>
+            </div>
+          </div>
+        </div>
+        <div id="config-portal"></div>
       </div>
     </div>
 
@@ -1247,8 +1282,10 @@ async function doLogin() {
   localStorage.setItem('ab_user', u);
   _currentUser = u;
   hideLogin(u);
+  apiFetch('/api/prefs').then(function(p){ if(p) _prefs = p; });
+  await loadConfig();
   refreshDashboard();
-  _pageTimer = setInterval(refreshDashboard, 30000);
+  _pageTimer = setInterval(refreshDashboard, _refreshMs.dash);
   checkUpdate();
   _checkAdminAccess();
 }
@@ -1316,6 +1353,8 @@ function getTradeSort() {
 
 // ── Page auto-refresh timer ─────────────────────────────────────────────────
 var _pageTimer = null;
+var _refreshMs = { dash: 30000, pos: 30000, lb: 60000, log: 5000, monitor: 2000 };
+var _prefs = {};
 function _stopPageTimer() {
   if (_pageTimer) { clearInterval(_pageTimer); _pageTimer = null; }
 }
@@ -1342,12 +1381,12 @@ function saveDefault(page) {
   } else if (page === 'logs') {
     state.market = _logMarket;
   }
-  try { localStorage.setItem('angelbot_default_' + page, JSON.stringify(state)); } catch(e) {}
+  apiFetch('/api/prefs', {method:'POST', body:JSON.stringify({key:'default_'+page, value:JSON.stringify(state)})});
+  _prefs['default_'+page] = JSON.stringify(state);
   toast('Default saved');
 }
 function applyDefault(page) {
-  var raw;
-  try { raw = localStorage.getItem('angelbot_default_' + page); } catch(e) {}
+  var raw = _prefs['default_'+page];
   if (!raw) return;
   var state;
   try { state = JSON.parse(raw); } catch(e) { return; }
@@ -1393,10 +1432,10 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
   _stopPageTimer();
-  if (name === 'dashboard')   { applyDefault('dash'); refreshDashboard(); _pageTimer = setInterval(refreshDashboard, 30000); }
-  if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, 30000); }
+  if (name === 'dashboard')   { applyDefault('dash'); refreshDashboard(); _pageTimer = setInterval(refreshDashboard, _refreshMs.dash); }
+  if (name === 'positions')   { applyDefault('pos');    loadPositions();  _pageTimer = setInterval(loadPositions, _refreshMs.pos); }
   if (name === 'trades')      { applyDefault('trades'); _tradeOffset = 0; loadTrades(); }
-  if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, 60000); }
+  if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, _refreshMs.lb); }
   if (name === 'config') { loadConfig(); var t = (function(){ try { return sessionStorage.getItem('cfg_tab'); } catch(e){ return null; } })(); if (t) showSettingsTab(t); }
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       loadUsers();
@@ -2122,6 +2161,13 @@ const _CONFIG_LABELS = {
   CRYPTO_PEAK_DRAWDOWN_PCT:'Crypto Peak Drawdown Limit',
   CRYPTO_TARGET_PCT:'Crypto Profit Target %', CRYPTO_SL_PCT:'Crypto Stop Loss %', CRYPTO_BTC_MIN_CHANGE:'BTC Sentiment Gate',
   PAPER_MODE:'India Paper Mode (Safe)', ALPACA_PAPER:'US Paper Mode (Safe)', BINANCE_PAPER:'Crypto Paper Mode (Safe)', SLIPPAGE_PCT:'Slippage Simulation',
+  TELEGRAM_ALERTS_ENABLED:'Telegram Alerts Master Switch', TELEGRAM_ALERT_BUY:'Buy Alert',
+  TELEGRAM_ALERT_SELL:'Sell / Close Alert', TELEGRAM_ALERT_DAILY:'Daily Summary Alert',
+  TELEGRAM_ALERT_ERRORS:'Error / Crash Alert', TELEGRAM_ALERT_BOT_START:'Bot Start Alert',
+  TELEGRAM_ALERT_BURST:'Loss Burst Alert',
+  PORTAL_DASH_REFRESH:'Dashboard Refresh (sec)', PORTAL_POS_REFRESH:'Positions Refresh (sec)',
+  PORTAL_LB_REFRESH:'Leaderboard Refresh (sec)', PORTAL_LOG_REFRESH:'Log Poll Interval (sec)',
+  PORTAL_MONITOR_REFRESH:'Monitor Poll Interval (sec)',
 };
 
 const _CONFIG_SECTIONS = {
@@ -2148,10 +2194,21 @@ const _CONFIG_SECTIONS = {
   },
   general: {
     keys: ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','SLIPPAGE_PCT']
+  },
+  telegram: {
+    keys: ['TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL',
+           'TELEGRAM_ALERT_DAILY','TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START',
+           'TELEGRAM_ALERT_BURST']
+  },
+  portal: {
+    keys: ['PORTAL_DASH_REFRESH','PORTAL_POS_REFRESH','PORTAL_LB_REFRESH',
+           'PORTAL_LOG_REFRESH','PORTAL_MONITOR_REFRESH']
   }
 };
 
-const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP']);
+const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP',
+  'TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL','TELEGRAM_ALERT_DAILY',
+  'TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START','TELEGRAM_ALERT_BURST']);
 
 const _CONFIG_SELECTS = {
   MIN_SIGNAL_SCORE: {
@@ -2209,6 +2266,18 @@ const _CONFIG_HINTS = {
   ALPACA_PAPER:             'US paper trading — Alpaca sandbox, no real money. Cannot be disabled from portal.',
   BINANCE_PAPER:            'Crypto paper trading — no real Binance orders. Cannot be disabled from portal.',
   SLIPPAGE_PCT:             'Added cost per paper trade to simulate real spread/slippage. <strong>0.001</strong> = 0.1% per trade. Makes paper results more realistic.',
+  TELEGRAM_ALERTS_ENABLED:  'Master switch — turn OFF to silence ALL Telegram notifications from the bot.',
+  TELEGRAM_ALERT_BUY:       'Send a Telegram message every time a new position is opened (buy signal).',
+  TELEGRAM_ALERT_SELL:      'Send a Telegram message every time a position closes (profit, SL, or EOD).',
+  TELEGRAM_ALERT_DAILY:     'Send the end-of-day P&amp;L summary for each market.',
+  TELEGRAM_ALERT_ERRORS:    'Send a Telegram message when the bot crashes or encounters a critical error.',
+  TELEGRAM_ALERT_BOT_START: 'Send a notification when the bot starts up.',
+  TELEGRAM_ALERT_BURST:     'Send a Telegram alert when the US loss burst circuit breaker triggers.',
+  PORTAL_DASH_REFRESH:      'How often the dashboard widgets auto-refresh in seconds. Default 30.',
+  PORTAL_POS_REFRESH:       'How often the open positions page auto-refreshes in seconds. Default 30.',
+  PORTAL_LB_REFRESH:        'How often the leaderboard auto-refreshes in seconds. Default 60.',
+  PORTAL_LOG_REFRESH:       'How often the live log view polls for new lines in seconds. Default 5.',
+  PORTAL_MONITOR_REFRESH:   'How often the live monitor polls for new data in seconds. Default 2.',
 };
 
 // Track original loaded values to detect changes
@@ -2234,6 +2303,18 @@ const _KEY_WORKERS = {
   CRYPTO_TARGET_PCT:['Crypto'], CRYPTO_SL_PCT:['Crypto'], CRYPTO_BTC_MIN_CHANGE:['Crypto'],
   PAPER_MODE:['India'], ALPACA_PAPER:['US'], BINANCE_PAPER:['Crypto'],
   SLIPPAGE_PCT:['India','US','Crypto'],
+  TELEGRAM_ALERTS_ENABLED:['India','US','Crypto'],
+  TELEGRAM_ALERT_BUY:['India','US','Crypto'],
+  TELEGRAM_ALERT_SELL:['India','US','Crypto'],
+  TELEGRAM_ALERT_DAILY:['India','US','Crypto'],
+  TELEGRAM_ALERT_ERRORS:['India','US','Crypto'],
+  TELEGRAM_ALERT_BOT_START:['India','US','Crypto'],
+  TELEGRAM_ALERT_BURST:['US'],
+  PORTAL_DASH_REFRESH:[],
+  PORTAL_POS_REFRESH:[],
+  PORTAL_LB_REFRESH:[],
+  PORTAL_LOG_REFRESH:[],
+  PORTAL_MONITOR_REFRESH:[],
 };
 
 async function loadConfig() {
@@ -2297,6 +2378,16 @@ async function loadConfig() {
   renderSection('us',       _CONFIG_SECTIONS.us.keys);
   renderSection('crypto',   _CONFIG_SECTIONS.crypto.keys);
   renderSection('general',  _CONFIG_SECTIONS.general.keys);
+  renderSection('telegram', _CONFIG_SECTIONS.telegram.keys);
+  renderSection('portal',   _CONFIG_SECTIONS.portal.keys);
+
+  // Update refresh intervals from loaded config values (applied on next navigation)
+  function _getNum(key, def) { var v = parseInt(_cfgOriginal[key]); return isNaN(v) ? def : v*1000; }
+  _refreshMs.dash    = _getNum('PORTAL_DASH_REFRESH', 30);
+  _refreshMs.pos     = _getNum('PORTAL_POS_REFRESH',  30);
+  _refreshMs.lb      = _getNum('PORTAL_LB_REFRESH',   60);
+  _refreshMs.log     = _getNum('PORTAL_LOG_REFRESH',   5);
+  _refreshMs.monitor = _getNum('PORTAL_MONITOR_REFRESH', 2);
 }
 
 function _markDirty(key, el) {
@@ -2386,6 +2477,7 @@ async function saveAllConfig() {
     setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
     if (failed) { toast(`&#9888; ${failed} setting(s) failed to save.`, 5000); return; }
     toast(`&#10003; ${saved} setting(s) saved.`);
+    if (affectedWorkers.size === 0) return;
     const choice = await _showRestartPrompt(affectedWorkers);
     if (!choice) return;
     const toRestart = choice === 'all'
@@ -2777,7 +2869,7 @@ function toggleAutoRefresh() {
   const dot = document.getElementById('ar-dot-span');
   if (dot) dot.style.display = on ? 'inline-block' : 'none';
   if (on) {
-    _autoRefreshInterval = setInterval(loadLog, 5000);
+    _autoRefreshInterval = setInterval(loadLog, _refreshMs.log);
   } else {
     clearInterval(_autoRefreshInterval);
     _autoRefreshInterval = null;
@@ -2820,7 +2912,7 @@ function startMonitor() {
   var ml = document.getElementById('monitor-lines');
   if (ml) ml.innerHTML = '<div style="padding:48px;color:#484f58;text-align:center;font-size:13px;">Connecting…</div>';
   pollMonitor();
-  _monitorInterval = setInterval(pollMonitor, 2000);
+  _monitorInterval = setInterval(pollMonitor, _refreshMs.monitor);
 }
 
 function stopMonitor() {
@@ -3282,6 +3374,14 @@ function updateLiveIndicators() {
   });
 }
 
+async function testTelegram() {
+  const r = await apiFetch('/api/telegram/test', { method: 'POST' });
+  if (!r) { toast('Telegram test failed — check token/chat ID', 5000); return; }
+  const d = await r.json();
+  if (d && d.ok) toast('Telegram connected ✓');
+  else toast('Telegram test failed — check token/chat ID', 5000);
+}
+
 (async function init() {
   const creds = localStorage.getItem('ab_creds');
   const user  = localStorage.getItem('ab_user') || 'admin';
@@ -3297,11 +3397,14 @@ function updateLiveIndicators() {
   }
   _currentUser = user;
   hideLogin(user);
+  const p = await apiFetch('/api/prefs');
+  if (p) _prefs = p;
+  await loadConfig();
   refreshDashboard();
+  _pageTimer = setInterval(refreshDashboard, _refreshMs.dash);
   checkUpdate();
   _checkAdminAccess();
   updateLiveIndicators();
-  setInterval(refreshDashboard, 30000);      // dashboard refreshes every 30s always
   setInterval(checkUpdate, 1800000);
   setInterval(updateLiveIndicators, 30000);
 })();

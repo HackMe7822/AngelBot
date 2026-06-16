@@ -580,6 +580,11 @@ def get_config(user: str = Depends(require_auth)):
         'PAPER_MODE', 'ALPACA_PAPER', 'BINANCE_PAPER',
         'MIN_SIGNAL_SCORE', 'MAX_CONCURRENT_POSITIONS', 'USE_TIME_EXIT', 'MAX_HOLD_MINUTES',
         'USE_MOOD_FILTER', 'MOOD_FILTER_THRESHOLD', 'USE_SECTOR_CAP', 'MAX_SECTOR_POSITIONS',
+        'TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL',
+        'TELEGRAM_ALERT_DAILY','TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START',
+        'TELEGRAM_ALERT_BURST',
+        'PORTAL_DASH_REFRESH','PORTAL_POS_REFRESH','PORTAL_LB_REFRESH',
+        'PORTAL_LOG_REFRESH','PORTAL_MONITOR_REFRESH',
     ]
     # DB values override config.py (DB = user's last saved choice, survives git pulls)
     db = {}
@@ -650,6 +655,56 @@ def update_config(update: ConfigUpdate, user: str = Depends(require_auth)):
     env_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
 
     return {"ok": True, "message": f"{key} saved to database + .env. Restart workers to apply."}
+
+
+@app.post("/api/telegram/test")
+def test_telegram(user: str = Depends(require_auth)):
+    try:
+        from reporting.telegram_alerts import send
+        ok = send("🔔 <b>AngelBot Test Alert</b>\nTelegram connection working correctly.")
+        return {"ok": ok}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── User preferences (filter defaults, UI state) — stored in DB ──────────────
+class PrefUpdate(BaseModel):
+    key: str
+    value: str
+
+@app.get("/api/prefs")
+def get_prefs(user: str = Depends(require_auth)):
+    """Return all user preferences stored in bot_settings with PREF_ prefix."""
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT setting_key, setting_value FROM bot_settings WHERE setting_key LIKE 'PREF_%'")
+        rows = c.fetchall()
+        conn.close()
+        return {row[0][5:]: row[1] for row in rows}  # strip PREF_ prefix
+    except Exception:
+        return {}
+
+@app.post("/api/prefs")
+def save_pref(update: PrefUpdate, user: str = Depends(require_auth)):
+    """Save a user preference to bot_settings with PREF_ prefix."""
+    key = 'PREF_' + update.key.strip()
+    val = update.value
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute(
+            "IF EXISTS (SELECT 1 FROM bot_settings WHERE setting_key=?) "
+            "  UPDATE bot_settings SET setting_value=?, updated_at=GETDATE() WHERE setting_key=? "
+            "ELSE "
+            "  INSERT INTO bot_settings (setting_key, setting_value, updated_by) VALUES (?,?,?)",
+            (key, val, key, key, val, user)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"Pref save failed: {e}")
+    return {"ok": True}
 
 
 # ── Auth management ───────────────────────────────────────────────────────────

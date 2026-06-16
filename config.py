@@ -114,3 +114,20 @@ CRYPTO_SCAN_SKIP_END    = (5, 0)   # resume at 5:00 AM IST
 CRYPTO_MAX_DEPLOYED_PCT  = float(os.getenv("CRYPTO_MAX_DEPLOYED_PCT",  "0.80"))  # 80% deployed cap
 CRYPTO_PEAK_DRAWDOWN_PCT = float(os.getenv("CRYPTO_PEAK_DRAWDOWN_PCT", "0.05"))  # 5% drawdown limit (wider than stocks)
 CRYPTO_MAX_CONCURRENT    = int(os.getenv("CRYPTO_MAX_CONCURRENT",      "8"))     # max simultaneous positions (one per symbol)
+
+# ── Telegram alert toggles ────────────────────────────────────────────────────
+# Each can be overridden via bot_settings DB (Settings page) without code change.
+TELEGRAM_ALERTS_ENABLED  = os.getenv("TELEGRAM_ALERTS_ENABLED",  "true").lower() == "true"
+TELEGRAM_ALERT_BUY       = os.getenv("TELEGRAM_ALERT_BUY",       "true").lower() == "true"
+TELEGRAM_ALERT_SELL      = os.getenv("TELEGRAM_ALERT_SELL",      "true").lower() == "true"
+TELEGRAM_ALERT_DAILY     = os.getenv("TELEGRAM_ALERT_DAILY",     "true").lower() == "true"
+TELEGRAM_ALERT_ERRORS    = os.getenv("TELEGRAM_ALERT_ERRORS",    "true").lower() == "true"
+TELEGRAM_ALERT_BOT_START = os.getenv("TELEGRAM_ALERT_BOT_START", "true").lower() == "true"
+TELEGRAM_ALERT_BURST     = os.getenv("TELEGRAM_ALERT_BURST",     "true").lower() == "true"
+
+# ── Portal UI refresh intervals (seconds) ────────────────────────────────────
+PORTAL_DASH_REFRESH    = int(os.getenv("PORTAL_DASH_REFRESH",    "30"))
+PORTAL_POS_REFRESH     = int(os.getenv("PORTAL_POS_REFRESH",     "30"))
+PORTAL_LB_REFRESH      = int(os.getenv("PORTAL_LB_REFRESH",     "60"))
+PORTAL_LOG_REFRESH     = int(os.getenv("PORTAL_LOG_REFRESH",      "5"))
+PORTAL_MONITOR_REFRESH = int(os.getenv("PORTAL_MONITOR_REFRESH",  "2"))
