@@ -607,7 +607,7 @@ if ($cfDest -and (Test-Path $cfDest)) {
             & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
             Start-Sleep -Seconds 2
         }
-        & $nssmDest install $cfSvcName $cfDest "tunnel --no-autoupdate --url http://localhost:8080" 2>&1 | Out-Null
+        & $nssmDest install $cfSvcName $cfDest "tunnel --no-autoupdate --url http://127.0.0.1:8080" 2>&1 | Out-Null
         & $nssmDest set $cfSvcName AppDirectory    $BOT_DIR             2>&1 | Out-Null
         & $nssmDest set $cfSvcName AppStdout       $cfLog               2>&1 | Out-Null
         & $nssmDest set $cfSvcName AppStderr       $cfLog               2>&1 | Out-Null
