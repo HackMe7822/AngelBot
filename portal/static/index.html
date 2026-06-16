@@ -92,6 +92,28 @@
   .config-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .config-key { font-family: monospace; font-size: 13px; color: var(--purple); }
   .config-val { font-family: monospace; }
+  /* Redesigned config rows */
+  .cfg-row { display:grid; grid-template-columns:280px 1fr; gap:20px; align-items:start; padding:14px 0; border-bottom:1px solid var(--border); }
+  .cfg-row:last-child { border-bottom:none; }
+  .cfg-label { font-size:13px; font-weight:600; margin-bottom:5px; color:var(--text); }
+  .cfg-key-badge { font-size:10px; color:var(--muted); background:rgba(130,80,223,.08); padding:2px 7px; border-radius:4px; font-family:monospace; border:1px solid rgba(130,80,223,.15); display:inline-block; }
+  .cfg-hint { font-size:11px; color:var(--muted); margin-top:7px; line-height:1.6; }
+  .cfg-section-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:8px; }
+  .cfg-section-icon { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+  /* FAQ */
+  .faq-group { margin-bottom:10px; padding:0; }
+  .faq-group summary { cursor:pointer; font-size:14px; font-weight:600; padding:14px 16px; list-style:none; display:flex; justify-content:space-between; align-items:center; user-select:none; }
+  .faq-group summary::after { content:'＋'; font-size:16px; color:var(--muted); flex-shrink:0; }
+  .faq-group[open] summary::after { content:'－'; }
+  .faq-group summary::-webkit-details-marker { display:none; }
+  .faq-body { padding:0 16px 16px; }
+  .faq-q { font-weight:600; font-size:13px; margin:10px 0 4px; color:var(--text); }
+  .faq-a { font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:8px; }
+  .preset-card { border:2px solid var(--border); border-radius:10px; padding:16px; cursor:pointer; transition:all .15s; background:var(--card); }
+  .preset-card:hover { border-color:var(--blue); background:rgba(9,105,218,.04); transform:translateY(-1px); }
+  .preset-card h4 { font-size:14px; font-weight:700; margin-bottom:6px; }
+  .preset-card p { font-size:12px; color:var(--muted); line-height:1.6; }
+  .preset-badge { display:inline-block; background:rgba(9,105,218,.1); color:var(--blue); border-radius:4px; padding:2px 7px; font-size:11px; margin:2px 2px 0 0; }
 
   /* Log viewer */
   .log-box { background: #f6f8fa; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; height: 500px; overflow-y: auto; white-space: pre-wrap; color: #24292f; }
@@ -206,6 +228,7 @@
     <a href="#" onclick="showPage('symbols')" id="nav-symbols">&#128279; Symbols</a>
     <a href="#" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
     <a href="#" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
+    <a href="#" onclick="showPage('help')" id="nav-help">❓ Help &amp; FAQ</a>
     <a href="#" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
   </nav>
   <div style="position:absolute; bottom:0; left:0; right:0; padding:12px 16px; border-top:1px solid var(--border);">
@@ -440,51 +463,92 @@
 
   <!-- CONFIG -->
   <div id="page-config" class="page">
-    <h2>Configuration</h2>
-    <p style="color:var(--muted); margin-bottom:20px; font-size:13px;">Changes are written to .env. Restart bot workers to apply.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="margin-bottom:4px;">Configuration</h2>
+        <div style="color:var(--muted);font-size:13px;">Settings saved to database and .env — restart workers to apply. &nbsp;<a href="#" onclick="showPage('help');return false;">❓ Help &amp; FAQ</a></div>
+      </div>
+      <button id="btn-save-all" class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
+    </div>
 
-    <!-- Strategy Quality — shown first, most impactful -->
+    <!-- Strategy Quality -->
     <div class="config-section">
-      <div class="card" style="border-left:3px solid #0969da;">
-        <div style="font-size:15px; font-weight:600; margin-bottom:4px;">&#127919; Strategy Quality Controls</div>
+      <div class="card" style="border-left:4px solid #0969da;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(9,105,218,.12);color:#0969da;">🎯</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Strategy Quality Controls</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Controls <strong>how often and when</strong> the bot buys — biggest impact on trade count and P&amp;L.</div>
+            </div>
+          </div>
+          <a href="#" onclick="showPage('help');return false;" style="font-size:12px;white-space:nowrap;color:var(--blue);">❓ Explain these</a>
+        </div>
         <div class="cred-note" style="margin-bottom:14px;">
           <span class="icon">&#9432;</span>
-          <div>These settings have the biggest impact on profit vs loss. Original <strong>$300/4hr session</strong> settings: <strong>Signal Score 4</strong> &bull; <strong>Mood Filter OFF</strong> &bull; <strong>Sector Cap OFF</strong> &bull; <strong>Time Exit OFF</strong>. Turning Mood Filter and Sector Cap OFF removes the biggest blockers that prevent buying on dip days or in popular sectors like IT/Banks. Changes are written to <code>.env</code> &mdash; restart bot workers to apply.</div>
+          <div>Original <strong>$300/4hr profitable session</strong>: Signal Score 4 &bull; Mood Filter <strong>OFF</strong> &bull; Sector Cap <strong>OFF</strong> &bull; Time Exit <strong>OFF</strong></div>
         </div>
         <div id="config-strategy"></div>
       </div>
     </div>
 
-    <div class="config-section">
-      <div class="config-section-title">
-        <div class="card">
-          <div style="font-size:15px; font-weight:600; margin-bottom:12px;">India Settings</div>
-          <div id="config-india"></div>
+    <div class="grid grid-2" style="margin-bottom:24px;">
+      <div class="card" style="border-left:4px solid #e36209;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;">🇮🇳</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">India (NSE)</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:15 AM – 3:30 PM IST &middot; Paper mode</div>
+            </div>
+          </div>
         </div>
+        <div id="config-india"></div>
       </div>
-    </div>
-
-    <div class="config-section">
-      <div class="card">
-        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">US Settings</div>
+      <div class="card" style="border-left:4px solid #1a7f37;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;">🇺🇸</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">US (NASDAQ / NYSE)</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
+            </div>
+          </div>
+        </div>
         <div id="config-us"></div>
       </div>
     </div>
 
-    <div class="config-section">
-      <div class="card">
-        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Crypto Settings</div>
+    <div class="grid grid-2" style="margin-bottom:24px;">
+      <div class="card" style="border-left:4px solid #8250df;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(130,80,223,.12);color:#8250df;font-weight:900;">₿</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Crypto (24/7)</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Binance paper &middot; BTC/ETH/USDT pairs</div>
+            </div>
+          </div>
+        </div>
         <div id="config-crypto"></div>
       </div>
-    </div>
-
-    <div class="config-section">
-      <div class="card">
-        <div style="font-size:15px; font-weight:600; margin-bottom:12px;">⚙️ General</div>
+      <div class="card" style="border-left:4px solid var(--muted);">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(101,109,118,.12);color:var(--muted);">⚙️</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">General</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Paper modes and slippage simulation</div>
+            </div>
+          </div>
+        </div>
         <div id="config-general"></div>
       </div>
     </div>
 
+    <div style="display:flex;justify-content:flex-end;padding-top:16px;border-top:2px solid var(--border);">
+      <button class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
+    </div>
   </div>
 
   <!-- API KEYS -->
@@ -587,6 +651,150 @@
       </div>
       <div id="cred-portal"></div>
     </div></div>
+  </div>
+
+  <!-- HELP / FAQ -->
+  <div id="page-help" class="page">
+    <h2>❓ Help &amp; FAQ</h2>
+
+    <!-- Quick Presets -->
+    <div class="card" style="margin-bottom:24px;border-left:4px solid #0969da;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">⚡ Quick Presets</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">Apply a full strategy configuration in one click — saves immediately to database.</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
+        <div class="preset-card" onclick="applyPreset('volume')">
+          <h4>🚀 High Volume</h4>
+          <p>Buy more stocks, more trades per day. Lower confidence per trade but maximum activity. Best when you want quantity.</p>
+          <div style="margin-top:10px;">
+            <span class="preset-badge">Signal: 2</span><span class="preset-badge">Mood Filter: OFF</span><span class="preset-badge">Sector Cap: OFF</span><span class="preset-badge">Max Positions: 20</span><span class="preset-badge">Time Exit: ON (30 min)</span>
+          </div>
+        </div>
+        <div class="preset-card" onclick="applyPreset('balanced')">
+          <h4>⚖️ Balanced</h4>
+          <p>Mix of frequency and quality. Filters some bad market days but still trades actively. Good all-around starting point.</p>
+          <div style="margin-top:10px;">
+            <span class="preset-badge">Signal: 3</span><span class="preset-badge">Mood Filter: ON</span><span class="preset-badge">Sector Cap: OFF</span><span class="preset-badge">Max Positions: 10</span><span class="preset-badge">Time Exit: OFF</span>
+          </div>
+        </div>
+        <div class="preset-card" onclick="applyPreset('conservative')">
+          <h4>🛡️ Conservative</h4>
+          <p>Only the strongest setups. Fewest trades but highest individual confidence. Good on low-volatility days.</p>
+          <div style="margin-top:10px;">
+            <span class="preset-badge">Signal: 4</span><span class="preset-badge">Mood Filter: ON (-0.5%)</span><span class="preset-badge">Sector Cap: ON</span><span class="preset-badge">Max Positions: 5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div style="max-width:820px;">
+
+      <details class="card faq-group">
+        <summary>📊 Signal Quality (MIN_SIGNAL_SCORE) — How does it work?</summary>
+        <div class="faq-body">
+          <p class="faq-a">Before buying any stock, the bot checks multiple technical signals: RSI, volume spike, price momentum, candle pattern, and more. MIN_SIGNAL_SCORE is how many of these must say "BUY" before the bot actually places a trade.</p>
+          <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;">
+            <div class="card" style="border-left:3px solid #cf222e;padding:12px;">
+              <div style="font-weight:700;margin-bottom:4px;color:#cf222e;">Score 2 — Aggressive</div>
+              <div style="font-size:12px;color:var(--muted);">Only 2 signals need to agree. Maximum trades. More noise and false entries. Use when you want as many setups as possible.</div>
+            </div>
+            <div class="card" style="border-left:3px solid #9a6700;padding:12px;">
+              <div style="font-weight:700;margin-bottom:4px;color:#9a6700;">Score 3 — Moderate</div>
+              <div style="font-size:12px;color:var(--muted);">3 signals agree. Good balance between frequency and quality. Fewer bad entries than Score 2.</div>
+            </div>
+            <div class="card" style="border-left:3px solid #1a7f37;padding:12px;">
+              <div style="font-weight:700;margin-bottom:4px;color:#1a7f37;">Score 4 — Strict</div>
+              <div style="font-size:12px;color:var(--muted);">4 signals agree. Fewest trades, highest confidence. Matched the original $300/4hr profitable session settings.</div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>🌡️ Market Mood Filter — ON or OFF?</summary>
+        <div class="faq-body">
+          <p class="faq-a"><strong>What it does:</strong> Checks whether the NIFTY index (India) or S&amp;P 500 (US) is down by more than the threshold percentage. If the index is down more than that, the bot stops buying new positions for the rest of the day. Existing open positions still close normally via target or SL.</p>
+          <p class="faq-a"><strong>Turn ON when:</strong> You want to avoid buying into a falling market. Conservative approach — avoids chasing stocks on overall bad days.</p>
+          <p class="faq-a"><strong>Turn OFF when:</strong> You want to trade regardless of the index direction. Individual stocks can go up even when the index is falling. The original $300/4hr profitable session had this OFF.</p>
+          <p class="faq-a"><strong>Threshold:</strong> -0.5 = very strict (blocks if index down 0.5%). -1.5 = standard. -3.0 = very loose (only blocks on crash days). Only applies when Mood Filter is ON.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>🏢 Sector Cap — What does it protect against?</summary>
+        <div class="faq-body">
+          <p class="faq-a"><strong>What it does:</strong> Limits how many stocks from the same industry sector you can hold open at the same time. With MAX_SECTOR_POSITIONS=2, the bot won't buy a 3rd IT stock if you already hold 2 IT stocks open.</p>
+          <p class="faq-a"><strong>Turn ON when:</strong> You want to spread risk across sectors. Protects you from being overexposed if one sector (e.g. Banks) suddenly drops.</p>
+          <p class="faq-a"><strong>Turn OFF when:</strong> You want maximum trades. If 5 IT stocks all have strong buy signals, the bot takes all 5. The original profitable session had this OFF. Sector concentration can work in your favor when a sector is on a run.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>🔢 Max Concurrent Positions — How many stocks at once?</summary>
+        <div class="faq-body">
+          <p class="faq-a">This is the total number of stocks the bot can hold open simultaneously across all markets. Once this limit is hit, it won't open new positions until existing ones close via target or stop-loss.</p>
+          <p class="faq-a"><strong>5 (default):</strong> Conservative. Only 5 open trades total at any time.</p>
+          <p class="faq-a"><strong>10–15:</strong> Active. Good for ₹10,000 capital — each position is ~₹500–₹700.</p>
+          <p class="faq-a"><strong>20+:</strong> High-volume. More positions means each individual SL hit hurts less. Recommended when you want maximum activity.</p>
+          <p class="faq-a"><strong>Rule of thumb:</strong> Keep (Max Positions × average position size) below 80% of your capital. With ₹10,000 and ₹600 avg position, 20 positions = ₹12,000 which is too much. Set target to 15 for ₹600 avg positions.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>⏱️ Time Exit — Should I force-close stuck positions?</summary>
+        <div class="faq-body">
+          <p class="faq-a">Sometimes a stock goes flat after you buy — neither hitting the profit target nor the stop-loss. It just sits there, tying up a position slot that could be used for a better opportunity.</p>
+          <p class="faq-a"><strong>Time Exit ON:</strong> After MAX_HOLD_MINUTES, close the position at whatever the current price is — profit, loss, or break-even. Frees the slot for new opportunities. Recommended for high-volume trading.</p>
+          <p class="faq-a"><strong>Time Exit OFF:</strong> Wait for target or stop-loss naturally. Better for high-confidence setups that just need more time.</p>
+          <p class="faq-a"><strong>MAX_HOLD_MINUTES:</strong> India market is 6 hours (9:15 AM – 3:30 PM IST). Setting 30 minutes means any stuck position is closed within 30 min and a new one can open. 90 minutes (default) means a stuck stock ties up a slot for 1.5 hours.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>📈 Profit Target &amp; Stop Loss — What % to use?</summary>
+        <div class="faq-body">
+          <p class="faq-a"><strong>SCALP_TARGET_PCT (default 1.5%):</strong> Exit and take profit when the stock gains this much. On a ₹600 position that's ₹9 profit per win.</p>
+          <p class="faq-a"><strong>SCALP_SL_PCT (default 0.6%):</strong> Exit and cut the loss when the stock drops this much. On a ₹600 position that's -₹3.60 loss per loss.</p>
+          <p class="faq-a"><strong>Risk/Reward = 2.5:1.</strong> You win ₹9 when right, lose ₹3.60 when wrong. You only need to be right about 30% of the time to break even. Being right 50% of the time means every ₹10,000 in daily volume generates profit.</p>
+          <p class="faq-a"><strong>To get more fills faster:</strong> Tighten the target (e.g. 1.0%) so positions close quicker. But don't tighten the SL too much — below 0.4% you'll get false exits on normal price noise.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>⚠️ Why did the bot stop buying after just a few stocks?</summary>
+        <div class="faq-body">
+          <div class="faq-q">Peak Drawdown limit (PEAK_DRAWDOWN_PCT) — now fixed</div>
+          <p class="faq-a">This was broken. It compared cash balance (which drops when you deploy capital) against the starting balance, making the bot think you'd lost 40–50% when you'd actually just bought stocks. This is now fixed — the check only fires when you've actually lost money through closed losing trades.</p>
+          <div class="faq-q">Max Positions full (MAX_CONCURRENT_POSITIONS)</div>
+          <p class="faq-a">All position slots are occupied. Bot waits for existing positions to close. Raise MAX_CONCURRENT_POSITIONS to allow more simultaneous trades.</p>
+          <div class="faq-q">Daily Loss Limit hit (MAX_DAILY_LOSS_PCT)</div>
+          <p class="faq-a">Total realized losses for the day exceeded this %. Default is 2% = ₹200 on ₹10,000 capital. Bot stops buying for the rest of the day.</p>
+          <div class="faq-q">Daily Trade Cap hit (MAX_DAILY_TRADES)</div>
+          <p class="faq-a">The bot has already completed N trades (wins + losses combined) today. Default is 30.</p>
+          <div class="faq-q">Mood Filter triggered (USE_MOOD_FILTER)</div>
+          <p class="faq-a">NIFTY/S&amp;P 500 dropped more than MOOD_FILTER_THRESHOLD%. Set USE_MOOD_FILTER to OFF to trade regardless of index direction.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>🛡️ What is Paper Mode and why can't I turn it off in the portal?</summary>
+        <div class="faq-body">
+          <p class="faq-a">Paper mode means the bot <strong>simulates trades without spending real money</strong>. It tracks virtual positions and P&amp;L exactly as if live — but no real orders are ever placed on Angel One, Alpaca, or Binance.</p>
+          <p class="faq-a">PAPER_MODE = India &bull; ALPACA_PAPER = US &bull; BINANCE_PAPER = Crypto</p>
+          <p class="faq-a">The portal intentionally blocks turning these off. To go live, edit the .env file directly on the server and restart. This prevents accidentally going live from the web UI while still testing.</p>
+        </div>
+      </details>
+
+      <details class="card faq-group">
+        <summary>💰 How is position size calculated?</summary>
+        <div class="faq-body">
+          <p class="faq-a">Position size = 5% of current balance per trade. On ₹10,000 balance: 5% = ₹500 per trade. For a stock at ₹250, that buys 2 shares. For a stock at ₹800, it buys 0 shares (can't afford a full lot) — the bot then tries 1 share if it's within 10% of balance.</p>
+          <p class="faq-a">As your balance grows from winning trades, position sizes grow automatically. As balance drops from losses, position sizes shrink — a built-in risk scaling mechanism.</p>
+          <p class="faq-a">MAX_DEPLOYED_PCT (default 70%) is the hard cap — bot will never have more than 70% of balance in open positions at any moment. The other 30% stays as cash buffer.</p>
+        </div>
+      </details>
+
+    </div>
   </div>
 
   <!-- LOGS -->
@@ -1538,79 +1746,95 @@ function renderLeaderboard() {
 }
 
 // ── Config ────────────────────────────────────────────────────────────────
+const _CONFIG_LABELS = {
+  MIN_SIGNAL_SCORE:'Signal Quality Gate', USE_MOOD_FILTER:'Market Mood Filter', MOOD_FILTER_THRESHOLD:'Mood Filter Threshold',
+  USE_SECTOR_CAP:'Sector Concentration Cap', MAX_SECTOR_POSITIONS:'Max Stocks Per Sector', MAX_CONCURRENT_POSITIONS:'Max Open Positions',
+  USE_TIME_EXIT:'Force Time Exit', MAX_HOLD_MINUTES:'Max Hold Time (minutes)',
+  CAPITAL:'India Capital (₹)', MAX_DAILY_TRADES:'India Daily Trade Limit', MAX_DEPLOYED_PCT:'India Max Capital Deployed %',
+  PEAK_DRAWDOWN_PCT:'India Peak Drawdown Limit', SCALP_TARGET_PCT:'India Profit Target %', SCALP_SL_PCT:'India Stop Loss %',
+  SL_CONFIRM_POLLS:'SL Confirmation Polls', MAX_DAILY_LOSS_PCT:'India Daily Loss Limit', MIN_STOCK_PRICE:'India Min Stock Price (₹)',
+  ENTRY_START_MIN:'Entry Window Start (min)', ENTRY_END_MIN:'Entry Window End (min)',
+  US_CAPITAL:'US Capital ($)', US_MAX_DAILY_TRADES:'US Daily Trade Limit', US_MAX_DAILY_LOSS_PCT:'US Daily Loss Limit',
+  US_MAX_DEPLOYED_PCT:'US Max Capital Deployed %', US_PEAK_DRAWDOWN_PCT:'US Peak Drawdown Limit',
+  US_SCALP_TARGET_PCT:'US Profit Target %', US_SCALP_SL_PCT:'US Stop Loss %', US_MIN_STOCK_PRICE:'US Min Stock Price ($)',
+  CRYPTO_CAPITAL:'Crypto Balance (USDT)', CRYPTO_MAX_DAILY_TRADES:'Crypto Daily Trade Limit',
+  CRYPTO_TARGET_PCT:'Crypto Profit Target %', CRYPTO_SL_PCT:'Crypto Stop Loss %', CRYPTO_BTC_MIN_CHANGE:'BTC Sentiment Gate',
+  PAPER_MODE:'India Paper Mode (Safe)', ALPACA_PAPER:'US Paper Mode (Safe)', BINANCE_PAPER:'Crypto Paper Mode (Safe)', SLIPPAGE_PCT:'Slippage Simulation',
+};
+
 const _CONFIG_SECTIONS = {
   strategy: {
-    label: '&#127919; Strategy Quality',
     keys: ['MIN_SIGNAL_SCORE','USE_MOOD_FILTER','MOOD_FILTER_THRESHOLD',
            'USE_SECTOR_CAP','MAX_SECTOR_POSITIONS',
            'MAX_CONCURRENT_POSITIONS','USE_TIME_EXIT','MAX_HOLD_MINUTES']
   },
   india: {
-    label: 'India Settings',
     keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
            'SCALP_TARGET_PCT','SCALP_SL_PCT','SL_CONFIRM_POLLS',
            'MAX_DAILY_LOSS_PCT','MIN_STOCK_PRICE','ENTRY_START_MIN','ENTRY_END_MIN']
   },
   us: {
-    label: 'US Settings',
     keys: ['US_CAPITAL','US_MAX_DAILY_TRADES','US_MAX_DAILY_LOSS_PCT',
            'US_MAX_DEPLOYED_PCT','US_PEAK_DRAWDOWN_PCT',
            'US_SCALP_TARGET_PCT','US_SCALP_SL_PCT','US_MIN_STOCK_PRICE']
   },
   crypto: {
-    label: 'Crypto Settings',
     keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
   },
   general: {
-    label: '&#9881;&#65039; General',
     keys: ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','SLIPPAGE_PCT']
   }
 };
 
-// Keys that render as ON/OFF toggle switches instead of text inputs
 const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP']);
 
-// Keys that render as a button-group selector (options defined below)
 const _CONFIG_SELECTS = {
   MIN_SIGNAL_SCORE: {
     options: [
-      { val:'2', label:'2 — Aggressive', desc:'Any setup with 2+ signals. Most trades, lowest confidence. High frequency but noisy — expect more false entries.' },
+      { val:'2', label:'2 — Aggressive', desc:'Any setup with 2+ signals. Most trades, highest frequency. Expect more false entries but maximum volume.' },
       { val:'3', label:'3 — Moderate',   desc:'Balanced. More setups than 4, still filtered. Good for active days when market is trending.' },
       { val:'4', label:'4 — Strict',     desc:'High-confidence only. Fewest trades, strongest setups. Matches the original $300/4hr profitable session.' },
     ]
   }
 };
 
-// Human-readable descriptions (shown under each setting)
 const _CONFIG_HINTS = {
-  // Strategy
-  MIN_SIGNAL_SCORE:         'Signal quality gate — choose how strict the entry filter is.',
-  USE_MOOD_FILTER:          '<strong>ON:</strong> Block all new buys when NIFTY/S&amp;P is down more than the threshold — conservative, avoids buying into falling markets. <strong>OFF:</strong> Trade regardless of index direction. <em>OFF matches the original profitable session.</em>',
-  MOOD_FILTER_THRESHOLD:    'Index drop % that triggers the mood block (negative number). <strong>-0.5</strong> = very strict (blocks on any 0.5% dip). <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Only applies when Mood Filter is ON.',
-  USE_SECTOR_CAP:           '<strong>ON:</strong> Max stocks per sector (e.g. max 2 IT, max 2 Banks) — limits concentration risk. <strong>OFF:</strong> No sector limit — buys the best setups regardless of sector. <em>OFF matches the original profitable session.</em>',
-  MAX_SECTOR_POSITIONS:     'Max open positions allowed in the same sector at once. Only applies when Sector Cap is ON. Default 2.',
-  MAX_CONCURRENT_POSITIONS: 'Hard cap on total parallel open positions across all stocks. <strong>5</strong> = default. <strong>10+</strong> = high frequency. Applies to all markets.',
-  USE_TIME_EXIT:            '<strong>ON:</strong> Force-close stagnating positions after MAX_HOLD_MINUTES — can cut profitable trades early. <strong>OFF:</strong> Let trades reach their target or stop-loss naturally. <em>OFF recommended for quality setups.</em>',
-  MAX_HOLD_MINUTES:         'Minutes before a stuck position is force-closed. Only active when Time Exit is ON. Default 90 min.',
-  // India
-  MAX_DAILY_TRADES:         'Circuit breaker: stop new India buys after N closed trades per day. Default 30.',
-  MAX_DEPLOYED_PCT:         'Never deploy more than this fraction of India balance at once. <strong>0.70</strong> = 70%. Lower = more conservative.',
-  PEAK_DRAWDOWN_PCT:        'Pause India buys if account drops this % from today\'s session high. <strong>0.03</strong> = 3%.',
-  MAX_DAILY_LOSS_PCT:       'Stop all India buys if day loss exceeds this % of capital. <strong>0.02</strong> = 2%.',
-  SCALP_TARGET_PCT:         'Exit on this % profit per India trade. <strong>0.015</strong> = 1.5%. Wider = higher reward, fewer fills.',
-  SCALP_SL_PCT:             'Exit on this % loss per India trade. <strong>0.006</strong> = 0.6%. Tighter = smaller loss per trade.',
-  SL_CONFIRM_POLLS:         'Consecutive 15s polls below SL before exiting. <strong>2</strong> = 30s confirmation (reduces false exits on wicks).',
-  MIN_STOCK_PRICE:          'Skip India stocks below this ₹ price. ₹150 default — cheaper stocks have too-small SL gaps vs spread.',
-  // US
-  US_MAX_DAILY_TRADES:      'Circuit breaker: stop new US buys after N closed trades per day.',
-  US_MAX_DEPLOYED_PCT:      'Never deploy more than this fraction of US balance at once.',
-  US_PEAK_DRAWDOWN_PCT:     'Pause US buys if account drops this % from session high.',
-  US_MAX_DAILY_LOSS_PCT:    'Stop all US buys if day loss exceeds this % of capital.',
-  US_SCALP_TARGET_PCT:      'Exit on this % profit per US trade.',
-  US_SCALP_SL_PCT:          'Exit on this % loss per US trade.',
-  US_MIN_STOCK_PRICE:       'Skip US stocks below this $ price. $10 default — penny stocks are erratic.',
-  // Crypto
-  CRYPTO_BTC_MIN_CHANGE:    'Skip all alt coin buys if BTC dropped more than this % in the last 1h. e.g. <strong>-0.4</strong> = block if BTC down 0.4%.',
+  MIN_SIGNAL_SCORE:         'How many technical signals must agree before buying. More = fewer but higher-quality trades.',
+  USE_MOOD_FILTER:          '<strong>ON:</strong> Stop new buys if NIFTY/S&amp;P drops more than the threshold. <strong>OFF:</strong> Trade regardless of index direction — <em>matches the original profitable session.</em>',
+  MOOD_FILTER_THRESHOLD:    'Index drop % that triggers the block (negative). <strong>-0.5</strong> = very strict. <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Only active when Mood Filter is ON.',
+  USE_SECTOR_CAP:           '<strong>ON:</strong> Max N stocks per sector (IT, Banks, etc). <strong>OFF:</strong> No sector limit — buys best setups regardless of sector. <em>OFF matches the original profitable session.</em>',
+  MAX_SECTOR_POSITIONS:     'Max open positions per sector at once. Only applies when Sector Cap is ON.',
+  MAX_CONCURRENT_POSITIONS: 'Hard cap on total open positions across all stocks at the same time. <strong>5</strong> = conservative. <strong>15–20</strong> = high volume.',
+  USE_TIME_EXIT:            '<strong>ON:</strong> Force-close stagnating positions after MAX_HOLD_MINUTES — frees slots for new opportunities. <strong>OFF:</strong> Hold until target or stop-loss naturally.',
+  MAX_HOLD_MINUTES:         'Minutes before a stuck position is force-closed. Only active when Time Exit is ON. India session is 6 hours — 30 min recommended for high volume.',
+  CAPITAL:                  'India paper trading starting balance in ₹. Position sizes scale as a % of this. Update when you add funds.',
+  MAX_DAILY_TRADES:         'Stop new India buys after N completed trades per day (wins + losses combined). Default 30.',
+  MAX_DEPLOYED_PCT:         'Never have more than this fraction of India balance in open positions. <strong>0.70</strong> = 70% max deployed, 30% always stays as cash.',
+  PEAK_DRAWDOWN_PCT:        'Pause India buys if actual portfolio losses hit this % from today\'s session peak. <strong>0.03</strong> = 3%. Only fires on real closed losses, not on capital deployment.',
+  MAX_DAILY_LOSS_PCT:       'Stop all India buys for the day if total realized losses exceed this %. <strong>0.02</strong> = 2% = ₹200 on ₹10k.',
+  SCALP_TARGET_PCT:         'Close India position for profit when it gains this %. <strong>0.015</strong> = 1.5%. Wider = bigger win per trade, fewer fills.',
+  SCALP_SL_PCT:             'Close India position for loss when it drops this %. <strong>0.006</strong> = 0.6%. Tighter = smaller max loss but more false exits on normal price movement.',
+  SL_CONFIRM_POLLS:         'Consecutive 15-second polls below SL price before actually selling. <strong>2</strong> = 30s confirmation, reduces false exits from brief price wicks.',
+  MIN_STOCK_PRICE:          'Skip India stocks below this ₹ price. Cheap stocks have tiny SL gaps vs spread — hard to scalp profitably. Default ₹150.',
+  ENTRY_START_MIN:          'Minutes after 9:15 AM IST to start placing entries. <strong>0</strong> = trade from open. <strong>15</strong> = skip the chaotic first 15 minutes.',
+  ENTRY_END_MIN:            'Minutes after 9:15 AM IST to stop new entries. <strong>360</strong> = 3:15 PM IST (15 min before close). Bot only exits existing positions after this.',
+  US_CAPITAL:               'US Alpaca paper trading balance in $. Bot positions scale as % of this.',
+  US_MAX_DAILY_TRADES:      'Stop new US buys after N completed trades today.',
+  US_MAX_DAILY_LOSS_PCT:    'Stop all US buys for the day if total realized losses exceed this %.',
+  US_MAX_DEPLOYED_PCT:      'Never have more than this fraction of US balance in open positions.',
+  US_PEAK_DRAWDOWN_PCT:     'Pause US buys if actual losses from session peak hit this %.',
+  US_SCALP_TARGET_PCT:      'Close US position for profit when it gains this %.',
+  US_SCALP_SL_PCT:          'Close US position for loss when it drops this %.',
+  US_MIN_STOCK_PRICE:       'Skip US stocks below this $ price. Default $10 — penny stocks are erratic and hard to scalp.',
+  CRYPTO_CAPITAL:           'Binance paper trading balance in USDT. No real money ever spent.',
+  CRYPTO_MAX_DAILY_TRADES:  'Stop new crypto buys after N completed trades today.',
+  CRYPTO_TARGET_PCT:        'Close crypto position for profit when it gains this %.',
+  CRYPTO_SL_PCT:            'Close crypto position for loss when it drops this %.',
+  CRYPTO_BTC_MIN_CHANGE:    'Block all crypto buys if BTC dropped more than this % in the last hour. <strong>-0.4</strong> = block if BTC down 0.4% (alt coins usually follow BTC down).',
+  PAPER_MODE:               'India paper trading — bot simulates trades, no real Angel One orders. Cannot be disabled from portal.',
+  ALPACA_PAPER:             'US paper trading — Alpaca sandbox, no real money. Cannot be disabled from portal.',
+  BINANCE_PAPER:            'Crypto paper trading — no real Binance orders. Cannot be disabled from portal.',
+  SLIPPAGE_PCT:             'Added cost per paper trade to simulate real spread/slippage. <strong>0.001</strong> = 0.1% per trade. Makes paper results more realistic.',
 };
 
 async function loadConfig() {
@@ -1621,58 +1845,49 @@ async function loadConfig() {
   function renderSection(containerId, keys) {
     const el = document.getElementById('config-' + containerId);
     if (!el) return;
-    const rows = keys.filter(k => d[k] !== undefined).map(k => {
-      const hint = _CONFIG_HINTS[k] ? `<div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.6">${_CONFIG_HINTS[k]}</div>` : '';
+    const rows = keys.filter(k => d[k] !== undefined).map(function(k) {
+      const label = _CONFIG_LABELS[k] || k;
+      const hint  = _CONFIG_HINTS[k] ? `<div class="cfg-hint">${_CONFIG_HINTS[k]}</div>` : '';
+      let control = '';
 
-      // Button-group selector (e.g. MIN_SIGNAL_SCORE)
       if (_CONFIG_SELECTS[k]) {
         const sel    = _CONFIG_SELECTS[k];
         const curVal = String(d[k]);
-        const btns   = sel.options.map(o => {
+        const btns   = sel.options.map(function(o) {
           const active = o.val === curVal;
-          return `<button class="btn ${active?'primary':'sm'}" style="margin:2px 4px 2px 0;${active?'':'background:var(--card-bg);color:var(--text);border:1px solid var(--border);'}" onclick="selectConfig('${k}',this,'${o.val}')" data-val="${o.val}">${o.label}</button>`;
-        }).join('');
-        const curDesc = (sel.options.find(o => o.val === curVal) || sel.options[sel.options.length-1]).desc;
-        return `<div class="config-row" style="flex-wrap:wrap">
-          <span class="config-key">${k}</span>
-          <div style="flex:1">
-            <div style="display:flex;flex-wrap:wrap;align-items:center;margin-bottom:4px">${btns}</div>
-            <div id="cfg-desc-${k}" style="color:var(--muted);font-size:11px;margin-top:2px;line-height:1.6">${curDesc}</div>
-            <input type="hidden" id="cfg-${k}" value="${curVal}"/>
-            ${hint}
-          </div>
-          <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
-        </div>`;
-      }
+          return `<button class="btn${active?' primary':''}" style="${active?'':'background:var(--bg);color:var(--muted);border-color:var(--border);'}" onclick="selectConfig('${k}',this,'${o.val}')" data-val="${o.val}">${o.label}</button>`;
+        }).join(' ');
+        const curDesc = (sel.options.find(function(o){return o.val===curVal;}) || sel.options[sel.options.length-1]).desc;
+        control = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${btns}</div>
+          <div id="cfg-desc-${k}" class="cfg-hint" style="color:var(--blue);font-style:italic">${curDesc}</div>
+          <input type="hidden" id="cfg-${k}" value="${curVal}"/>`;
 
-      // Toggle switch
-      if (_CONFIG_TOGGLES.has(k)) {
+      } else if (_CONFIG_TOGGLES.has(k)) {
         const isOn = String(d[k]).toLowerCase() === 'true';
-        return `<div class="config-row" style="flex-wrap:wrap">
-          <span class="config-key">${k}</span>
-          <div style="flex:1">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-              <div class="toggle-wrap" onclick="toggleConfig('${k}',this)" data-val="${isOn}">
-                <div class="toggle-track ${isOn?'on':''}"><div class="toggle-thumb"></div></div>
-                <span id="cfg-lbl-${k}" style="font-size:12px;color:${isOn?'#00c853':'var(--muted)'}">${isOn?'ON':'OFF'}</span>
-              </div>
-              <input type="hidden" id="cfg-${k}" value="${isOn}" />
-            </label>
-            ${hint}
+        const locked = ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER'].includes(k);
+        control = `<label style="display:flex;align-items:center;gap:10px;cursor:${locked?'not-allowed':'pointer'}">
+          <div class="toggle-wrap" ${locked?'':'onclick="toggleConfig(\''+k+'\',this)"'} data-val="${isOn}" ${locked?'title="Cannot disable paper mode from portal"':''}>
+            <div class="toggle-track ${isOn?'on':''}"><div class="toggle-thumb"></div></div>
+            <span id="cfg-lbl-${k}" style="font-size:13px;font-weight:600;color:${isOn?'#00c853':'var(--muted)'}">${isOn?'ON':'OFF'}</span>
           </div>
-          <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
-        </div>`;
+          <input type="hidden" id="cfg-${k}" value="${isOn}" />
+          ${locked?'<span style="font-size:11px;color:var(--muted);">(edit .env to change)</span>':''}
+        </label>`;
+
+      } else {
+        control = `<input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" style="width:200px;font-family:monospace;font-size:13px;"/>`;
       }
 
-      // Plain text input
-      return `<div class="config-row" style="flex-wrap:wrap">
-        <span class="config-key">${k}</span>
-        <div style="flex:1"><input type="text" id="cfg-${k}" value="${d[k]}" class="config-val" style="width:100%"/>
-        ${hint}</div>
-        <button class="btn primary sm" onclick="saveConfig('${k}')">Save</button>
+      return `<div class="cfg-row">
+        <div>
+          <div class="cfg-label">${label}</div>
+          <code class="cfg-key-badge">${k}</code>
+        </div>
+        <div>${control}${hint}</div>
       </div>`;
     }).join('');
-    el.innerHTML = rows || '<div class="cred-note"><span class="icon">&#9432;</span><div>Settings not synced yet. Click <strong>Update &amp; Restart</strong> in the portal header, wait 30 seconds, then hard-refresh (<kbd>Ctrl+Shift+R</kbd>).</div></div>';
+
+    el.innerHTML = rows || '<div class="cred-note"><span class="icon">&#9432;</span><div>Settings not synced yet. Click <strong>Update &amp; Restart</strong> in the header, wait 30 seconds, then hard-refresh (<kbd>Ctrl+Shift+R</kbd>).</div></div>';
   }
 
   renderSection('strategy', _CONFIG_SECTIONS.strategy.keys);
@@ -1684,19 +1899,14 @@ async function loadConfig() {
 
 function selectConfig(key, btn, val) {
   btn.parentElement.querySelectorAll('button').forEach(function(b) {
-    b.className = 'btn sm';
-    b.style.background = 'var(--card-bg)';
-    b.style.color = 'var(--text)';
-    b.style.border = '1px solid var(--border)';
+    b.className = 'btn';
+    b.style.background = 'var(--bg)'; b.style.color = 'var(--muted)'; b.style.borderColor = 'var(--border)';
   });
-  btn.className = 'btn primary';
-  btn.style.background = '';
-  btn.style.color = '';
-  btn.style.border = '';
+  btn.className = 'btn primary'; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = '';
   document.getElementById('cfg-' + key).value = val;
   var descEl = document.getElementById('cfg-desc-' + key);
   if (descEl && _CONFIG_SELECTS[key]) {
-    var opt = _CONFIG_SELECTS[key].options.find(function(o) { return o.val === val; });
+    var opt = _CONFIG_SELECTS[key].options.find(function(o){ return o.val === val; });
     if (opt) descEl.textContent = opt.desc;
   }
 }
@@ -1705,25 +1915,58 @@ function toggleConfig(key, wrap) {
   var cur = wrap.dataset.val === 'true';
   var nxt = !cur;
   wrap.dataset.val = nxt;
-  var track = wrap.querySelector('.toggle-track');
-  var lbl   = document.getElementById('cfg-lbl-' + key);
-  var inp   = document.getElementById('cfg-' + key);
-  track.className = 'toggle-track' + (nxt ? ' on' : '');
+  wrap.querySelector('.toggle-track').className = 'toggle-track' + (nxt ? ' on' : '');
+  var lbl = document.getElementById('cfg-lbl-' + key);
   lbl.textContent = nxt ? 'ON' : 'OFF';
   lbl.style.color = nxt ? '#00c853' : 'var(--muted)';
-  inp.value = nxt;
+  document.getElementById('cfg-' + key).value = nxt;
 }
 
 async function saveConfig(key) {
   const val = document.getElementById('cfg-' + key).value;
-  const r   = await apiFetch('/api/config', {
-    method: 'POST',
-    body: JSON.stringify({ key, value: val }),
-  });
+  const r   = await apiFetch('/api/config', { method:'POST', body:JSON.stringify({key, value:val}) });
   if (!r) return;
   const d = await r.json();
   if (d.ok) toast('&#10003; ' + d.message);
   else toast('&#10007; ' + (d.detail || 'Error'), 5000);
+}
+
+async function saveAllConfig() {
+  const btn = document.getElementById('btn-save-all');
+  const orig = btn ? btn.innerHTML : '💾 Save All Changes';
+  if (btn) { btn.innerHTML = '&#8635; Saving&hellip;'; btn.disabled = true; }
+  const allKeys = Object.values(_CONFIG_SECTIONS).flatMap(function(s){ return s.keys; });
+  let saved = 0, failed = 0;
+  for (const key of allKeys) {
+    const el = document.getElementById('cfg-' + key);
+    if (!el) continue;
+    const r = await apiFetch('/api/config', { method:'POST', body:JSON.stringify({key, value:el.value}) });
+    if (r) { const d = await r.json(); if (d && d.ok) saved++; else failed++; } else failed++;
+  }
+  const msg = failed > 0 ? `&#10007; ${failed} failed` : `&#10003; ${saved} settings saved`;
+  if (btn) { btn.innerHTML = msg; }
+  setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
+  if (!failed) toast(`&#10003; All ${saved} settings saved to database. Restart workers to apply.`);
+  else toast(`&#9888; ${failed} setting(s) failed to save.`, 5000);
+}
+
+async function applyPreset(name) {
+  const presets = {
+    volume:       { MIN_SIGNAL_SCORE:'2', USE_MOOD_FILTER:'false', USE_SECTOR_CAP:'false', MAX_CONCURRENT_POSITIONS:'20', USE_TIME_EXIT:'true', MAX_HOLD_MINUTES:'30' },
+    balanced:     { MIN_SIGNAL_SCORE:'3', USE_MOOD_FILTER:'true',  MOOD_FILTER_THRESHOLD:'-1.5', USE_SECTOR_CAP:'false', MAX_CONCURRENT_POSITIONS:'10', USE_TIME_EXIT:'false', MAX_HOLD_MINUTES:'90' },
+    conservative: { MIN_SIGNAL_SCORE:'4', USE_MOOD_FILTER:'true',  MOOD_FILTER_THRESHOLD:'-0.5', USE_SECTOR_CAP:'true',  MAX_SECTOR_POSITIONS:'2', MAX_CONCURRENT_POSITIONS:'5', USE_TIME_EXIT:'false', MAX_HOLD_MINUTES:'90' },
+  };
+  const p = presets[name];
+  if (!p) return;
+  const labels = { volume:'🚀 High Volume', balanced:'⚖️ Balanced', conservative:'🛡️ Conservative' };
+  if (!confirm(`Apply "${labels[name]}" preset? This will save ${Object.keys(p).length} settings to the database immediately.`)) return;
+  let saved = 0, failed = 0;
+  for (const [key, value] of Object.entries(p)) {
+    const r = await apiFetch('/api/config', { method:'POST', body:JSON.stringify({key, value}) });
+    if (r) { const d = await r.json(); if (d && d.ok) saved++; else failed++; } else failed++;
+  }
+  toast(`&#10003; ${labels[name]} preset applied (${saved} settings saved). Go to Settings and restart workers.`);
+  if (!failed) { setTimeout(function(){ showPage('config'); }, 1500); }
 }
 
 // ── API Keys / Credentials ────────────────────────────────────────────────
