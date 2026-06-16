@@ -5,7 +5,7 @@ $ProgressPreference    = "SilentlyContinue"
 $BOT_DIR  = "C:\AngelBot"
 $LOG_FILE = "C:\angelbot_install.log"
 $tmp      = "C:\angelbot_tmp"
-$STEPS    = 9
+$STEPS    = 10
 
 # -- Helpers -------------------------------------------------------------------
 function Log($msg) {
@@ -549,29 +549,195 @@ New-NetFirewallRule -DisplayName "AngelBot IIS 80"      -Direction Inbound -Prot
 New-NetFirewallRule -DisplayName "SQL Server 1433"      -Direction Inbound -Protocol TCP -LocalPort 1433 -Action Allow -ErrorAction SilentlyContinue | Out-Null
 OK "Firewall rules added (8080, 80, 1433)"
 
-# Cloudflare tunnel (optional)
-$cfDest = "C:\Windows\cloudflared.exe"
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 10 -- Cloudflare Tunnel  (free public URL, no port-forwarding needed)
+# ─────────────────────────────────────────────────────────────────────────────
+Step 10 "Cloudflare Tunnel (free remote access from anywhere)"
+
+$cfDest     = "C:\Windows\cloudflared.exe"
+$cfBundled  = "$BOT_DIR\prerequisite\setup\cloudflared\cloudflared.exe"
+$cfTmpExe   = "$tmp\cloudflared.exe"
+
+# Install binary ---------------------------------------------------------------
 if (-not (Test-Path $cfDest)) {
-    $cfExe = "$tmp\cloudflared.exe"
-    Download "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" $cfExe
-    if (Test-Path $cfExe) {
-        Copy-Item $cfExe $cfDest -Force
-        OK "cloudflared installed  (run: cloudflared tunnel --url http://localhost:8080)"
-    } else { Warn "cloudflared download failed -- skipping (optional)" }
+    if (Test-Path $cfBundled) {
+        try { Copy-Item $cfBundled $cfDest -Force; OK "cloudflared installed from bundle" }
+        catch { Warn "Could not copy to C:\Windows -- will use full path from repo" }
+    }
+    if (-not (Test-Path $cfDest)) {
+        Download "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" $cfTmpExe
+        if (Test-Path $cfTmpExe) {
+            try { Copy-Item $cfTmpExe $cfDest -Force; OK "cloudflared downloaded and installed" }
+            catch { $cfDest = $cfTmpExe; OK "cloudflared at $cfDest" }
+        } else { Warn "cloudflared download failed -- skipping tunnel"; $cfDest = $null }
+    }
 } else { OK "cloudflared already present" }
+
+$script:cfPublicUrl = $null
+
+if ($cfDest -and (Test-Path $cfDest)) {
+
+    Write-Host ""
+    Write-Host "  ┌─────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
+    Write-Host "  │  Cloudflare Tunnel — choose setup mode                  │" -ForegroundColor Cyan
+    Write-Host "  │                                                         │" -ForegroundColor Cyan
+    Write-Host "  │  [1] Quick tunnel  — instant random URL, no account     │" -ForegroundColor Cyan
+    Write-Host "  │      Example: https://abc-xyz.trycloudflare.com         │" -ForegroundColor Cyan
+    Write-Host "  │      Note: URL changes every restart                    │" -ForegroundColor Cyan
+    Write-Host "  │                                                         │" -ForegroundColor Cyan
+    Write-Host "  │  [2] Named tunnel  — stable URL, free Cloudflare acct   │" -ForegroundColor Cyan
+    Write-Host "  │      Example: https://portal.yourdomain.com             │" -ForegroundColor Cyan
+    Write-Host "  │      Requires: domain on Cloudflare (free plan OK)      │" -ForegroundColor Cyan
+    Write-Host "  │                                                         │" -ForegroundColor Cyan
+    Write-Host "  │  [N] Skip tunnel setup                                  │" -ForegroundColor Cyan
+    Write-Host "  └─────────────────────────────────────────────────────────┘" -ForegroundColor Cyan
+    Write-Host ""
+    $cfChoice = Read-Host "  Choice (1/2/N)"
+
+    # ── OPTION 1: Quick tunnel ─────────────────────────────────────────────────
+    if ($cfChoice -eq "1") {
+        $cfSvcName = "AngelBot-Tunnel"
+        $cfLog     = "$BOT_DIR\logs\AngelBot-Tunnel.log"
+        $existing  = Get-Service -Name $cfSvcName -ErrorAction SilentlyContinue
+        if ($existing) {
+            Stop-Service $cfSvcName -Force -ErrorAction SilentlyContinue
+            & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
+            Start-Sleep -Seconds 2
+        }
+        & $nssmDest install $cfSvcName $cfDest "tunnel --url http://localhost:8080" 2>&1 | Out-Null
+        & $nssmDest set $cfSvcName AppDirectory    $BOT_DIR             2>&1 | Out-Null
+        & $nssmDest set $cfSvcName AppStdout       $cfLog               2>&1 | Out-Null
+        & $nssmDest set $cfSvcName AppStderr       $cfLog               2>&1 | Out-Null
+        & $nssmDest set $cfSvcName AppRotateFiles  1                    2>&1 | Out-Null
+        & $nssmDest set $cfSvcName AppRotateBytes  5242880              2>&1 | Out-Null
+        & $nssmDest set $cfSvcName Start           SERVICE_AUTO_START   2>&1 | Out-Null
+        Start-Service $cfSvcName -ErrorAction SilentlyContinue
+        if (Wait-ServiceRunning $cfSvcName 20) {
+            OK "AngelBot-Tunnel (quick) running -- URL printed in logs\AngelBot-Tunnel.log"
+            Write-Host ""
+            Write-Host "  Run this to see your public URL:" -ForegroundColor Yellow
+            Write-Host "      Get-Content '$cfLog' | Select-String 'trycloudflare'" -ForegroundColor White
+        } else {
+            Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log for URL"
+        }
+    }
+
+    # ── OPTION 2: Named tunnel ─────────────────────────────────────────────────
+    elseif ($cfChoice -eq "2") {
+
+        # Step 2a: Login (opens browser or prints auth URL)
+        Write-Host ""
+        Write-Host "  Opening Cloudflare login page..." -ForegroundColor Yellow
+        Write-Host "  (If no browser opens, copy the URL from below into any browser)" -ForegroundColor DarkGray
+        Write-Host ""
+        $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+        & $cfDest tunnel login 2>&1
+        $loginOk = ($LASTEXITCODE -eq 0)
+        $ErrorActionPreference = $oldPref2
+
+        if (-not $loginOk) {
+            Warn "Cloudflare login failed or cancelled -- skipping named tunnel"
+        } else {
+            OK "Logged in to Cloudflare"
+
+            # Step 2b: Create tunnel
+            $tunnelName = "angelbot"
+            Write-Host ""
+            Info "Creating tunnel '$tunnelName'..."
+            $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+            $createOut = & $cfDest tunnel create $tunnelName 2>&1
+            $ErrorActionPreference = $oldPref2
+            Write-Host ($createOut | Out-String).Trim() -ForegroundColor DarkGray
+
+            # Find credentials file (UUID.json in .cloudflared)
+            $cfCredDir  = "$env:USERPROFILE\.cloudflared"
+            $credFile   = Get-ChildItem $cfCredDir -Filter "*.json" -ErrorAction SilentlyContinue |
+                          Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            $tunnelUUID = if ($credFile) { $credFile.BaseName } else { $null }
+
+            if (-not $tunnelUUID) { Warn "Could not find tunnel credentials -- check .cloudflared folder"; return }
+            OK "Tunnel UUID: $tunnelUUID"
+
+            # Step 2c: Hostname
+            Write-Host ""
+            Write-Host "  Enter the public hostname for the portal." -ForegroundColor Cyan
+            Write-Host "  Your domain must be on Cloudflare (free plan OK)." -ForegroundColor DarkGray
+            Write-Host "  Example: portal.yourdomain.com" -ForegroundColor DarkGray
+            $cfHostname = Read-Host "  Hostname"
+
+            # Step 2d: Write config
+            $cfConfigPath = "$BOT_DIR\cloudflared.yml"
+            if ($cfHostname) {
+                @"
+tunnel: $tunnelUUID
+credentials-file: $($credFile.FullName)
+ingress:
+  - hostname: $cfHostname
+    service: http://localhost:8080
+  - service: http_status:404
+"@ | Out-File $cfConfigPath -Encoding ASCII -Force
+                # Create DNS CNAME automatically
+                $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+                & $cfDest tunnel route dns $tunnelName $cfHostname 2>&1 | Out-Null
+                $ErrorActionPreference = $oldPref2
+                OK "DNS route created: $cfHostname -> tunnel"
+                $script:cfPublicUrl = "https://$cfHostname"
+            } else {
+                @"
+tunnel: $tunnelUUID
+credentials-file: $($credFile.FullName)
+ingress:
+  - service: http://localhost:8080
+"@ | Out-File $cfConfigPath -Encoding ASCII -Force
+            }
+            OK "Config written: $cfConfigPath"
+
+            # Step 2e: Register NSSM service
+            $cfSvcName = "AngelBot-Tunnel"
+            $cfLog     = "$BOT_DIR\logs\AngelBot-Tunnel.log"
+            $existing  = Get-Service -Name $cfSvcName -ErrorAction SilentlyContinue
+            if ($existing) {
+                Stop-Service $cfSvcName -Force -ErrorAction SilentlyContinue
+                & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
+                Start-Sleep -Seconds 2
+            }
+            & $nssmDest install $cfSvcName $cfDest "tunnel --config `"$cfConfigPath`" run" 2>&1 | Out-Null
+            & $nssmDest set $cfSvcName AppDirectory    $BOT_DIR            2>&1 | Out-Null
+            & $nssmDest set $cfSvcName AppStdout       $cfLog              2>&1 | Out-Null
+            & $nssmDest set $cfSvcName AppStderr       $cfLog              2>&1 | Out-Null
+            & $nssmDest set $cfSvcName AppRotateFiles  1                   2>&1 | Out-Null
+            & $nssmDest set $cfSvcName AppRotateBytes  5242880             2>&1 | Out-Null
+            & $nssmDest set $cfSvcName Start           SERVICE_AUTO_START  2>&1 | Out-Null
+            Start-Service $cfSvcName -ErrorAction SilentlyContinue
+            if (Wait-ServiceRunning $cfSvcName 30) {
+                OK "AngelBot-Tunnel service running"
+            } else {
+                Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log"
+            }
+        }
+    }
+
+    else {
+        Info "Skipping tunnel -- run 'cloudflared tunnel --url http://localhost:8080' anytime for a quick URL"
+    }
+}
 
 # -- Done ----------------------------------------------------------------------
 Write-Host ""
 Write-Host "  ============================================================" -ForegroundColor Green
 Write-Host "    AngelBot installed and running!" -ForegroundColor Green
 Write-Host "  ============================================================" -ForegroundColor Green
-Write-Host "    Portal (direct)  : http://localhost:8080" -ForegroundColor Green
-Write-Host "    Portal (via IIS) : http://localhost" -ForegroundColor Green
-Write-Host "    Default login    : admin / AngelBot@1234" -ForegroundColor Green
-Write-Host "    SQL Server       : .\ANGELBOT  (SA password in .env)" -ForegroundColor Green
-Write-Host "    Logs             : $BOT_DIR\logs\" -ForegroundColor Green
-Write-Host "    Config           : $BOT_DIR\.env" -ForegroundColor Green
-Write-Host "    All 4 workers auto-start on every reboot." -ForegroundColor Green
+Write-Host "    Portal (local)    : http://localhost:8080" -ForegroundColor Green
+Write-Host "    Portal (via IIS)  : http://localhost" -ForegroundColor Green
+if ($script:cfPublicUrl) {
+Write-Host "    Portal (public)   : $($script:cfPublicUrl)" -ForegroundColor Green
+}
+Write-Host "    Default login     : admin / AngelBot@1234" -ForegroundColor Green
+Write-Host "    SQL Server        : .\ANGELBOT  (SA password in .env)" -ForegroundColor Green
+Write-Host "    Logs              : $BOT_DIR\logs\" -ForegroundColor Green
+Write-Host "    Config            : $BOT_DIR\.env" -ForegroundColor Green
+Write-Host "    5 services auto-start on every reboot." -ForegroundColor Green
+Write-Host "    (India, US, Crypto, Portal, Tunnel)" -ForegroundColor Green
 Write-Host "  ============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  NEXT: Open the portal and go to API Keys to enter your" -ForegroundColor Yellow
@@ -582,6 +748,10 @@ Write-Host ""
 Log "=== Installation complete ==="
 
 Start-Sleep -Seconds 3
-Start-Process "http://localhost:8080"
+if ($script:cfPublicUrl) {
+    Start-Process $script:cfPublicUrl
+} else {
+    Start-Process "http://localhost:8080"
+}
 Write-Host "  Press Enter to close ..." -ForegroundColor DarkGray
 Read-Host | Out-Null

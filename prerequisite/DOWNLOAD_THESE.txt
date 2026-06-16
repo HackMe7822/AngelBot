@@ -28,10 +28,13 @@ The installer (install.ps1) will find them automatically.
   (~300 KB)
 
 ─── Cloudflared (Cloudflare Tunnel) ──────────────────────────
+  NOTE: The installer auto-downloads this if not present.
+  For offline VMs, download manually:
   Download: https://github.com/cloudflare/cloudflared/releases/latest
   File:     cloudflared-windows-amd64.exe
   Save as:  prerequisite\setup\cloudflared\cloudflared.exe
-  (~35 MB — only needed for remote access through corporate firewall)
+  (~52 MB — used by Step 10 to expose the portal publicly for free)
+  Account:  https://dash.cloudflare.com/sign-up (free plan is sufficient)
 
 ─── Python 3.11+ ─────────────────────────────────────────────
   Download: https://www.python.org/downloads/
