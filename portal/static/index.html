@@ -94,6 +94,11 @@
   .config-val { font-family: monospace; font-size: 13px; border: 1.5px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--bg); transition: border-color .15s, box-shadow .15s; width: 220px; }
   .config-val:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px rgba(9,105,218,.1); }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* Market label badges (flag emojis don't render on Windows) */
+  .mkt-badge { display:inline-flex; align-items:center; justify-content:center; border-radius:4px; padding:0 6px; font-size:10px; font-weight:700; line-height:18px; vertical-align:middle; flex-shrink:0; }
+  .mkt-in    { background:#e36209; color:#fff; }
+  .mkt-us    { background:#1a7f37; color:#fff; }
+  .mkt-btc   { background:#8250df; color:#fff; }
   /* Settings tabs */
   .settings-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px; overflow-x:auto; flex-shrink:0; }
   .settings-tab { padding:10px 20px; font-size:13px; font-weight:600; color:var(--muted); background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; margin-bottom:-2px; transition:color .15s,border-color .15s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
@@ -492,9 +497,9 @@
     <!-- Tabs -->
     <div class="settings-tabs">
       <button class="settings-tab active" data-tab="strategy" onclick="showSettingsTab('strategy')">🎯 Strategy</button>
-      <button class="settings-tab" data-tab="india" onclick="showSettingsTab('india')">🇮🇳 India</button>
-      <button class="settings-tab" data-tab="us" onclick="showSettingsTab('us')">🇺🇸 US</button>
-      <button class="settings-tab" data-tab="crypto" onclick="showSettingsTab('crypto')">₿ Crypto</button>
+      <button class="settings-tab" data-tab="india" onclick="showSettingsTab('india')"><span class="mkt-badge mkt-in">IN</span> India</button>
+      <button class="settings-tab" data-tab="us" onclick="showSettingsTab('us')"><span class="mkt-badge mkt-us">US</span> US</button>
+      <button class="settings-tab" data-tab="crypto" onclick="showSettingsTab('crypto')"><span class="mkt-badge mkt-btc">₿</span> Crypto</button>
       <button class="settings-tab" data-tab="general" onclick="showSettingsTab('general')">⚙️ General</button>
     </div>
 
@@ -524,7 +529,7 @@
       <div class="card" style="border-left:4px solid #e36209;">
         <div class="cfg-section-hdr">
           <div style="display:flex;align-items:center;gap:12px;">
-            <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;">🇮🇳</div>
+            <div class="cfg-section-icon" style="background:rgba(227,98,9,.12);color:#e36209;font-size:13px;font-weight:700;">IN</div>
             <div>
               <div style="font-size:15px;font-weight:700;">India (NSE)</div>
               <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:15 AM – 3:30 PM IST &middot; Paper mode</div>
@@ -540,7 +545,7 @@
       <div class="card" style="border-left:4px solid #1a7f37;">
         <div class="cfg-section-hdr">
           <div style="display:flex;align-items:center;gap:12px;">
-            <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;">🇺🇸</div>
+            <div class="cfg-section-icon" style="background:rgba(26,127,55,.12);color:#1a7f37;font-size:13px;font-weight:700;">US</div>
             <div>
               <div style="font-size:15px;font-weight:700;">US (NASDAQ / NYSE)</div>
               <div style="font-size:12px;color:var(--muted);margin-top:2px;">9:30 AM – 4:00 PM ET &middot; Alpaca paper</div>
@@ -1998,20 +2003,29 @@ async function saveConfig(key) {
 async function saveAllConfig() {
   const btn = document.getElementById('btn-save-all');
   const orig = btn ? btn.innerHTML : '💾 Save All Changes';
-  if (btn) { btn.innerHTML = '&#8635; Saving&hellip;'; btn.disabled = true; }
+  const spinner = '<span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;"></span>';
+  if (btn) { btn.innerHTML = spinner + 'Saving&hellip;'; btn.disabled = true; }
   const allKeys = Object.values(_CONFIG_SECTIONS).flatMap(function(s){ return s.keys; });
   let saved = 0, failed = 0;
-  for (const key of allKeys) {
-    const el = document.getElementById('cfg-' + key);
-    if (!el) continue;
-    const r = await apiFetch('/api/config', { method:'POST', body:JSON.stringify({key, value:el.value}) });
-    if (r) { const d = await r.json(); if (d && d.ok) saved++; else failed++; } else failed++;
+  try {
+    for (const key of allKeys) {
+      const el = document.getElementById('cfg-' + key);
+      if (!el) continue;
+      try {
+        const r = await apiFetch('/api/config', { method:'POST', body:JSON.stringify({key, value:el.value}) });
+        if (r) {
+          try { const d = await r.json(); if (d && d.ok) saved++; else failed++; }
+          catch(e) { failed++; }
+        } else { failed++; }
+      } catch(e) { failed++; }
+    }
+  } finally {
+    const msg = failed > 0 ? `&#10007; ${failed} failed` : `&#10003; ${saved} settings saved`;
+    if (btn) { btn.innerHTML = msg; }
+    setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
+    if (!failed) toast(`&#10003; All ${saved} settings saved to database. Restart workers to apply.`);
+    else toast(`&#9888; ${failed} setting(s) failed to save.`, 5000);
   }
-  const msg = failed > 0 ? `&#10007; ${failed} failed` : `&#10003; ${saved} settings saved`;
-  if (btn) { btn.innerHTML = msg; }
-  setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
-  if (!failed) toast(`&#10003; All ${saved} settings saved to database. Restart workers to apply.`);
-  else toast(`&#9888; ${failed} setting(s) failed to save.`, 5000);
 }
 
 function showSettingsTab(name) {
