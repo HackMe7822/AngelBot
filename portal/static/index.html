@@ -261,6 +261,7 @@
   @keyframes flash-down { 0%{background:rgba(207,34,46,.28)}100%{background:transparent} }
   .price-flash-up   { animation: flash-up   .8s ease-out; border-radius:3px; }
   .price-flash-down { animation: flash-down .8s ease-out; border-radius:3px; }
+  .price-loading { display:inline-block; width:13px; height:13px; border:2px solid var(--border); border-top-color:var(--muted); border-radius:50%; animation:spin .8s linear infinite; vertical-align:middle; opacity:.6; }
 
   /* Symbol chips */
   .sym-chip { display: inline-flex; align-items: center; background: rgba(9,105,218,.08); color: var(--blue); border: 1px solid rgba(9,105,218,.2); border-radius: 4px; padding: 3px 8px; font-size: 12px; font-weight: 600; font-family: monospace; margin: 3px 3px 3px 0; letter-spacing: .3px; }
@@ -454,7 +455,7 @@
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <div class="pill-group">
           <span class="pill active" id="dash-view-closed" onclick="setDashView('closed')">Closed Trades</span>
-          <span class="pill" id="dash-view-buys" onclick="setDashView('buys')">Recent Buys</span>
+          <span class="pill" id="dash-view-buys" onclick="setDashView('buys')">Open Positions</span>
         </div>
         <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
       </div>
@@ -1536,7 +1537,7 @@ function setDashView(view) {
   document.getElementById('dash-view-buys').classList.toggle('active', view === 'buys');
   var sub = document.getElementById('dash-recent-subtitle');
   if (view === 'buys') {
-    if (sub) sub.textContent = 'Current open positions (live price)';
+    if (sub) sub.textContent = 'All open positions — live prices';
     loadRecentBuys();
   } else {
     if (sub) sub.textContent = 'Last 10 closed';
@@ -1561,7 +1562,7 @@ async function loadRecentBuys() {
   if (!r) return;
   const d = await r.json();
   const el   = document.getElementById('recent-trades-table');
-  const rows = (d.positions || []).slice(0, 10);
+  const rows = d.positions || [];
   if (!rows.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
   el.innerHTML = '<table><thead><tr>' +
     '<th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th>' +
@@ -1576,9 +1577,9 @@ async function loadRecentBuys() {
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
-        '<td id="rb-lp-'   + p.id + '" style="color:var(--muted)">&#8212;</td>' +
-        '<td id="rb-gain-' + p.id + '" style="color:var(--muted)">&#8212;</td>' +
-        '<td id="rb-upnl-' + p.id + '" style="color:var(--muted)">&#8212;</td>' +
+        '<td id="rb-lp-'   + p.id + '"><span class="price-loading"></span></td>' +
+        '<td id="rb-gain-' + p.id + '"><span class="price-loading"></span></td>' +
+        '<td id="rb-upnl-' + p.id + '"><span class="price-loading"></span></td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
   fetchLivePrices(rows, function(prices, normed) {
@@ -1729,9 +1730,9 @@ function _buildPositionsTable(positions) {
         '<td>' + mktBadge(p.source) + '</td>' +
         '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
-        '<td id="lp-' + p.id + '" style="color:var(--muted)">—</td>' +
-        '<td id="gain-' + p.id + '" style="color:var(--muted)">—</td>' +
-        '<td id="upnl-' + p.id + '" style="color:var(--muted)">—</td>' +
+        '<td id="lp-' + p.id + '"><span class="price-loading"></span></td>' +
+        '<td id="gain-' + p.id + '"><span class="price-loading"></span></td>' +
+        '<td id="upnl-' + p.id + '"><span class="price-loading"></span></td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
         '<td class="pnl-neg">' + cur + (p.stop_loss||0).toFixed(4) + '</td>' +
@@ -2283,12 +2284,59 @@ async function saveAllConfig() {
       } catch(e) { failed++; }
     }
   } finally {
-    const msg = failed > 0 ? `&#10007; ${failed} failed` : `&#10003; ${saved} settings saved`;
+    const msg = failed > 0 ? `&#10007; ${failed} failed` : `&#10003; ${saved} saved`;
     if (btn) { btn.innerHTML = msg; }
     setTimeout(function(){ if (btn){ btn.innerHTML = orig; btn.disabled = false; } }, 3000);
-    if (!failed) toast(`&#10003; All ${saved} settings saved to database. Restart workers to apply.`);
-    else toast(`&#9888; ${failed} setting(s) failed to save.`, 5000);
+    if (failed) { toast(`&#9888; ${failed} setting(s) failed to save.`, 5000); return; }
+    toast(`&#10003; ${saved} settings saved.`);
+    // Ask user to restart
+    const choice = await _showRestartPrompt();
+    if (!choice) return;
+    const toRestart = choice === 'all'
+      ? ['AngelBot-India','AngelBot-US','AngelBot-Crypto']
+      : [choice];
+    for (const svc of toRestart) {
+      const rr = await apiFetch('/api/services/' + svc + '/restart', { method: 'POST' });
+      if (rr) toast('&#9889; ' + svc + ' restarting…');
+    }
   }
+}
+
+function _showRestartPrompt() {
+  return new Promise(function(resolve) {
+    // Detect active settings tab for a smart default
+    var activeTab = document.querySelector('.settings-tab.active');
+    var tab = activeTab ? activeTab.dataset.tab : null;
+    var svcMap = { india:'AngelBot-India', us:'AngelBot-US', crypto:'AngelBot-Crypto' };
+    var suggested = svcMap[tab] || null;
+
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 28px 20px;max-width:400px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);';
+    box.innerHTML =
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px;">&#9889; Restart Worker?</div>' +
+      '<div style="color:var(--muted);font-size:13px;margin-bottom:20px;">Settings saved. Restart a worker service to apply the new values immediately.</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;">' +
+      (suggested ? '<button class="btn primary" id="rs-suggested">Restart ' + suggested.replace('AngelBot-','') + ' Worker (recommended)</button>' : '') +
+      (!suggested || suggested !== 'AngelBot-India'   ? '<button class="btn" id="rs-india">Restart India Worker</button>' : '') +
+      (!suggested || suggested !== 'AngelBot-US'      ? '<button class="btn" id="rs-us">Restart US Worker</button>' : '') +
+      (!suggested || suggested !== 'AngelBot-Crypto'  ? '<button class="btn" id="rs-crypto">Restart Crypto Worker</button>' : '') +
+      '<button class="btn" style="background:rgba(9,105,218,.1);color:var(--blue);border-color:rgba(9,105,218,.3);" id="rs-all">Restart All Workers</button>' +
+      '<button class="btn" style="color:var(--muted);margin-top:4px;" id="rs-skip">Skip — restart later</button>' +
+      '</div>';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+
+    function close(val) { document.body.removeChild(ov); resolve(val); }
+    if (suggested) { var b = box.querySelector('#rs-suggested'); if (b) b.onclick = function(){ close(suggested); }; }
+    var bi = box.querySelector('#rs-india');   if (bi) bi.onclick = function(){ close('AngelBot-India'); };
+    var bu = box.querySelector('#rs-us');      if (bu) bu.onclick = function(){ close('AngelBot-US'); };
+    var bc = box.querySelector('#rs-crypto');  if (bc) bc.onclick = function(){ close('AngelBot-Crypto'); };
+    var ba = box.querySelector('#rs-all');     if (ba) ba.onclick = function(){ close('all'); };
+    var bs = box.querySelector('#rs-skip');    if (bs) bs.onclick = function(){ close(null); };
+    ov.addEventListener('click', function(e){ if (e.target === ov) close(null); });
+  });
 }
 
 function showSettingsTab(name) {
@@ -2384,22 +2432,29 @@ const _CRED_SECTIONS = [
   ]},
 ];
 
+const _CRED_LABELS = { angelone:'Angel One', alpaca:'Alpaca', binance:'Binance', telegram:'Telegram', portal:'Portal' };
+
 async function loadCredentials() {
   const r = await apiFetch('/api/credentials');
   if (!r) return;
   const d = await r.json();
   for (const sec of _CRED_SECTIONS) {
     const el = document.getElementById('cred-' + sec.id);
-    el.innerHTML = sec.keys.map(({k, label}) => `
-      <div class="config-row">
+    const rows = sec.keys.map(function({k, label}) {
+      return `<div class="config-row">
         <span class="config-key">${label}</span>
         <div style="display:flex;gap:6px;flex:1">
           <input type="password" id="cred-${k}" value="${(d[k]||'').replace(/"/g,'&quot;')}"
                  class="config-val" style="flex:1" placeholder="not set" />
-          <button class="btn" style="padding:4px 8px;font-size:12px" onclick="toggleCredVis('${k}')" title="Show/hide">👁</button>
+          <button class="btn" style="padding:4px 8px;font-size:12px;" onclick="toggleCredVis('${k}')" title="Show/hide">&#128065;</button>
         </div>
-        <button class="btn primary sm" onclick="saveCredential('${k}')">Save</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+    const lbl = _CRED_LABELS[sec.id] || sec.id;
+    el.innerHTML = rows +
+      `<div style="display:flex;justify-content:flex-end;padding-top:12px;margin-top:8px;border-top:1px solid var(--border);">
+        <button class="btn primary" id="cred-save-${sec.id}" onclick="saveAllCredSection('${sec.id}')">&#10003; Save ${lbl}</button>
+      </div>`;
   }
 }
 
@@ -2408,16 +2463,30 @@ function toggleCredVis(key) {
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
-async function saveCredential(key) {
-  const val = document.getElementById('cred-' + key).value;
-  const r   = await apiFetch('/api/credentials', {
-    method: 'POST',
-    body: JSON.stringify({ key, value: val }),
-  });
-  if (!r) return;
-  const d = await r.json();
-  if (d.ok) toast('Saved: ' + d.message);
-  else toast('Error: ' + (d.detail || 'Unknown error'), 5000);
+async function saveAllCredSection(secId) {
+  const sec = _CRED_SECTIONS.find(function(s){ return s.id === secId; });
+  if (!sec) return;
+  const btn = document.getElementById('cred-save-' + secId);
+  const lbl = _CRED_LABELS[secId] || secId;
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '&#8635; Saving…'; btn.disabled = true; }
+  var saved = 0, failed = 0;
+  for (var i = 0; i < sec.keys.length; i++) {
+    var k = sec.keys[i].k;
+    var inp = document.getElementById('cred-' + k);
+    if (!inp) continue;
+    try {
+      var rr = await apiFetch('/api/credentials', { method:'POST', body:JSON.stringify({key:k, value:inp.value}) });
+      if (rr) { var dd = await rr.json(); if (dd && dd.ok) saved++; else failed++; }
+      else failed++;
+    } catch(e) { failed++; }
+  }
+  if (btn) {
+    btn.innerHTML = failed ? '&#10007; ' + failed + ' failed' : '&#10003; Saved';
+    setTimeout(function(){ if (btn){ btn.innerHTML = '&#10003; Save ' + lbl; btn.disabled = false; } }, 2500);
+  }
+  if (saved && !failed) toast('&#10003; ' + lbl + ' credentials saved. Restart workers to apply.');
+  if (failed) toast('&#9888; ' + failed + ' credential(s) failed to save.', 5000);
 }
 
 // ── Log line parser ───────────────────────────────────────────────────────
