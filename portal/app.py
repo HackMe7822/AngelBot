@@ -887,14 +887,19 @@ def get_services(user: str = Depends(require_auth)):
     return {"services": services}
 
 
+_NSSM = r'C:\Windows\nssm.exe'
+
 @app.post("/api/services/{name}/start")
 def start_service(name: str, user: str = Depends(require_auth)):
-    """Start a stopped Windows service."""
+    """Start a stopped Windows service via NSSM."""
     if name not in _SERVICE_NAMES:
         raise HTTPException(400, f"Unknown service '{name}'.")
+    if name == "AngelBot-Portal":
+        raise HTTPException(400, "Portal cannot be started this way — use the Restart button.")
     try:
-        r = subprocess.run(['net', 'start', name], capture_output=True, text=True, timeout=30)
-        if r.returncode != 0:
+        r = subprocess.run([_NSSM, 'start', name], capture_output=True, text=True,
+                           encoding='utf-8', errors='replace', timeout=30)
+        if r.returncode not in (0, 1):   # NSSM returns 1 if already running — treat as OK
             raise HTTPException(500, f"Failed to start {name}: {(r.stderr or r.stdout).strip()}")
         return {"ok": True, "name": name, "message": f"{name} started."}
     except HTTPException:
@@ -905,12 +910,15 @@ def start_service(name: str, user: str = Depends(require_auth)):
 
 @app.post("/api/services/{name}/stop")
 def stop_service(name: str, user: str = Depends(require_auth)):
-    """Stop a running Windows service."""
+    """Stop a running Windows service via NSSM."""
     if name not in _SERVICE_NAMES:
         raise HTTPException(400, f"Unknown service '{name}'.")
+    if name == "AngelBot-Portal":
+        raise HTTPException(400, "Portal cannot be stopped this way — use the Restart button.")
     try:
-        r = subprocess.run(['net', 'stop', name], capture_output=True, text=True, timeout=30)
-        if r.returncode != 0:
+        r = subprocess.run([_NSSM, 'stop', name], capture_output=True, text=True,
+                           encoding='utf-8', errors='replace', timeout=30)
+        if r.returncode not in (0, 3):   # NSSM returns 3 if already stopped — treat as OK
             raise HTTPException(500, f"Failed to stop {name}: {(r.stderr or r.stdout).strip()}")
         return {"ok": True, "name": name, "message": f"{name} stopped."}
     except HTTPException:
@@ -939,11 +947,11 @@ def restart_service(name: str, user: str = Depends(require_auth)):
             if r.returncode != 0:
                 raise HTTPException(500, f"Failed to schedule restart: {r.stderr.strip()}")
             return {"ok": True, "name": name, "message": f"{name} restarting in ~10s — page will reload."}
-        subprocess.run(['nssm', 'stop', name], capture_output=True, text=True,
+        subprocess.run([_NSSM, 'stop', name], capture_output=True, text=True,
                        encoding='utf-8', errors='replace', timeout=30)
-        start = subprocess.run(['nssm', 'start', name], capture_output=True, text=True,
+        start = subprocess.run([_NSSM, 'start', name], capture_output=True, text=True,
                                encoding='utf-8', errors='replace', timeout=30)
-        if start.returncode != 0:
+        if start.returncode not in (0, 1):
             raise HTTPException(500, f"Failed to start {name}: {(start.stderr or start.stdout).strip()}")
         return {"ok": True, "name": name, "message": f"{name} restarted."}
     except HTTPException:

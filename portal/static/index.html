@@ -93,6 +93,7 @@
   .config-key { font-family: monospace; font-size: 13px; color: var(--purple); }
   .config-val { font-family: monospace; font-size: 13px; border: 1.5px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--bg); transition: border-color .15s, box-shadow .15s; width: 220px; }
   .config-val:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px rgba(9,105,218,.1); }
+  @keyframes spin { to { transform: rotate(360deg); } }
   /* Settings tabs */
   .settings-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px; overflow-x:auto; flex-shrink:0; }
   .settings-tab { padding:10px 20px; font-size:13px; font-weight:600; color:var(--muted); background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; margin-bottom:-2px; transition:color .15s,border-color .15s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
@@ -1427,6 +1428,9 @@ async function svcAction(name, action) {
 
 async function restartService(name) { return svcAction(name, 'restart'); }
 
+// Shared loading spinner — used by all data pages
+var _LOADING_HTML = '<div style="text-align:center;padding:56px 0;"><div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;"></div><div style="color:var(--muted);font-size:13px;margin-top:14px;letter-spacing:.3px;">Loading…</div></div>';
+
 // ── Positions ─────────────────────────────────────────────────────────────
 var _posCache = null; // {positions, market, sortKey}
 
@@ -1542,9 +1546,16 @@ async function loadPositions() {
   const market = document.getElementById('pos-market-filter').value;
   const sortKey = (_sort.pos.col || '') + (_sort.pos.dir || '');
   var _ptel = document.getElementById('positions-table');
-  if (_ptel) _ptel.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;">&#8635; Loading positions&hellip;</div>';
-  var _psel = document.getElementById('pos-summary');
-  if (_psel) _psel.innerHTML = '';
+  // Show spinner only when: no table rendered yet, OR market filter changed.
+  // Auto-refresh skips spinner so the existing table isn't wiped (causes stuck-spinner bug).
+  var hasTable = _ptel && _ptel.querySelector('table');
+  var marketChanged = !_posCache || (_posCache.market !== market);
+  if (!hasTable || marketChanged) {
+    if (_ptel) _ptel.innerHTML = _LOADING_HTML;
+    var _psel = document.getElementById('pos-summary');
+    if (_psel) _psel.innerHTML = '';
+    _posCache = null;
+  }
   const r = await apiFetch('/api/positions' + (market ? '?market=' + market : ''));
   if (!r) return;
   const d = await r.json();
@@ -1561,7 +1572,7 @@ async function loadPositions() {
   const cacheSortKey = _posCache ? _posCache.sortKey : '';
   if (!_posCache || newIds !== cacheIds || sortKey !== cacheSortKey) {
     _buildPositionsTable(d.positions);
-    _posCache = {positions: d.positions, ids: newIds, sortKey: sortKey};
+    _posCache = {positions: d.positions, ids: newIds, sortKey: sortKey, market: market};
   } else {
     // Positions unchanged — update our cached copy in case prices changed (no table rebuild)
     _posCache.positions = d.positions;
@@ -1695,7 +1706,7 @@ function buildTradeTable(trades, sortable) {
 
 async function loadTrades() {
   var _ttel = document.getElementById('trades-table');
-  if (_ttel) _ttel.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;">&#8635; Loading trades&hellip;</div>';
+  if (_ttel) _ttel.innerHTML = _LOADING_HTML;
   var _tcel = document.getElementById('trade-count'); if (_tcel) _tcel.textContent = '';
   var _tpel = document.getElementById('trade-total-pnl'); if (_tpel) _tpel.innerHTML = '';
   var _tpgl = document.getElementById('trade-pagination'); if (_tpgl) _tpgl.innerHTML = '';
@@ -1743,7 +1754,7 @@ async function loadLeaderboard(market) {
   var keys = ['','india','us','crypto'];
   tabs.forEach(function(t, i) { t.classList.toggle('active', keys[i] === market); });
   var _lbel = document.getElementById('leaderboard-table');
-  if (_lbel) _lbel.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;">&#8635; Loading leaderboard&hellip;</div>';
+  if (_lbel) _lbel.innerHTML = _LOADING_HTML;
   var url = '/api/stats/leaderboard' + (market ? '?market=' + market : '');
   var r = await apiFetch(url);
   if (!r) return;
@@ -2152,7 +2163,7 @@ async function loadLog() {
   const lines  = document.getElementById('log-lines').value;
   const date   = document.getElementById('log-date').value;
   const box    = document.getElementById('log-box');
-  box.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:14px;letter-spacing:.5px;">&#8635; Loading logs&hellip;</div>';
+  box.innerHTML = _LOADING_HTML;
   const params = `lines=${lines}` + (date ? `&date=${date}` : '');
   const r = await apiFetch(`/api/logs/${market}?${params}`);
   if (!r) { box.innerHTML = '<div style="color:#e55;padding:12px;">Failed to load log.</div>'; return; }
