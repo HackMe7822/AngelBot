@@ -312,17 +312,17 @@
 <aside class="sidebar">
   <h1>🤖 AngelBot</h1>
   <nav>
-    <a href="#" onclick="showPage('dashboard')" id="nav-dashboard" class="active">📊 Dashboard</a>
-    <a href="#" onclick="showPage('positions')" id="nav-positions">📋 Positions</a>
-    <a href="#" onclick="showPage('trades')" id="nav-trades">📈 Trade History</a>
-    <a href="#" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
-    <a href="#" onclick="showPage('config')" id="nav-config">⚙️ Settings</a>
-    <a href="#" onclick="showPage('apikeys')" id="nav-apikeys">🔑 API Keys</a>
-    <a href="#" onclick="showPage('symbols')" id="nav-symbols">&#128279; Symbols</a>
-    <a href="#" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
-    <a href="#" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
-    <a href="#" onclick="showPage('help')" id="nav-help">❓ Help &amp; FAQ</a>
-    <a href="#" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
+    <a href="javascript:void(0)" onclick="showPage('dashboard')" id="nav-dashboard" class="active">📊 Dashboard</a>
+    <a href="javascript:void(0)" onclick="showPage('positions')" id="nav-positions">📋 Positions</a>
+    <a href="javascript:void(0)" onclick="showPage('trades')" id="nav-trades">📈 Trade History</a>
+    <a href="javascript:void(0)" onclick="showPage('leaderboard')" id="nav-leaderboard">🏆 Leaderboard</a>
+    <a href="javascript:void(0)" onclick="showPage('config')" id="nav-config">⚙️ Settings</a>
+    <a href="javascript:void(0)" onclick="showPage('apikeys')" id="nav-apikeys">🔑 API Keys</a>
+    <a href="javascript:void(0)" onclick="showPage('symbols')" id="nav-symbols">&#128279; Symbols</a>
+    <a href="javascript:void(0)" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
+    <a href="javascript:void(0)" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
+    <a href="javascript:void(0)" onclick="showPage('help')" id="nav-help">❓ Help &amp; FAQ</a>
+    <a href="javascript:void(0)" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
   </nav>
   <div style="position:absolute; bottom:0; left:0; right:0; padding:12px 16px; border-top:1px solid var(--border);">
     <div style="font-size:11px; color:var(--muted); margin-bottom:8px;" id="sidebar-user">Logged in</div>
@@ -1334,8 +1334,8 @@ async function doLogin() {
   hideLogin(u);
   apiFetch('/api/prefs').then(function(p){ if(p) _prefs = p; });
   await loadConfig();
-  refreshDashboard();
-  _pageTimer = setInterval(refreshDashboard, _refreshMs.dash);
+  var startPage = _urlToPage();
+  showPage(startPage, false);
   checkUpdate();
   _checkAdminAccess();
 }
@@ -1480,7 +1480,25 @@ function applyDefault(page) {
 
 // ── Navigation ─────────────────────────────────────────────────────────────
 var _lbMarket = '';
-function showPage(name) {
+
+// URL slug → internal page-id  (for reading the address bar on load / back-forward)
+var _URL_TO_PAGE = {
+  'dashboard':'dashboard','positions':'positions','trades':'trades',
+  'leaderboard':'leaderboard','settings':'config','apikeys':'apikeys',
+  'users':'users','logs':'logs','monitor':'monitor','symbols':'symbols','help':'help'
+};
+// Internal page-id → URL slug  (for pushState when navigating)
+var _PAGE_TO_URL = {
+  'dashboard':'dashboard','positions':'positions','trades':'trades',
+  'leaderboard':'leaderboard','config':'settings','apikeys':'apikeys',
+  'users':'users','logs':'logs','monitor':'monitor','symbols':'symbols','help':'help'
+};
+
+function showPage(name, pushState) {
+  if (pushState !== false) {
+    var slug = _PAGE_TO_URL[name] || name;
+    history.pushState({page: name}, '', '/' + slug);
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
@@ -1497,6 +1515,17 @@ function showPage(name) {
   if (name === 'symbols')     loadSymbols();
   if (name === 'monitor')     startMonitor();
   if (name !== 'monitor')     stopMonitor();
+}
+
+// Browser back / forward
+window.addEventListener('popstate', function(e) {
+  var page = (e.state && e.state.page) || _urlToPage();
+  if (page) showPage(page, false);
+});
+
+function _urlToPage() {
+  var slug = window.location.pathname.replace(/^\//, '') || 'dashboard';
+  return _URL_TO_PAGE[slug] || 'dashboard';
 }
 
 // ── Dashboard date filter ─────────────────────────────────────────────────
@@ -3580,8 +3609,8 @@ async function testTelegram() {
   const p = await apiFetch('/api/prefs');
   if (p) _prefs = p;
   await loadConfig();
-  refreshDashboard();
-  _pageTimer = setInterval(refreshDashboard, _refreshMs.dash);
+  const startPage = _urlToPage();
+  showPage(startPage, false);
   checkUpdate();
   _checkAdminAccess();
   updateLiveIndicators();

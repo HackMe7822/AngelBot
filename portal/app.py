@@ -136,11 +136,24 @@ _STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
-# ── HTML UI ───────────────────────────────────────────────────────────────────
+# ── HTML UI — serve index.html for root and all SPA page routes ──────────────
+_SPA_PAGES = {
+    'dashboard', 'positions', 'trades', 'leaderboard',
+    'settings', 'apikeys', 'users', 'logs', 'monitor', 'symbols', 'help',
+}
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     index = _STATIC_DIR / "index.html"
     return HTMLResponse(content=index.read_text(encoding="utf-8"))
+
+@app.get("/{page_name}", response_class=HTMLResponse)
+async def spa_page(page_name: str):
+    """Serve the SPA shell for any known page so browser history/deep-links work."""
+    if page_name in _SPA_PAGES:
+        index = _STATIC_DIR / "index.html"
+        return HTMLResponse(content=index.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
