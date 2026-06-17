@@ -347,6 +347,27 @@
     .mkt-hours { font-size: 10px; }
     .badge { font-size: 10px; padding: 1px 6px; }
   }
+  /* ── Export dropdown ─────────────────────────────────────────────────── */
+  .exp-drop { position:relative; display:inline-block; }
+  .exp-drop-menu { display:none; position:absolute; right:0; top:calc(100% + 3px); background:var(--surface); border:1px solid var(--border); border-radius:6px; z-index:200; min-width:158px; padding:4px 0; box-shadow:0 4px 16px rgba(0,0,0,.35); }
+  .exp-drop-menu div { padding:8px 14px; cursor:pointer; font-size:13px; white-space:nowrap; }
+  .exp-drop-menu div:hover { background:var(--bg); }
+  .exp-drop.open .exp-drop-menu { display:block; }
+  table input[type=checkbox].row-chk { cursor:pointer; width:14px; height:14px; }
+  /* ── Print / PDF export ──────────────────────────────────────────────── */
+  @media print {
+    nav, .sidebar, #sidebar, header, .toolbar, .tabs, .settings-tabs, .pill-group,
+    button, select, input, .modal-overlay, .toast-container, .exp-drop { display:none !important; }
+    .page { display:none !important; }
+    .page.active { display:block !important; }
+    body { background:#fff !important; color:#000 !important; font-size:12px; }
+    .card { box-shadow:none !important; border:1px solid #ddd !important; page-break-inside:avoid; }
+    .pnl-pos { color:#006e2e !important; }
+    .pnl-neg { color:#c0392b !important; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { border:1px solid #ccc; padding:4px 7px; font-size:11px; }
+    th { background:#f0f0f0; }
+  }
 </style>
 </head>
 <body>
@@ -416,6 +437,14 @@
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <span id="bot-status-badge" class="badge active">● Active</span>
         <button class="btn danger" id="pause-btn" onclick="toggleBot()">⏸ Pause Bot</button>
+        <div class="exp-drop">
+          <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+          <div class="exp-drop-menu">
+            <div onmousedown="exportDash('csv')">&#128196; CSV / Excel</div>
+            <div onmousedown="exportDash('pdf')">&#128438; Print / PDF</div>
+            <div onmousedown="exportDashboardPage()" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128444; Export Page (PDF)</div>
+          </div>
+        </div>
         <button class="btn" onclick="refreshDashboard()">↻ Refresh</button>
       </div>
     </div>
@@ -540,6 +569,13 @@
             <option value="100">100</option>
             <option value="all">All</option>
           </select>
+          <div class="exp-drop">
+            <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+            <div class="exp-drop-menu">
+              <div onmousedown="exportDash('csv')">&#128196; CSV / Excel</div>
+              <div onmousedown="exportDash('pdf')">&#128438; Print / PDF</div>
+            </div>
+          </div>
         </div>
       </div>
       <div id="dash-pos-summary" style="display:none; margin-bottom:10px;"></div>
@@ -566,6 +602,13 @@
           <option value="500">500 / page</option>
           <option value="all">All</option>
         </select>
+        <div class="exp-drop">
+          <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+          <div class="exp-drop-menu">
+            <div onmousedown="exportPositions('csv')">&#128196; CSV / Excel</div>
+            <div onmousedown="exportPositions('pdf')">&#128438; Print / PDF</div>
+          </div>
+        </div>
         <button class="btn" onclick="loadPositions()">&#8635; Refresh</button>
         <button class="btn btn-danger" onclick="forceSellAll()">Force Sell All</button>
         <button class="btn btn-danger" style="background:#3a1a1a; border-color:#666;" onclick="cancelAll()">Cancel All (no price)</button>
@@ -613,6 +656,13 @@
         <option value="500">500 / page</option>
         <option value="all">All</option>
       </select>
+      <div class="exp-drop">
+        <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+        <div class="exp-drop-menu">
+          <div onmousedown="exportTrades('csv')">&#128196; CSV / Excel</div>
+          <div onmousedown="exportTrades('pdf')">&#128438; Print / PDF</div>
+        </div>
+      </div>
       <button class="btn" onclick="_tradeOffset=0;loadTrades()">↻ Refresh</button>
       <span id="trade-count" style="color:var(--muted); font-size:12px;"></span>
     </div>
@@ -633,6 +683,13 @@
           <option value="500">500 / page</option>
           <option value="all">All</option>
         </select>
+        <div class="exp-drop">
+          <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+          <div class="exp-drop-menu">
+            <div onmousedown="exportLeaderboard('csv')">&#128196; CSV / Excel</div>
+            <div onmousedown="exportLeaderboard('pdf')">&#128438; Print / PDF</div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="tabs">
@@ -732,7 +789,16 @@
         <div style="color:var(--muted);font-size:13px;">Saved to database — restart workers to apply. &nbsp;<a href="#" onclick="showPage('help');return false;">❓ Help &amp; FAQ</a></div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
-        <button id="btn-save-all" class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="btn-save-all" class="btn primary" onclick="saveAllConfig()" style="padding:10px 24px;font-size:14px;">💾 Save All Changes</button>
+          <div class="exp-drop">
+            <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+            <div class="exp-drop-menu">
+              <div onmousedown="exportSettings('csv')">&#128196; CSV / Excel</div>
+              <div onmousedown="exportSettings('pdf')">&#128438; Print / PDF</div>
+            </div>
+          </div>
+        </div>
         <div style="display:flex;gap:6px;align-items:center;">
           <span style="font-size:11px;color:var(--muted);white-space:nowrap;">Quick preset:</span>
           <button class="btn" onclick="fillPreset('volume')" style="font-size:12px;padding:5px 12px;" title="Signal 2, No filters, 20 positions, 30-min time exit">🚀 High Volume</button>
@@ -1289,7 +1355,14 @@
         </select>
         <input class="log-search" type="text" id="log-search" placeholder="&#128269; Filter…" oninput="filterLog(this.value)">
         <button class="btn" onclick="loadLog()" title="Refresh">&#8635;</button>
-        <button id="btn-log-download" class="btn" onclick="downloadLog()" title="Download full log">&#8595; DL</button>
+        <button id="btn-log-download" class="btn" onclick="downloadLog()" title="Download full log file">&#8595; DL</button>
+        <div class="exp-drop">
+          <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
+          <div class="exp-drop-menu">
+            <div onmousedown="exportLogVisible('csv')">&#128196; Visible → CSV</div>
+            <div onmousedown="exportLogVisible('pdf')">&#128438; Visible → Print</div>
+          </div>
+        </div>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;" title="Auto-refresh every 5 seconds">
           <input type="checkbox" id="log-auto" onchange="toggleAutoRefresh()">
           <span id="ar-dot-span" style="display:none;" class="ar-dot"></span>
@@ -1485,6 +1558,15 @@ let _lbPage       = 0;
 let _posLimit     = 100;
 let _posPage      = 0;
 let _dashRecentLimit = 10;
+// export: raw data caches
+var _tradesRaw     = [];
+var _dashTradesRaw = [];
+var _dashBuysRaw   = [];
+// export: per-table selection sets
+var _selTrades   = new Set();
+var _selPos      = new Set();
+var _selLb       = new Set();
+var _selDashT    = new Set();
 
 // ── In-page confirm dialog (no browser prompt) ─────────────────────────────
 function showConfirm(title, msg, okLabel) {
@@ -1950,7 +2032,8 @@ async function loadRecentTrades() {
   const r = await apiFetch('/api/trades?status_filter=closed&limit=' + lim + '&offset=0');
   if (!r) return;
   const d = await r.json();
-  document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades, false);
+  _dashTradesRaw = d.trades || [];
+  document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades, false, 'dash');
   var sub = document.getElementById('dash-recent-subtitle');
   if (sub) sub.textContent = lim >= 99999 ? 'All closed' : 'Last ' + lim + ' closed';
 }
@@ -1961,6 +2044,7 @@ async function loadRecentBuys() {
   const d = await r.json();
   const el   = document.getElementById('recent-trades-table');
   const rows = d.positions || [];
+  _dashBuysRaw = rows;
   if (!rows.length) { el.innerHTML = '<p style="color:var(--muted);padding:16px">No open positions.</p>'; return; }
   el.innerHTML = '<table><thead><tr>' +
     '<th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry Price</th>' +
@@ -2145,6 +2229,7 @@ function _buildPositionsTable(positions) {
   });
   const el = document.getElementById('positions-table');
   el.innerHTML = '<table><thead><tr>' +
+    '<th style="width:28px;padding:4px;"><input type="checkbox" title="Select all" onclick="_chkAll(\'pos\',this.checked)" style="cursor:pointer"></th>' +
     thSort('pos','sym','Symbol') + thSort('pos','mkt','Market') +
     thSort('pos','time','Entry Time') + '<th>Entry Price</th>' +
     '<th>Live Price</th><th>P&amp;L/Share</th><th>P&amp;L Total</th>' +
@@ -2154,6 +2239,7 @@ function _buildPositionsTable(positions) {
     positions.map(function(p) {
       var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       return '<tr id="pos-row-' + p.id + '">' +
+        '<td style="padding:4px;"><input type="checkbox" class="row-chk" data-id="' + p.id + '" onclick="_cht(' + p.id + ',\'pos\')" ' + (_selPos.has(p.id)?'checked':'') + '></td>' +
         '<td><strong>' + fmtSym(p.symbol, p.source) + '</strong></td>' +
         '<td>' + mktBadge(p.source) + '</td>' +
         '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
@@ -2368,12 +2454,14 @@ function mktBadge(source) {
   return '<span style="background:#0a2e18;color:#7ef0a0;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">IN</span>';
 }
 
-function buildTradeTable(trades, sortable) {
+function buildTradeTable(trades, sortable, ctx) {
   if (!trades.length) return '<p style="color:var(--muted);padding:16px">No trades found.</p>';
+  var sel = ctx === 'dash' ? _selDashT : _selTrades;
   var th = (sortable !== false)
     ? function(col, label) { return thSort('trades', col, label); }
     : function(col, label) { return '<th>' + label + '</th>'; };
   return '<table><thead><tr>' +
+    (ctx ? '<th style="width:28px;padding:4px;"><input type="checkbox" title="Select all" onclick="_chkAll(\'' + ctx + '\',this.checked)" style="cursor:pointer"></th>' : '') +
     '<th style="color:var(--muted)">#</th>' +
     th('sym', 'Symbol') + th('mkt', 'Market') +
     th('date', 'Buy Time') + th('entry', 'Entry Price') +
@@ -2387,6 +2475,7 @@ function buildTradeTable(trades, sortable) {
       var cls  = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
       var sign = pnl >= 0 ? '+' : '';
       return '<tr>' +
+        (ctx ? '<td style="padding:4px;"><input type="checkbox" class="row-chk" data-id="' + t.id + '" onclick="_cht(' + t.id + ',\'' + ctx + '\')" ' + (sel.has(t.id)?'checked':'') + '></td>' : '') +
         '<td style="color:var(--muted)">' + t.id + '</td>' +
         '<td><strong>' + fmtSym(t.symbol, t.source) + '</strong></td>' +
         '<td>' + mktBadge(t.source) + '</td>' +
@@ -2421,7 +2510,8 @@ async function loadTrades() {
   const r = await apiFetch(url);
   if (!r) return;
   const d = await r.json();
-  document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades, true);
+  _tradesRaw = d.trades || [];
+  document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades, true, 'trades');
   updateSortIcons('trades');
   document.getElementById('trade-count').textContent = `${d.total} total trades`;
 
@@ -2489,6 +2579,7 @@ function renderLeaderboard() {
   var pageRows = (_lbLimit >= 99999) ? rows : rows.slice(start, start + _lbLimit);
   var pages = Math.ceil(total / _lbLimit);
   el.innerHTML = '<table><thead><tr>' +
+    '<th style="width:28px;padding:4px;"><input type="checkbox" title="Select all" onclick="_chkAll(\'lb\',this.checked)" style="cursor:pointer"></th>' +
     thSort('lb','sym','Symbol') + thSort('lb','trades','Trades') +
     thSort('lb','wr','Win Rate') + thSort('lb','pnl','Total P&L') +
     thSort('lb','avg','Avg P&L') + thSort('lb','best','Best') + thSort('lb','worst','Worst') +
@@ -2496,6 +2587,7 @@ function renderLeaderboard() {
     pageRows.map(function(row) {
       var wr = row.win_rate || 0;
       return '<tr>' +
+        '<td style="padding:4px;"><input type="checkbox" class="row-chk" data-id="' + row.symbol + '" onclick="_cht(\'' + row.symbol + '\',\'lb\')" ' + (_selLb.has(row.symbol)?'checked':'') + '></td>' +
         '<td><strong>' + row.symbol + '</strong></td>' +
         '<td>' + row.trades + ' <span style="color:var(--muted);font-size:11px">(' + row.wins + 'W/' + row.losses + 'L)</span></td>' +
         '<td><div style="display:flex;align-items:center;gap:8px"><span>' + wr.toFixed(1) + '%</span>' +
@@ -4026,6 +4118,156 @@ async function testTelegram() {
   setInterval(checkUpdate, 1800000);
   setInterval(updateLiveIndicators, 30000);
 })();
+
+// ══════════════════════════════════════════════════════════════════════════
+// EXPORT UTILITIES
+// ══════════════════════════════════════════════════════════════════════════
+
+function _isoDate() { return new Date().toISOString().slice(0,10); }
+
+function _csvEsc(v) {
+  v = (v === null || v === undefined) ? '' : String(v);
+  return (v.includes(',') || v.includes('"') || v.includes('\n'))
+    ? '"' + v.replace(/"/g,'""') + '"' : v;
+}
+
+function downloadCSV(fname, headers, rows) {
+  var lines = [headers.map(_csvEsc).join(',')];
+  rows.forEach(function(r){ lines.push(r.map(_csvEsc).join(',')); });
+  var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+}
+
+function printTable(title, headers, rows) {
+  var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title>' +
+    '<style>body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:20px}' +
+    'h2{font-size:16px;margin:0 0 6px}.meta{font-size:11px;color:#888;margin-bottom:12px}' +
+    'table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:5px 8px;text-align:left;font-size:11px}' +
+    'th{background:#f0f0f0;font-weight:600}.pos{color:#006e2e}.neg{color:#c0392b}' +
+    '@media print{button{display:none}}</style>' +
+    '</head><body><h2>' + esc(title) + '</h2>' +
+    '<div class="meta">Exported ' + new Date().toLocaleString() + ' &nbsp;&middot;&nbsp; ' + rows.length + ' rows</div>' +
+    '<table><thead><tr>' + headers.map(function(h){return '<th>'+esc(h)+'</th>';}).join('') + '</tr></thead><tbody>' +
+    rows.map(function(r){
+      return '<tr>' + r.map(function(c){
+        var v = esc(String(c===null||c===undefined?'':c));
+        var cls = (typeof c === 'number' && c < 0) ? ' class="neg"' : (typeof c === 'number' && c > 0 ? ' class="pos"' : '');
+        return '<td'+cls+'>'+v+'</td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody></table>' +
+    '<br><button onclick="window.print()" style="padding:6px 16px;cursor:pointer;">Print / Save as PDF</button>' +
+    '<script>setTimeout(function(){window.print();},300);<\/script>' +
+    '</body></html>';
+  var w = window.open('','_blank','width=1000,height=700');
+  if (w){ w.document.write(html); w.document.close(); }
+}
+
+// Toggle export dropdown open/close
+function _expToggle(btn) {
+  var drop = btn.closest('.exp-drop');
+  document.querySelectorAll('.exp-drop.open').forEach(function(d){ if(d!==drop) d.classList.remove('open'); });
+  drop.classList.toggle('open');
+}
+document.addEventListener('click', function(e){
+  if (!e.target.closest('.exp-drop')) document.querySelectorAll('.exp-drop.open').forEach(function(d){ d.classList.remove('open'); });
+});
+
+// Checkbox toggle helpers
+function _cht(id, ctx) {
+  var s = ctx==='dash'?_selDashT : ctx==='lb'?_selLb : ctx==='pos'?_selPos : _selTrades;
+  if (s.has(id)) s.delete(id); else s.add(id);
+}
+function _chkAll(ctx, master) {
+  var tblId = ctx==='trades'?'trades-table' : ctx==='dash'?'recent-trades-table' : ctx==='lb'?'leaderboard-table' : 'positions-table';
+  var s = ctx==='dash'?_selDashT : ctx==='lb'?_selLb : ctx==='pos'?_selPos : _selTrades;
+  var el = document.getElementById(tblId);
+  if (!el) return;
+  el.querySelectorAll('.row-chk').forEach(function(cb){
+    cb.checked = master;
+    var id = ctx==='lb' ? cb.dataset.id : +cb.dataset.id;
+    if (master) s.add(id); else s.delete(id);
+  });
+}
+
+// ── Per-section export functions ──────────────────────────────────────────
+
+function exportTrades(fmt) {
+  var sel = _selTrades.size ? _tradesRaw.filter(function(t){return _selTrades.has(t.id);}) : _tradesRaw;
+  var H = ['#','Symbol','Market','Buy Time','Entry Price','Sell Time','Exit Price','P&L','P&L %','Reason','Status'];
+  var R = sel.map(function(t){return [t.id,t.symbol,t.source||'',t.entry_time||'',t.entry_price||0,t.exit_time||'',t.exit_price||'',t.pnl||0,t.pnl_pct||0,t.exit_reason||'',t.status||''];});
+  if (fmt==='csv') downloadCSV('trades_' + _isoDate() + '.csv', H, R);
+  else printTable('Trade History' + (_selTrades.size?' ('+_selTrades.size+' selected)':''), H, R);
+}
+
+function exportDashTrades(fmt) {
+  var sel = _selDashT.size ? _dashTradesRaw.filter(function(t){return _selDashT.has(t.id);}) : _dashTradesRaw;
+  var H = ['#','Symbol','Market','Buy Time','Entry Price','Sell Time','Exit Price','P&L','P&L %','Reason','Status'];
+  var R = sel.map(function(t){return [t.id,t.symbol,t.source||'',t.entry_time||'',t.entry_price||0,t.exit_time||'',t.exit_price||'',t.pnl||0,t.pnl_pct||0,t.exit_reason||'',t.status||''];});
+  if (fmt==='csv') downloadCSV('closed_trades_' + _isoDate() + '.csv', H, R);
+  else printTable('Closed Trades', H, R);
+}
+
+function exportDashBuys(fmt) {
+  var H = ['Symbol','Market','Entry Time','Entry Price','Qty','Capital Deployed'];
+  var R = _dashBuysRaw.map(function(p){return [p.symbol,p.source||'',p.entry_time||'',p.entry_price||0,p.quantity||0,(p.capital_used||0).toFixed(2)];});
+  if (fmt==='csv') downloadCSV('open_positions_' + _isoDate() + '.csv', H, R);
+  else printTable('Open Positions (Dashboard)', H, R);
+}
+
+function exportDash(fmt) {
+  if (typeof _dashView !== 'undefined' && _dashView === 'buys') exportDashBuys(fmt);
+  else exportDashTrades(fmt);
+}
+
+function exportPositions(fmt) {
+  var all = _posCache ? _posCache.positions : [];
+  var sel = _selPos.size ? all.filter(function(p){return _selPos.has(p.id);}) : all;
+  var H = ['Symbol','Market','Entry Time','Entry Price','Qty','Capital','Stop Loss','Target'];
+  var R = sel.map(function(p){return [p.symbol,p.source||'',p.entry_time||'',(p.entry_price||0).toFixed(4),p.quantity||0,(p.capital_used||0).toFixed(2),(p.stop_loss||0).toFixed(4),(p.target||0).toFixed(4)];});
+  if (fmt==='csv') downloadCSV('positions_' + _isoDate() + '.csv', H, R);
+  else printTable('Open Positions' + (_selPos.size?' ('+_selPos.size+' selected)':''), H, R);
+}
+
+function exportLeaderboard(fmt) {
+  var sel = _selLb.size ? _lbData.filter(function(r){return _selLb.has(r.symbol);}) : _lbData;
+  var H = ['Symbol','Trades','Wins','Losses','Win Rate %','Total P&L','Avg P&L','Best Trade','Worst Trade'];
+  var R = sel.map(function(r){return [r.symbol,r.trades,r.wins,r.losses,(r.win_rate||0).toFixed(1),(r.total_pnl||0).toFixed(2),(r.avg_pnl||0).toFixed(2),(r.best||0).toFixed(2),(r.worst||0).toFixed(2)];});
+  if (fmt==='csv') downloadCSV('leaderboard_' + _isoDate() + '.csv', H, R);
+  else printTable('Symbol Leaderboard' + (_selLb.size?' ('+_selLb.size+' selected)':''), H, R);
+}
+
+function exportSettings(fmt) {
+  if (!_cfgOriginal || !Object.keys(_cfgOriginal).length) { toast('Load settings first'); return; }
+  var H = ['Key','Label','Value'];
+  var R = Object.keys(_cfgOriginal).map(function(k){return [k,_CONFIG_LABELS[k]||k,_cfgOriginal[k]];});
+  if (fmt==='csv') downloadCSV('settings_' + _isoDate() + '.csv', H, R);
+  else printTable('Bot Settings', H, R);
+}
+
+function exportLogVisible(fmt) {
+  var inner = document.getElementById('log-lines-inner');
+  if (!inner) { toast('Load a log first'); return; }
+  var lines = Array.from(inner.querySelectorAll('.log-line')).filter(function(l){return l.style.display!=='none';}).map(function(l){return (l.textContent||l.innerText||'').trim();});
+  if (!lines.length) lines = [(inner.textContent||inner.innerText||'').trim()];
+  if (fmt==='csv') {
+    downloadCSV('log_' + (_logMarket||'') + '_' + _isoDate() + '.csv', ['#','Line'], lines.map(function(l,i){return [i+1,l];}));
+  } else {
+    var w = window.open('','_blank','width=1000,height=700');
+    if (w) {
+      w.document.write('<html><head><title>Log Export</title><style>pre{font-family:monospace;font-size:11px;white-space:pre-wrap;line-height:1.5}button{margin-bottom:10px;padding:6px 16px;cursor:pointer}</style></head><body>');
+      w.document.write('<button onclick="window.print()">Print / Save as PDF</button><pre>' + lines.map(function(l){return l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}).join('\n') + '</pre>');
+      w.document.write('<script>setTimeout(function(){window.print();},300);<\/script></body></html>');
+      w.document.close();
+    }
+  }
+}
+
+function exportDashboardPage() { window.print(); }
 </script>
 </body>
 </html>
