@@ -4256,6 +4256,8 @@ function _expToggle(btn) {
 document.addEventListener('click', function(e) {
   if (!_expMenuEl) return;
   if (_expMenuEl.contains(e.target)) return;
+  // Don't close when clicking the toggle button itself — _expToggle handles that
+  if (e.target.closest('.exp-drop')) return;
   _expMenuEl.remove();
   _expMenuEl = null;
 });
