@@ -51,6 +51,20 @@ def send(message):
 
 _MAX_TG = 4000  # Telegram hard limit is 4096; leave headroom for safety
 
+_WA_MARKET_KEY = {'india': 'WHATSAPP_ALERT_INDIA', 'us': 'WHATSAPP_ALERT_US', 'crypto': 'WHATSAPP_ALERT_CRYPTO'}
+
+def _wa(type_key, msg, market=None):
+    """Mirror alert to WhatsApp if the corresponding WA toggle is enabled."""
+    if not _alert_enabled(type_key):
+        return
+    if market and not _alert_enabled(_WA_MARKET_KEY.get(market, '')):
+        return
+    try:
+        from reporting.whatsapp_alerts import send as _wa_send
+        _wa_send(msg)
+    except Exception:
+        pass
+
 def _send_chunked(text):
     """Send text in ≤4000-char chunks split on newline boundaries."""
     if len(text) <= _MAX_TG:
@@ -101,6 +115,7 @@ def send_buy_alert(symbol, entry, stop_loss, target, capital_used, quantity,
         f"Confidence:   {confidence:.0f}%\n"
         f"Reason:       {reason_s}"
     )
+    _wa('WHATSAPP_ALERT_BUY', msg, market)
     return send(msg)
 
 
@@ -120,6 +135,7 @@ def send_hold_alert(symbol, price, stop_loss, reason, balance):
         f"Balance:   ₹{balance:.2f}\n"
         f"<i>Bot will keep monitoring — will exit if conditions worsen</i>"
     )
+    _wa('WHATSAPP_ALERT_SELL', msg)
     return send(msg)
 
 def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, reason,
@@ -160,6 +176,7 @@ def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, 
         f"{day_line}"
         f"Balance:  ₹{balance:.2f}"
     )
+    _wa('WHATSAPP_ALERT_SELL', msg, market)
     return send(msg)
 
 def send_reload_alert(old_balance, new_balance, reload_count, total_invested, amount=None):
@@ -175,6 +192,7 @@ def send_reload_alert(old_balance, new_balance, reload_count, total_invested, am
         f"{'─'*28}\n"
         f"Bot continues learning and trading 🤖"
     )
+    _wa('WHATSAPP_ALERT_SELL', msg)
     return send(msg)
 
 def send_daily_summary(date, trades, wins, losses, day_pnl, balance,
@@ -208,7 +226,9 @@ def send_daily_summary(date, trades, wins, losses, day_pnl, balance,
                 f"<b>{s}₹{t['pnl']:.2f}</b> ({s}{t['pnl_pct']:.2f}%)"
             )
 
-    return _send_chunked("\n".join(lines))
+    full = "\n".join(lines)
+    _wa('WHATSAPP_ALERT_DAILY', full)
+    return _send_chunked(full)
 
 
 def send_us_daily_summary(date, trades, wins, losses, day_pnl, balance,
@@ -242,7 +262,9 @@ def send_us_daily_summary(date, trades, wins, losses, day_pnl, balance,
                 f"<b>{s}${t['pnl']:.2f}</b> ({s}{t['pnl_pct']:.2f}%)"
             )
 
-    return _send_chunked("\n".join(lines))
+    full = "\n".join(lines)
+    _wa('WHATSAPP_ALERT_DAILY', full)
+    return _send_chunked(full)
 
 
 def send_crypto_daily_summary(date, trades, wins, losses, day_pnl, balance,
@@ -276,7 +298,9 @@ def send_crypto_daily_summary(date, trades, wins, losses, day_pnl, balance,
                 f"<b>{s}${t['pnl']:.4f}</b> ({s}{t['pnl_pct']:.2f}%)"
             )
 
-    return _send_chunked("\n".join(lines))
+    full = "\n".join(lines)
+    _wa('WHATSAPP_ALERT_DAILY', full)
+    return _send_chunked(full)
 
 
 def send_combined_summary(date, india_pnl, india_bal, india_trades,
@@ -323,7 +347,9 @@ def send_combined_summary(date, india_pnl, india_bal, india_trades,
         ]
     lines.append(f"🏆 Better today: <b>{winner}</b>")
 
-    return send("\n".join(lines))
+    full = "\n".join(lines)
+    _wa('WHATSAPP_ALERT_DAILY', full)
+    return send(full)
 
 
 if __name__ == "__main__":

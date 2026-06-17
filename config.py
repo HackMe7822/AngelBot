@@ -127,8 +127,26 @@ TELEGRAM_ALERT_BURST     = os.getenv("TELEGRAM_ALERT_BURST",     "true").lower()
 TELEGRAM_ALERT_INDIA     = os.getenv("TELEGRAM_ALERT_INDIA",     "true").lower() == "true"
 TELEGRAM_ALERT_US        = os.getenv("TELEGRAM_ALERT_US",        "true").lower() == "true"
 TELEGRAM_ALERT_CRYPTO    = os.getenv("TELEGRAM_ALERT_CRYPTO",    "true").lower() == "true"
-TELEGRAM_MIN_BUY_CAPITAL = float(os.getenv("TELEGRAM_MIN_BUY_CAPITAL", "0"))   # skip buy alerts below this capital deployed
-TELEGRAM_MIN_PNL_ALERT   = float(os.getenv("TELEGRAM_MIN_PNL_ALERT",   "0"))   # skip sell alerts below this |P&L| value
+TELEGRAM_MIN_BUY_CAPITAL  = float(os.getenv("TELEGRAM_MIN_BUY_CAPITAL",  "0"))
+TELEGRAM_MIN_PNL_ALERT    = float(os.getenv("TELEGRAM_MIN_PNL_ALERT",    "0"))
+TELEGRAM_ALERT_TUNNEL_URL = os.getenv("TELEGRAM_ALERT_TUNNEL_URL", "true").lower() == "true"
+
+# ── WhatsApp alerts (CallMeBot — free, save +34 644 82 13 90 and send "I allow callmebot to send me messages") ──
+WHATSAPP_PHONE     = os.getenv("WHATSAPP_PHONE",     "")
+WHATSAPP_API_KEY   = os.getenv("WHATSAPP_API_KEY",   "")
+WHATSAPP_ALERTS_ENABLED   = os.getenv("WHATSAPP_ALERTS_ENABLED",   "false").lower() == "true"
+WHATSAPP_ALERT_BUY        = os.getenv("WHATSAPP_ALERT_BUY",        "true").lower() == "true"
+WHATSAPP_ALERT_SELL       = os.getenv("WHATSAPP_ALERT_SELL",       "true").lower() == "true"
+WHATSAPP_ALERT_DAILY      = os.getenv("WHATSAPP_ALERT_DAILY",      "true").lower() == "true"
+WHATSAPP_ALERT_ERRORS     = os.getenv("WHATSAPP_ALERT_ERRORS",     "true").lower() == "true"
+WHATSAPP_ALERT_BOT_START  = os.getenv("WHATSAPP_ALERT_BOT_START",  "true").lower() == "true"
+WHATSAPP_ALERT_BURST      = os.getenv("WHATSAPP_ALERT_BURST",      "true").lower() == "true"
+WHATSAPP_ALERT_INDIA      = os.getenv("WHATSAPP_ALERT_INDIA",      "true").lower() == "true"
+WHATSAPP_ALERT_US         = os.getenv("WHATSAPP_ALERT_US",         "true").lower() == "true"
+WHATSAPP_ALERT_CRYPTO     = os.getenv("WHATSAPP_ALERT_CRYPTO",     "true").lower() == "true"
+WHATSAPP_ALERT_TUNNEL_URL = os.getenv("WHATSAPP_ALERT_TUNNEL_URL", "true").lower() == "true"
+WHATSAPP_MIN_BUY_CAPITAL  = float(os.getenv("WHATSAPP_MIN_BUY_CAPITAL", "0"))
+WHATSAPP_MIN_PNL_ALERT    = float(os.getenv("WHATSAPP_MIN_PNL_ALERT",   "0"))
 
 # ── Portal UI refresh intervals (seconds) ────────────────────────────────────
 PORTAL_DASH_REFRESH    = int(os.getenv("PORTAL_DASH_REFRESH",    "30"))

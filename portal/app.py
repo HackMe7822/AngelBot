@@ -8,7 +8,7 @@ Default admin credentials:  admin / AngelBot@1234
 Change via PORTAL_PASS in .env (sets initial admin password on first run)
 """
 
-import os, sys, json, subprocess, hashlib, hmac, secrets
+import os, sys, json, subprocess, hashlib, hmac, secrets, asyncio, re as _re
 from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -80,10 +80,48 @@ def _sync_db_to_env():
         print(f"[Portal] DB→.env sync: {e}")
 
 
+_last_tunnel_url_notified: str = ""
+
 @app.on_event("startup")
 async def _on_startup():
     _ensure_settings_table()
     _sync_db_to_env()
+    asyncio.create_task(_watch_tunnel_url())
+
+async def _watch_tunnel_url():
+    """Background task: detect when cloudflared gets a new URL and notify Telegram + WhatsApp."""
+    global _last_tunnel_url_notified
+    log_path = _BOT_DIR / "logs" / "AngelBot-Tunnel.log"
+    pattern  = _re.compile(r'https://[a-z0-9-]+\.trycloudflare\.com')
+    while True:
+        await asyncio.sleep(12)
+        try:
+            if not log_path.exists():
+                continue
+            text = log_path.read_text(encoding='utf-8', errors='ignore')
+            matches = pattern.findall(text)
+            if not matches:
+                continue
+            latest = matches[-1]
+            if latest == _last_tunnel_url_notified:
+                continue
+            _last_tunnel_url_notified = latest
+            msg = f"🌐 <b>AngelBot Tunnel URL updated</b>\n{latest}\n<i>Save this link — it changes on every restart.</i>"
+            try:
+                from reporting.telegram_alerts import send as _tg, _alert_enabled as _ae
+                if _ae('TELEGRAM_ALERTS_ENABLED') and _ae('TELEGRAM_ALERT_TUNNEL_URL'):
+                    _tg(msg)
+            except Exception:
+                pass
+            try:
+                from reporting.telegram_alerts import _alert_enabled as _ae2
+                if _ae2('WHATSAPP_ALERT_TUNNEL_URL'):
+                    from reporting.whatsapp_alerts import send as _wa
+                    _wa(msg)
+            except Exception:
+                pass
+        except Exception:
+            pass
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -603,7 +641,12 @@ def get_config(user: str = Depends(require_auth)):
         'TELEGRAM_ALERT_DAILY','TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START',
         'TELEGRAM_ALERT_BURST',
         'TELEGRAM_ALERT_INDIA','TELEGRAM_ALERT_US','TELEGRAM_ALERT_CRYPTO',
-        'TELEGRAM_MIN_BUY_CAPITAL','TELEGRAM_MIN_PNL_ALERT',
+        'TELEGRAM_MIN_BUY_CAPITAL','TELEGRAM_MIN_PNL_ALERT','TELEGRAM_ALERT_TUNNEL_URL',
+        'WHATSAPP_ALERTS_ENABLED','WHATSAPP_ALERT_BUY','WHATSAPP_ALERT_SELL',
+        'WHATSAPP_ALERT_DAILY','WHATSAPP_ALERT_ERRORS','WHATSAPP_ALERT_BOT_START',
+        'WHATSAPP_ALERT_BURST',
+        'WHATSAPP_ALERT_INDIA','WHATSAPP_ALERT_US','WHATSAPP_ALERT_CRYPTO',
+        'WHATSAPP_MIN_BUY_CAPITAL','WHATSAPP_MIN_PNL_ALERT','WHATSAPP_ALERT_TUNNEL_URL',
         'PORTAL_DASH_REFRESH','PORTAL_POS_REFRESH','PORTAL_LB_REFRESH',
         'PORTAL_LOG_REFRESH','PORTAL_MONITOR_REFRESH',
     ]
@@ -686,6 +729,28 @@ def test_telegram(user: str = Depends(require_auth)):
         return {"ok": ok}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/whatsapp/test")
+def test_whatsapp(user: str = Depends(require_auth)):
+    try:
+        from reporting.whatsapp_alerts import send
+        ok = send("🤖 *AngelBot WhatsApp Test*\nConnection working correctly.")
+        return {"ok": ok}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/tunnel/url")
+def get_tunnel_url(user: str = Depends(require_auth)):
+    """Return the current Cloudflare Tunnel URL parsed from the tunnel log."""
+    log = _BOT_DIR / "logs" / "AngelBot-Tunnel.log"
+    svc_status = _sc_status("AngelBot-Tunnel")
+    if not log.exists():
+        return {"url": None, "status": svc_status}
+    text = log.read_text(encoding='utf-8', errors='ignore')
+    matches = _re.findall(r'https://[a-z0-9-]+\.trycloudflare\.com', text)
+    return {"url": matches[-1] if matches else None, "status": svc_status}
 
 
 # ── User preferences (filter defaults, UI state) — stored in DB ──────────────
@@ -962,7 +1027,7 @@ def get_log_live(market: str, lines: int = 200, user: str = Depends(require_auth
 
 
 # ── Services ──────────────────────────────────────────────────────────────────
-_SERVICE_NAMES = ['AngelBot-India', 'AngelBot-US', 'AngelBot-Crypto', 'AngelBot-Portal']
+_SERVICE_NAMES = ['AngelBot-India', 'AngelBot-US', 'AngelBot-Crypto', 'AngelBot-Portal', 'AngelBot-Tunnel']
 
 def _sc_status(name: str) -> str:
     """Query a Windows service status via sc.exe."""
