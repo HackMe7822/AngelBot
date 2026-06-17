@@ -443,6 +443,7 @@
             <div onmousedown="exportDash('csv')">&#128196; Download CSV</div>
             <div onmousedown="exportDash('pdf')">&#128438; Print / PDF</div>
             <div onmousedown="exportDashboardPage()" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128444; Export Page (PDF)</div>
+            <div onmousedown="document.getElementById('report-overlay').style.display='flex'">&#128202; Generate Report…</div>
           </div>
         </div>
         <button class="btn" onclick="refreshDashboard()">↻ Refresh</button>
@@ -574,6 +575,7 @@
             <div class="exp-drop-menu">
               <div onmousedown="exportDash('csv')">&#128196; Download CSV</div>
               <div onmousedown="exportDash('pdf')">&#128438; Print / PDF</div>
+              <div onmousedown="document.getElementById('report-overlay').style.display='flex'" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128202; Generate Report…</div>
             </div>
           </div>
         </div>
@@ -607,6 +609,7 @@
           <div class="exp-drop-menu">
             <div onmousedown="exportPositions('csv')">&#128196; Download CSV</div>
             <div onmousedown="exportPositions('pdf')">&#128438; Print / PDF</div>
+            <div onmousedown="document.getElementById('report-overlay').style.display='flex'" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128202; Generate Report…</div>
           </div>
         </div>
         <button class="btn" onclick="loadPositions()">&#8635; Refresh</button>
@@ -661,6 +664,7 @@
         <div class="exp-drop-menu">
           <div onmousedown="exportTrades('csv')">&#128196; Download CSV</div>
           <div onmousedown="exportTrades('pdf')">&#128438; Print / PDF</div>
+          <div onmousedown="document.getElementById('report-overlay').style.display='flex'" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128202; Generate Report…</div>
         </div>
       </div>
       <button class="btn" onclick="_tradeOffset=0;loadTrades()">↻ Refresh</button>
@@ -688,6 +692,7 @@
           <div class="exp-drop-menu">
             <div onmousedown="exportLeaderboard('csv')">&#128196; Download CSV</div>
             <div onmousedown="exportLeaderboard('pdf')">&#128438; Print / PDF</div>
+            <div onmousedown="document.getElementById('report-overlay').style.display='flex'" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128202; Generate Report…</div>
           </div>
         </div>
       </div>
@@ -1530,6 +1535,54 @@
     <div id="update-steps" style="display:grid; gap:10px; margin-bottom:20px;"></div>
     <div id="update-reconnecting" style="display:none; color:var(--muted); font-size:13px; text-align:center; padding:8px;">
       <span id="update-reconnect-msg">Portal restarting… reconnecting</span>
+    </div>
+  </div>
+</div>
+
+<!-- Report Generator Modal -->
+<div id="report-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;align-items:center;justify-content:center;">
+  <div class="card" style="width:420px;padding:28px;box-shadow:0 8px 40px rgba(0,0,0,.4);">
+    <h3 style="font-size:16px;font-weight:600;margin-bottom:18px;">Generate Analysis Report</h3>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Market</label>
+        <select id="rpt-market" style="width:100%;">
+          <option value="">All Markets</option>
+          <option value="india">India (NSE)</option>
+          <option value="us">US (Alpaca)</option>
+          <option value="crypto">Crypto (Binance)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Time Range</label>
+        <select id="rpt-range" style="width:100%;" onchange="document.getElementById('rpt-custom-wrap').style.display=this.value==='custom'?'flex':'none'">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="week">Last 7 Days</option>
+          <option value="month">Last 30 Days</option>
+          <option value="all">All Time</option>
+          <option value="custom">Custom Range…</option>
+        </select>
+      </div>
+      <div id="rpt-custom-wrap" style="display:none;gap:8px;align-items:center;">
+        <input type="date" id="rpt-from" style="flex:1;">
+        <span style="color:var(--muted);">to</span>
+        <input type="date" id="rpt-to" style="flex:1;">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Include in Report</label>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-summary" checked> Performance Summary</label>
+          <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-exits" checked> Exit Reason Breakdown</label>
+          <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-symbols" checked> Top / Bottom Symbols</label>
+          <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-daily" checked> Daily P&amp;L Breakdown</label>
+          <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-trades"> Full Trade List</label>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn" onclick="document.getElementById('report-overlay').style.display='none'">Cancel</button>
+      <button class="btn primary" onclick="generateReport()">Generate Report</button>
     </div>
   </div>
 </div>
@@ -4298,6 +4351,314 @@ function exportLogVisible(fmt) {
 }
 
 function exportDashboardPage() { window.print(); }
+
+// ── CSV Summary header builder ─────────────────────────────────────────────
+function _tradeSummaryRows(trades) {
+  if (!trades || !trades.length) return [];
+  var closed = trades.filter(function(t){ return t.status === 'closed'; });
+  var wins   = closed.filter(function(t){ return (t.pnl||0) > 0; });
+  var losses = closed.filter(function(t){ return (t.pnl||0) < 0; });
+  var totalPnl  = closed.reduce(function(s,t){ return s + (t.pnl||0); }, 0);
+  var totalWin  = wins.reduce(function(s,t){ return s + (t.pnl||0); }, 0);
+  var totalLoss = losses.reduce(function(s,t){ return s + (t.pnl||0); }, 0);
+  var avgPnl    = closed.length ? totalPnl / closed.length : 0;
+  var winRate   = closed.length ? (wins.length / closed.length * 100) : 0;
+  var pnls      = closed.map(function(t){ return t.pnl||0; });
+  var best      = pnls.length ? Math.max.apply(null, pnls) : 0;
+  var worst     = pnls.length ? Math.min.apply(null, pnls) : 0;
+  var exits     = {};
+  trades.forEach(function(t){ var r = (t.exit_reason||'unknown').split('—')[0].trim(); exits[r] = (exits[r]||0) + 1; });
+  var topExit   = Object.keys(exits).sort(function(a,b){ return exits[b]-exits[a]; })[0] || '—';
+  return [
+    ['TRADE SUMMARY',''],
+    ['Generated', new Date().toLocaleString()],
+    ['Total Trades', trades.length],
+    ['Closed Trades', closed.length],
+    ['Open Trades', trades.length - closed.length],
+    ['Wins', wins.length],
+    ['Losses', losses.length],
+    ['Win Rate', winRate.toFixed(1) + '%'],
+    ['Total P&L', totalPnl.toFixed(2)],
+    ['Total Profit (wins)', totalWin.toFixed(2)],
+    ['Total Loss (losses)', totalLoss.toFixed(2)],
+    ['Avg P&L per trade', avgPnl.toFixed(2)],
+    ['Best Trade', best.toFixed(2)],
+    ['Worst Trade', worst.toFixed(2)],
+    ['Most Common Exit', topExit + ' (' + (exits[topExit]||0) + ' times)'],
+    ['',''],
+  ];
+}
+
+// ── Report Generator ──────────────────────────────────────────────────────
+async function generateReport() {
+  var market  = document.getElementById('rpt-market').value;
+  var range   = document.getElementById('rpt-range').value;
+  var fromDt  = document.getElementById('rpt-from').value;
+  var toDt    = document.getElementById('rpt-to').value;
+  var incSum  = document.getElementById('rpt-inc-summary').checked;
+  var incExits= document.getElementById('rpt-inc-exits').checked;
+  var incSym  = document.getElementById('rpt-inc-symbols').checked;
+  var incDaily= document.getElementById('rpt-inc-daily').checked;
+  var incList = document.getElementById('rpt-inc-trades').checked;
+
+  document.getElementById('report-overlay').style.display = 'none';
+  toast('Generating report…', 8000);
+
+  // Build API URL
+  var url = '/api/trades?limit=99999&offset=0&status_filter=closed';
+  if (market)                 url += '&market=' + market;
+  if (range && range !== 'custom') url += '&date_filter=' + range;
+  if (range === 'custom' && fromDt) url += '&date_from=' + fromDt;
+  if (range === 'custom' && toDt)   url += '&date_to='   + toDt;
+
+  var lbUrl = '/api/stats/leaderboard' + (market ? '?market=' + market : '');
+
+  var [tradeRes, lbRes] = await Promise.all([apiFetch(url), apiFetch(lbUrl)]);
+  if (!tradeRes || !lbRes) { toast('Failed to load report data'); return; }
+  var tradeData = await tradeRes.json();
+  var lbData    = await lbRes.json();
+
+  var trades  = (tradeData.trades || []).filter(function(t){ return t.status === 'closed'; });
+  var symbols = (lbData.leaderboard || []);
+
+  if (!trades.length) { toast('No closed trades found for selected period'); return; }
+
+  // ── Compute stats ──────────────────────────────────────────────────────
+  var wins   = trades.filter(function(t){ return (t.pnl||0) > 0; });
+  var losses = trades.filter(function(t){ return (t.pnl||0) < 0; });
+  var totalPnl  = trades.reduce(function(s,t){ return s+(t.pnl||0); }, 0);
+  var totalWin  = wins.reduce(function(s,t){ return s+(t.pnl||0); }, 0);
+  var totalLoss = losses.reduce(function(s,t){ return s+(t.pnl||0); }, 0);
+  var winRate   = (wins.length / trades.length * 100);
+  var avgPnl    = totalPnl / trades.length;
+  var pnls      = trades.map(function(t){ return t.pnl||0; });
+  var best      = Math.max.apply(null, pnls);
+  var worst     = Math.min.apply(null, pnls);
+  var profitFactor = totalLoss !== 0 ? Math.abs(totalWin / totalLoss) : 999;
+
+  // Exit reason breakdown
+  var exitMap = {};
+  trades.forEach(function(t){
+    var r = (t.exit_reason||'unknown').split('—')[0].split('–')[0].trim();
+    if (!exitMap[r]) exitMap[r] = {count:0, pnl:0, wins:0};
+    exitMap[r].count++;
+    exitMap[r].pnl += (t.pnl||0);
+    if ((t.pnl||0) > 0) exitMap[r].wins++;
+  });
+
+  // Market breakdown
+  var mktMap = {};
+  trades.forEach(function(t){
+    var m = t.source || 'unknown';
+    if (!mktMap[m]) mktMap[m] = {count:0, pnl:0, wins:0};
+    mktMap[m].count++;
+    mktMap[m].pnl += (t.pnl||0);
+    if ((t.pnl||0) > 0) mktMap[m].wins++;
+  });
+
+  // Daily breakdown
+  var dayMap = {};
+  trades.forEach(function(t){
+    var d = (t.entry_time||'').slice(0,10);
+    if (!d) return;
+    if (!dayMap[d]) dayMap[d] = {count:0, pnl:0, wins:0, losses:0};
+    dayMap[d].count++;
+    dayMap[d].pnl += (t.pnl||0);
+    if ((t.pnl||0) > 0) dayMap[d].wins++; else dayMap[d].losses++;
+  });
+  var days = Object.keys(dayMap).sort();
+
+  // Top/bottom symbols
+  var topSym  = symbols.slice().sort(function(a,b){ return b.total_pnl-a.total_pnl; }).slice(0,10);
+  var botSym  = symbols.slice().sort(function(a,b){ return a.total_pnl-b.total_pnl; }).slice(0,10);
+
+  // ── Build HTML report ──────────────────────────────────────────────────
+  var e = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var pnlStyle = function(v){ return v >= 0 ? 'color:#006e2e;font-weight:600' : 'color:#c0392b;font-weight:600'; };
+  var pnlSign  = function(v){ return (v >= 0 ? '+' : '') + v.toFixed(2); };
+  var mktLabel = {'india_paper':'India (NSE)','us_paper':'US (Alpaca)','crypto_paper':'Crypto'};
+
+  var rangeLabel = {'today':'Today','yesterday':'Yesterday','week':'Last 7 Days','month':'Last 30 Days','all':'All Time','custom':'Custom'};
+  var reportTitle = 'AngelBot Report — ' + (market ? (mktLabel[market+'_paper']||market) : 'All Markets') + ' — ' + (rangeLabel[range]||range);
+
+  var css = [
+    'body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:24px;background:#fff}',
+    'h1{font-size:20px;margin:0 0 4px}',
+    'h2{font-size:15px;font-weight:600;margin:24px 0 10px;padding-bottom:4px;border-bottom:2px solid #e0e0e0}',
+    '.meta{font-size:11px;color:#888;margin-bottom:20px}',
+    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:8px}',
+    '.kpi{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:8px;padding:14px}',
+    '.kpi-val{font-size:22px;font-weight:700;margin:4px 0 2px}',
+    '.kpi-label{font-size:11px;color:#888}',
+    'table{border-collapse:collapse;width:100%;margin-bottom:8px}',
+    'th,td{border:1px solid #ddd;padding:6px 10px;font-size:12px;text-align:left}',
+    'th{background:#f0f0f0;font-weight:600}',
+    'tr:nth-child(even){background:#fafafa}',
+    '.bar{display:inline-block;height:10px;background:#3b82f6;border-radius:3px;vertical-align:middle}',
+    '.pnl-pos{color:#006e2e;font-weight:600}.pnl-neg{color:#c0392b;font-weight:600}',
+    '.day-bar{display:inline-block;height:14px;min-width:3px;vertical-align:middle;border-radius:2px}',
+    'button{padding:7px 18px;border:1px solid #ccc;border-radius:5px;cursor:pointer;font-size:13px;margin-right:8px;margin-bottom:20px}',
+    '@media print{button{display:none}}'
+  ].join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + e(reportTitle) + '</title><style>' + css + '</style></head><body>';
+  html += '<button onclick="window.print()">&#128438; Print / Save PDF</button>';
+  html += '<button onclick="window.close()">Close</button>';
+  html += '<h1>' + e(reportTitle) + '</h1>';
+  html += '<div class="meta">Generated ' + new Date().toLocaleString() + ' &nbsp;&middot;&nbsp; ' + trades.length + ' closed trades analysed</div>';
+
+  // ── Summary KPIs ──────────────────────────────────────────────────────
+  if (incSum) {
+    html += '<h2>Performance Summary</h2><div class="grid">';
+    var kpis = [
+      ['Total Trades', trades.length, ''],
+      ['Win Rate', winRate.toFixed(1) + '%', winRate >= 50 ? '#006e2e' : '#c0392b'],
+      ['Total P&L', pnlSign(totalPnl), totalPnl >= 0 ? '#006e2e' : '#c0392b'],
+      ['Total Profit', '+' + totalWin.toFixed(2), '#006e2e'],
+      ['Total Loss', totalLoss.toFixed(2), '#c0392b'],
+      ['Avg P&L / Trade', pnlSign(avgPnl), avgPnl >= 0 ? '#006e2e' : '#c0392b'],
+      ['Best Trade', '+' + best.toFixed(2), '#006e2e'],
+      ['Worst Trade', worst.toFixed(2), '#c0392b'],
+      ['Wins', wins.length, '#006e2e'],
+      ['Losses', losses.length, '#c0392b'],
+      ['Profit Factor', profitFactor > 99 ? '∞' : profitFactor.toFixed(2), profitFactor >= 1 ? '#006e2e' : '#c0392b'],
+    ];
+    kpis.forEach(function(k){
+      html += '<div class="kpi"><div class="kpi-label">' + e(k[0]) + '</div>';
+      html += '<div class="kpi-val" style="color:' + (k[2]||'#222') + '">' + e(String(k[1])) + '</div></div>';
+    });
+    html += '</div>';
+
+    // Market breakdown (if all markets)
+    if (Object.keys(mktMap).length > 1) {
+      html += '<h2>Market Breakdown</h2><table><thead><tr><th>Market</th><th>Trades</th><th>Wins</th><th>Win Rate</th><th>Total P&L</th></tr></thead><tbody>';
+      Object.keys(mktMap).forEach(function(m){
+        var mv = mktMap[m];
+        var wr = (mv.wins/mv.count*100).toFixed(1);
+        html += '<tr><td>' + e(mktLabel[m]||m) + '</td><td>' + mv.count + '</td><td>' + mv.wins + '</td>';
+        html += '<td style="' + pnlStyle(parseFloat(wr)-50) + '">' + wr + '%</td>';
+        html += '<td style="' + pnlStyle(mv.pnl) + '">' + pnlSign(mv.pnl) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+  }
+
+  // ── Exit reason breakdown ──────────────────────────────────────────────
+  if (incExits) {
+    html += '<h2>Exit Reason Breakdown</h2><table><thead><tr><th>Exit Reason</th><th>Count</th><th>%</th><th>Wins</th><th>Win Rate</th><th>Total P&L</th></tr></thead><tbody>';
+    Object.keys(exitMap).sort(function(a,b){ return exitMap[b].count - exitMap[a].count; }).forEach(function(r){
+      var ev = exitMap[r];
+      var pct = (ev.count / trades.length * 100).toFixed(1);
+      var wr  = (ev.wins / ev.count * 100).toFixed(1);
+      html += '<tr><td>' + e(r) + '</td><td>' + ev.count + '</td>';
+      html += '<td><span class="bar" style="width:' + pct + 'px"></span> ' + pct + '%</td>';
+      html += '<td>' + ev.wins + '</td>';
+      html += '<td style="' + pnlStyle(parseFloat(wr)-50) + '">' + wr + '%</td>';
+      html += '<td style="' + pnlStyle(ev.pnl) + '">' + pnlSign(ev.pnl) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // ── Top / Bottom symbols ──────────────────────────────────────────────
+  if (incSym && symbols.length) {
+    html += '<h2>Top 10 Symbols (by P&amp;L)</h2><table><thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead><tbody>';
+    topSym.forEach(function(s){
+      html += '<tr><td><strong>' + e(s.symbol) + '</strong></td><td>' + s.trades + '</td>';
+      html += '<td>' + (s.win_rate||0).toFixed(1) + '%</td>';
+      html += '<td style="' + pnlStyle(s.total_pnl) + '">' + pnlSign(s.total_pnl) + '</td>';
+      html += '<td style="' + pnlStyle(s.avg_pnl) + '">' + pnlSign(s.avg_pnl) + '</td>';
+      html += '<td class="pnl-pos">+' + (s.best||0).toFixed(2) + '</td>';
+      html += '<td class="pnl-neg">' + (s.worst||0).toFixed(2) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<h2>Bottom 10 Symbols (by P&amp;L)</h2><table><thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead><tbody>';
+    botSym.forEach(function(s){
+      html += '<tr><td><strong>' + e(s.symbol) + '</strong></td><td>' + s.trades + '</td>';
+      html += '<td>' + (s.win_rate||0).toFixed(1) + '%</td>';
+      html += '<td style="' + pnlStyle(s.total_pnl) + '">' + pnlSign(s.total_pnl) + '</td>';
+      html += '<td style="' + pnlStyle(s.avg_pnl) + '">' + pnlSign(s.avg_pnl) + '</td>';
+      html += '<td class="pnl-pos">+' + (s.best||0).toFixed(2) + '</td>';
+      html += '<td class="pnl-neg">' + (s.worst||0).toFixed(2) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // ── Daily breakdown ───────────────────────────────────────────────────
+  if (incDaily && days.length) {
+    var maxAbsPnl = days.reduce(function(m,d){ return Math.max(m, Math.abs(dayMap[d].pnl)); }, 0);
+    html += '<h2>Daily P&amp;L Breakdown</h2><table><thead><tr><th>Date</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>P&amp;L</th><th>Visual</th></tr></thead><tbody>';
+    days.forEach(function(d){
+      var dv = dayMap[d];
+      var wr = (dv.wins/dv.count*100).toFixed(1);
+      var barW = maxAbsPnl > 0 ? Math.round(Math.abs(dv.pnl) / maxAbsPnl * 120) : 0;
+      var barCol = dv.pnl >= 0 ? '#006e2e' : '#c0392b';
+      html += '<tr><td>' + e(d) + '</td><td>' + dv.count + '</td><td>' + dv.wins + '</td><td>' + dv.losses + '</td>';
+      html += '<td style="' + pnlStyle(parseFloat(wr)-50) + '">' + wr + '%</td>';
+      html += '<td style="' + pnlStyle(dv.pnl) + '">' + pnlSign(dv.pnl) + '</td>';
+      html += '<td><span class="day-bar" style="width:' + barW + 'px;background:' + barCol + '"></span></td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // ── Full trade list ───────────────────────────────────────────────────
+  if (incList) {
+    html += '<h2>Full Trade List (' + trades.length + ' trades)</h2>';
+    html += '<table><thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th></tr></thead><tbody>';
+    trades.forEach(function(t){
+      var pnlV = t.pnl||0;
+      html += '<tr><td>' + e(t.id) + '</td><td><strong>' + e(t.symbol) + '</strong></td>';
+      html += '<td>' + e(mktLabel[t.source]||t.source||'') + '</td>';
+      html += '<td style="color:#888;white-space:nowrap">' + e((t.entry_time||'').slice(0,16)) + '</td>';
+      html += '<td>' + (t.entry_price||0).toFixed(2) + '</td>';
+      html += '<td>' + (t.exit_price ? (t.exit_price).toFixed(2) : '—') + '</td>';
+      html += '<td style="' + pnlStyle(pnlV) + '">' + pnlSign(pnlV) + '</td>';
+      html += '<td style="' + pnlStyle(pnlV) + '">' + (t.pnl_pct != null ? (pnlV>=0?'+':'')+t.pnl_pct.toFixed(1)+'%' : '—') + '</td>';
+      html += '<td style="color:#888;font-size:11px">' + e(t.exit_reason||'—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  html += '</body></html>';
+
+  var w = window.open('','_blank','width=1100,height=800');
+  if (w) { w.document.write(html); w.document.close(); }
+  else toast('Allow popups to view report');
+}
+
+// ── Patch exportTrades/exportDashTrades to include summary in CSV ──────────
+var _origExportTrades = exportTrades;
+exportTrades = function(fmt) {
+  if (fmt !== 'csv') { _origExportTrades(fmt); return; }
+  var sel = _selTrades.size ? _tradesRaw.filter(function(t){return _selTrades.has(t.id);}) : _tradesRaw;
+  var sumRows = _tradeSummaryRows(sel);
+  var H = ['#','Symbol','Market','Buy Time','Entry Price','Sell Time','Exit Price','P&L','P&L %','Reason','Status'];
+  var R = sel.map(function(t){return [t.id,t.symbol,t.source||'',t.entry_time||'',t.entry_price||0,t.exit_time||'',t.exit_price||'',t.pnl||0,t.pnl_pct||0,t.exit_reason||'',t.status||''];});
+  var allRows = sumRows.concat([H]).concat(R);
+  var lines = allRows.map(function(r){ return r.map(_csvEsc).join(','); });
+  var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trades_' + _isoDate() + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+};
+
+var _origExportDashTrades = exportDashTrades;
+exportDashTrades = function(fmt) {
+  if (fmt !== 'csv') { _origExportDashTrades(fmt); return; }
+  var sel = _selDashT.size ? _dashTradesRaw.filter(function(t){return _selDashT.has(t.id);}) : _dashTradesRaw;
+  var sumRows = _tradeSummaryRows(sel);
+  var H = ['#','Symbol','Market','Buy Time','Entry Price','Sell Time','Exit Price','P&L','P&L %','Reason','Status'];
+  var R = sel.map(function(t){return [t.id,t.symbol,t.source||'',t.entry_time||'',t.entry_price||0,t.exit_time||'',t.exit_price||'',t.pnl||0,t.pnl_pct||0,t.exit_reason||'',t.status||''];});
+  var allRows = sumRows.concat([H]).concat(R);
+  var lines = allRows.map(function(r){ return r.map(_csvEsc).join(','); });
+  var blob = new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'closed_trades_' + _isoDate() + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+};
 </script>
 </body>
 </html>
