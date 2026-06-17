@@ -440,7 +440,7 @@
         <div class="exp-drop">
           <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
           <div class="exp-drop-menu">
-            <div onmousedown="exportDash('csv')">&#128196; CSV / Excel</div>
+            <div onmousedown="exportDash('csv')">&#128196; Download CSV</div>
             <div onmousedown="exportDash('pdf')">&#128438; Print / PDF</div>
             <div onmousedown="exportDashboardPage()" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">&#128444; Export Page (PDF)</div>
           </div>
@@ -572,7 +572,7 @@
           <div class="exp-drop">
             <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
             <div class="exp-drop-menu">
-              <div onmousedown="exportDash('csv')">&#128196; CSV / Excel</div>
+              <div onmousedown="exportDash('csv')">&#128196; Download CSV</div>
               <div onmousedown="exportDash('pdf')">&#128438; Print / PDF</div>
             </div>
           </div>
@@ -605,7 +605,7 @@
         <div class="exp-drop">
           <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
           <div class="exp-drop-menu">
-            <div onmousedown="exportPositions('csv')">&#128196; CSV / Excel</div>
+            <div onmousedown="exportPositions('csv')">&#128196; Download CSV</div>
             <div onmousedown="exportPositions('pdf')">&#128438; Print / PDF</div>
           </div>
         </div>
@@ -659,7 +659,7 @@
       <div class="exp-drop">
         <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
         <div class="exp-drop-menu">
-          <div onmousedown="exportTrades('csv')">&#128196; CSV / Excel</div>
+          <div onmousedown="exportTrades('csv')">&#128196; Download CSV</div>
           <div onmousedown="exportTrades('pdf')">&#128438; Print / PDF</div>
         </div>
       </div>
@@ -686,7 +686,7 @@
         <div class="exp-drop">
           <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
           <div class="exp-drop-menu">
-            <div onmousedown="exportLeaderboard('csv')">&#128196; CSV / Excel</div>
+            <div onmousedown="exportLeaderboard('csv')">&#128196; Download CSV</div>
             <div onmousedown="exportLeaderboard('pdf')">&#128438; Print / PDF</div>
           </div>
         </div>
@@ -794,7 +794,7 @@
           <div class="exp-drop">
             <button class="btn" style="font-size:12px;" onclick="_expToggle(this)">&#8595; Export &#9660;</button>
             <div class="exp-drop-menu">
-              <div onmousedown="exportSettings('csv')">&#128196; CSV / Excel</div>
+              <div onmousedown="exportSettings('csv')">&#128196; Download CSV</div>
               <div onmousedown="exportSettings('pdf')">&#128438; Print / PDF</div>
             </div>
           </div>
@@ -4167,14 +4167,44 @@ function printTable(title, headers, rows) {
   if (w){ w.document.write(html); w.document.close(); }
 }
 
-// Toggle export dropdown open/close
+// Export dropdown — rendered at body level to avoid overflow/z-index clipping
+var _expMenuEl = null;
+
 function _expToggle(btn) {
-  var drop = btn.closest('.exp-drop');
-  document.querySelectorAll('.exp-drop.open').forEach(function(d){ if(d!==drop) d.classList.remove('open'); });
-  drop.classList.toggle('open');
+  // If same button toggled again, close
+  if (_expMenuEl) {
+    var prev = _expMenuEl._srcBtn;
+    _expMenuEl.remove();
+    _expMenuEl = null;
+    if (prev === btn) return;
+  }
+  // Clone menu template from sibling
+  var tpl = btn.parentElement.querySelector('.exp-drop-menu');
+  if (!tpl) return;
+  var clone = tpl.cloneNode(true);
+  var rect = btn.getBoundingClientRect();
+  clone.setAttribute('style',
+    'display:block;position:fixed;z-index:9999;' +
+    'background:var(--surface);border:1px solid var(--border);border-radius:6px;' +
+    'min-width:158px;padding:4px 0;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+  );
+  clone.style.top  = (rect.bottom + 3) + 'px';
+  clone.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
+  clone._srcBtn = btn;
+  // Auto-close after each item action
+  clone.querySelectorAll('[onmousedown]').forEach(function(item) {
+    var orig = item.getAttribute('onmousedown');
+    item.setAttribute('onmousedown', 'if(window._expMenuEl){window._expMenuEl.remove();window._expMenuEl=null;}' + orig);
+  });
+  document.body.appendChild(clone);
+  _expMenuEl = clone;
 }
-document.addEventListener('click', function(e){
-  if (!e.target.closest('.exp-drop')) document.querySelectorAll('.exp-drop.open').forEach(function(d){ d.classList.remove('open'); });
+
+document.addEventListener('click', function(e) {
+  if (!_expMenuEl) return;
+  if (_expMenuEl.contains(e.target)) return;
+  _expMenuEl.remove();
+  _expMenuEl = null;
 });
 
 // Checkbox toggle helpers
