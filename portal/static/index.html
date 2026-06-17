@@ -531,7 +531,16 @@
           <span class="pill" id="dash-view-closed" onclick="setDashView('closed')">Closed Trades</span>
           <span class="pill active" id="dash-view-buys" onclick="setDashView('buys')">Open Positions</span>
         </div>
-        <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
+          <select id="dash-recent-limit-sel" style="font-size:12px;width:auto;" onchange="_dashRecentLimit=this.value==='all'?99999:+this.value;loadRecentTrades()">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">All</option>
+          </select>
+        </div>
       </div>
       <div id="dash-pos-summary" style="display:none; margin-bottom:10px;"></div>
       <div class="table-wrap" id="recent-trades-table">Loading...</div>
@@ -551,6 +560,12 @@
         </select>
         <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 30s</span>
         <button class="btn" style="font-size:12px;" onclick="saveDefault('pos')" title="Save current filter as default">&#9733; Save Default</button>
+        <select id="pos-limit-sel" style="width:auto;" onchange="_posLimit=this.value==='all'?99999:+this.value;_posPage=0;_applyPosPagination()">
+          <option value="100" selected>100 / page</option>
+          <option value="200">200 / page</option>
+          <option value="500">500 / page</option>
+          <option value="all">All</option>
+        </select>
         <button class="btn" onclick="loadPositions()">&#8635; Refresh</button>
         <button class="btn btn-danger" onclick="forceSellAll()">Force Sell All</button>
         <button class="btn btn-danger" style="background:#3a1a1a; border-color:#666;" onclick="cancelAll()">Cancel All (no price)</button>
@@ -592,6 +607,12 @@
         <span class="pill" data-val="week" onclick="setTradeFilter(this,'week')">7 Days</span>
         <span class="pill" data-val="month" onclick="setTradeFilter(this,'month')">30 Days</span>
       </div>
+      <select id="trade-limit-sel" style="width:auto;" onchange="_tradeLimit=this.value==='all'?99999:+this.value;_tradeOffset=0;loadTrades()">
+        <option value="100" selected>100 / page</option>
+        <option value="200">200 / page</option>
+        <option value="500">500 / page</option>
+        <option value="all">All</option>
+      </select>
       <button class="btn" onclick="_tradeOffset=0;loadTrades()">↻ Refresh</button>
       <span id="trade-count" style="color:var(--muted); font-size:12px;"></span>
     </div>
@@ -606,6 +627,12 @@
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 60s</span>
         <button class="btn" style="font-size:12px;" onclick="saveDefault('lb')" title="Save sort as default">&#9733; Save Default</button>
+        <select id="lb-limit-sel" style="width:auto;" onchange="_lbLimit=this.value==='all'?99999:+this.value;_lbPage=0;renderLeaderboard()">
+          <option value="100" selected>100 / page</option>
+          <option value="200">200 / page</option>
+          <option value="500">500 / page</option>
+          <option value="all">All</option>
+        </select>
       </div>
     </div>
     <div class="tabs">
@@ -1452,7 +1479,12 @@
 const API = '';  // same origin
 let _autoRefreshInterval = null;
 let _tradeOffset = 0;
-const _tradeLimit = 50;
+let _tradeLimit   = 100;
+let _lbLimit      = 100;
+let _lbPage       = 0;
+let _posLimit     = 100;
+let _posPage      = 0;
+let _dashRecentLimit = 10;
 
 // ── In-page confirm dialog (no browser prompt) ─────────────────────────────
 function showConfirm(title, msg, okLabel) {
@@ -1903,7 +1935,7 @@ function setDashView(view) {
     if (sub) sub.textContent = 'All open positions — live prices';
     loadRecentBuys();
   } else {
-    if (sub) sub.textContent = 'Last 10 closed';
+    if (sub) sub.textContent = _dashRecentLimit >= 99999 ? 'All closed' : 'Last ' + _dashRecentLimit + ' closed';
     var dps = document.getElementById('dash-pos-summary');
     if (dps) { dps.style.display = 'none'; dps.innerHTML = ''; }
     loadRecentTrades();
@@ -1914,10 +1946,13 @@ function loadDashRecent() {
 }
 
 async function loadRecentTrades() {
-  const r = await apiFetch('/api/trades?status_filter=closed&limit=10&offset=0');
+  const lim = _dashRecentLimit >= 99999 ? 99999 : _dashRecentLimit;
+  const r = await apiFetch('/api/trades?status_filter=closed&limit=' + lim + '&offset=0');
   if (!r) return;
   const d = await r.json();
   document.getElementById('recent-trades-table').innerHTML = buildTradeTable(d.trades, false);
+  var sub = document.getElementById('dash-recent-subtitle');
+  if (sub) sub.textContent = lim >= 99999 ? 'All closed' : 'Last ' + lim + ' closed';
 }
 
 async function loadRecentBuys() {
@@ -2066,6 +2101,36 @@ var _LOADING_HTML = '<div style="text-align:center;padding:56px 0;"><div style="
 // ── Positions ─────────────────────────────────────────────────────────────
 var _posCache = null; // {positions, market, sortKey}
 
+function _applyPosPagination() {
+  var el = document.getElementById('positions-table');
+  if (!el) return;
+  var tbody = el.querySelector('tbody');
+  if (!tbody) return;
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  var oldPg = document.getElementById('pos-pagination');
+  if (oldPg) oldPg.remove();
+  if (_posLimit >= 99999 || total <= _posLimit) {
+    rows.forEach(function(r){ r.style.display = ''; });
+    return;
+  }
+  var start = _posPage * _posLimit;
+  rows.forEach(function(r, i) {
+    r.style.display = (i >= start && i < start + _posLimit) ? '' : 'none';
+  });
+  var pages = Math.ceil(total / _posLimit);
+  var pg = document.createElement('div');
+  pg.id = 'pos-pagination';
+  pg.className = 'toolbar';
+  pg.style.cssText = 'margin-top:12px;justify-content:center;';
+  var html = '';
+  if (_posPage > 0) html += '<button class="btn" onclick="_posPage--;_applyPosPagination()">← Prev</button>';
+  html += '<span style="color:var(--muted);font-size:12px">Page ' + (_posPage+1) + ' / ' + pages + ' &nbsp;(' + total + ' positions)</span>';
+  if (start + _posLimit < total) html += '<button class="btn" onclick="_posPage++;_applyPosPagination()">Next →</button>';
+  pg.innerHTML = html;
+  el.after(pg);
+}
+
 function _buildPositionsTable(positions) {
   const s   = _sort.pos;
   const col = s.col || 'time';
@@ -2204,6 +2269,7 @@ async function loadPositions() {
   const cacheSortKey = _posCache ? _posCache.sortKey : '';
   if (!_posCache || newIds !== cacheIds || sortKey !== cacheSortKey) {
     _buildPositionsTable(d.positions);
+    _applyPosPagination();
     _posCache = {positions: d.positions, ids: newIds, sortKey: sortKey, market: market};
   } else {
     // Positions unchanged — update our cached copy in case prices changed (no table rebuild)
@@ -2394,6 +2460,7 @@ async function loadLeaderboard(market) {
   if (!r) return;
   var d = await r.json();
   _lbData = (d && d.leaderboard) ? d.leaderboard : [];
+  _lbPage = 0;
   renderLeaderboard();
 }
 function renderLeaderboard() {
@@ -2417,12 +2484,16 @@ function renderLeaderboard() {
     if (col === 'worst')  return mul * (a.worst - b.worst);
     return 0;
   });
+  var total = rows.length;
+  var start = _lbPage * _lbLimit;
+  var pageRows = (_lbLimit >= 99999) ? rows : rows.slice(start, start + _lbLimit);
+  var pages = Math.ceil(total / _lbLimit);
   el.innerHTML = '<table><thead><tr>' +
     thSort('lb','sym','Symbol') + thSort('lb','trades','Trades') +
     thSort('lb','wr','Win Rate') + thSort('lb','pnl','Total P&L') +
     thSort('lb','avg','Avg P&L') + thSort('lb','best','Best') + thSort('lb','worst','Worst') +
     '</tr></thead><tbody>' +
-    rows.map(function(row) {
+    pageRows.map(function(row) {
       var wr = row.win_rate || 0;
       return '<tr>' +
         '<td><strong>' + row.symbol + '</strong></td>' +
@@ -2435,6 +2506,14 @@ function renderLeaderboard() {
         '<td class="pnl-neg">' + row.worst.toFixed(2) + '</td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
+  if (_lbLimit < 99999 && total > _lbLimit) {
+    var pgHtml = '<div class="toolbar" style="margin-top:12px;justify-content:center;">';
+    if (_lbPage > 0) pgHtml += '<button class="btn" onclick="_lbPage--;renderLeaderboard()">← Prev</button>';
+    pgHtml += '<span style="color:var(--muted);font-size:12px">Page ' + (_lbPage+1) + ' / ' + pages + ' &nbsp;(' + total + ' symbols)</span>';
+    if (start + _lbLimit < total) pgHtml += '<button class="btn" onclick="_lbPage++;renderLeaderboard()">Next →</button>';
+    pgHtml += '</div>';
+    el.innerHTML += pgHtml;
+  }
   updateSortIcons('lb');
 }
 
