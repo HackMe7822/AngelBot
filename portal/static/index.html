@@ -1713,7 +1713,7 @@
           <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-symbols" checked> Top / Bottom Symbols</label>
           <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-daily" checked> Daily P&amp;L Breakdown</label>
           <label style="font-size:13px;cursor:pointer;"><input type="checkbox" id="rpt-inc-trades"> Full Trade List</label>
-          <label style="font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:4px;padding-top:8px;border-top:1px solid var(--border);"><input type="checkbox" id="rpt-inc-ai" checked> 🤖 AI Analysis <span style="font-size:11px;color:var(--muted);">(needs API key in Settings)</span></label>
+          <label style="font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:4px;padding-top:8px;border-top:1px solid var(--border);"><input type="checkbox" id="rpt-inc-ai" checked> 🤖 AI Analysis <span style="font-size:11px;color:var(--muted);">(free — built in)</span></label>
         </div>
       </div>
     </div>
@@ -4706,6 +4706,111 @@ function _tradeSummaryRows(trades) {
   ];
 }
 
+// ── Free Built-in Analysis Engine ────────────────────────────────────────
+function _runLocalAnalysis(data) {
+  var o = data.overall || {};
+  var days = data.per_day || [];
+  var exits = data.exit_reasons || [];
+  var mkts = data.markets || [];
+  var cur = (data.market === 'India') ? '₹' : (data.market === 'Crypto' ? '$' : '$');
+
+  var wr = +(o.win_rate || 0);
+  var pf = +(o.profit_factor || 0);
+  var pnl = +(o.total_pnl || 0);
+  var n = +(o.total_trades || 0);
+  var avgPnl = +(o.avg_pnl || 0);
+  var best = +(o.best_trade || 0);
+  var worst = +(o.worst_trade || 0);
+
+  // ── Overall Assessment ──────────────────────────────────────────────
+  var overall = [];
+  if (n === 0) return '**Overall Assessment**\nNo trades found in this period.';
+
+  var grade = wr >= 65 && pf >= 1.5 ? 'Strong' : wr >= 50 && pf >= 1.0 ? 'Moderate' : 'Needs Work';
+  overall.push('Performance grade: **' + grade + '**.');
+  overall.push('Took ' + n + ' trade' + (n===1?'':'s') + ' with a ' + wr.toFixed(1) + '% win rate and ' + (pf > 0 ? pf.toFixed(2) : 'N/A') + ' profit factor.');
+  overall.push('Net P&L: ' + cur + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '  (avg ' + cur + (avgPnl >= 0 ? '+' : '') + avgPnl.toFixed(2) + ' per trade).');
+  if (best > 0) overall.push('Best single trade: ' + cur + '+' + best.toFixed(2) + '.  Worst: ' + cur + worst.toFixed(2) + '.');
+
+  // ── What's Working ──────────────────────────────────────────────────
+  var working = [];
+  if (wr >= 55) working.push('Win rate of ' + wr.toFixed(1) + '% is above average — the entry logic is sound.');
+  if (pf >= 1.5) working.push('Profit factor ' + pf.toFixed(2) + ' means winners are significantly larger than losers.');
+  if (pnl > 0) working.push('Overall P&L is positive — the strategy is profitable in this period.');
+
+  // Best exit reason
+  var bestExit = null, bestExitWR = 0;
+  exits.forEach(function(e) { if (e.count >= 2 && e.win_rate > bestExitWR) { bestExitWR = e.win_rate; bestExit = e; } });
+  if (bestExit && bestExitWR >= 60) working.push('Exit type "' + bestExit.reason + '" is working well (' + bestExitWR.toFixed(0) + '% win rate, ' + bestExit.count + ' trades).');
+
+  // Best day
+  var bestDay = null, bestDayPnl = -Infinity;
+  days.forEach(function(d) { if (d.pnl > bestDayPnl) { bestDayPnl = d.pnl; bestDay = d; } });
+  if (bestDay && bestDay.pnl > 0) working.push('Best day was ' + bestDay.date + ' with ' + cur + '+' + bestDay.pnl.toFixed(2) + ' from ' + bestDay.trades + ' trades.');
+
+  if (working.length === 0) working.push('No strong positives yet — keep refining the strategy.');
+
+  // ── What Needs Improvement ──────────────────────────────────────────
+  var improve = [];
+  if (wr < 45) improve.push('Win rate of ' + wr.toFixed(1) + '% is below 45% — review entry conditions and look for better setups.');
+  if (pf > 0 && pf < 1.0) improve.push('Profit factor below 1.0 means total losses exceed total gains — tighten stop-losses or widen take-profits.');
+  if (pnl < 0) improve.push('Net P&L is negative (' + cur + pnl.toFixed(2) + ') — consider reducing trade frequency until the win rate improves.');
+
+  // Worst exit reason
+  var worstExit = null, worstExitWR = 100;
+  exits.forEach(function(e) { if (e.count >= 2 && e.win_rate < worstExitWR) { worstExitWR = e.win_rate; worstExit = e; } });
+  if (worstExit && worstExitWR < 40) improve.push('Exit type "' + worstExit.reason + '" has only ' + worstExitWR.toFixed(0) + '% win rate (' + worstExit.count + ' trades) — check if this exit fires too early or too late.');
+
+  // SL hit rate
+  var slExits = exits.filter(function(e) { return /sl|stop.?loss/i.test(e.reason); });
+  var slCount = slExits.reduce(function(a,e){ return a+e.count; }, 0);
+  var slRate = n > 0 ? slCount/n*100 : 0;
+  if (slRate > 40) improve.push('Stop-losses triggered on ' + slRate.toFixed(0) + '% of trades — entries may need better timing or stops are too tight.');
+
+  // Worst day
+  var worstDay = null, worstDayPnl = Infinity;
+  days.forEach(function(d) { if (d.pnl < worstDayPnl) { worstDayPnl = d.pnl; worstDay = d; } });
+  if (worstDay && worstDay.pnl < 0) improve.push('Worst day was ' + worstDay.date + ' (' + cur + worstDay.pnl.toFixed(2) + ') — review those trades for patterns to avoid.');
+
+  if (improve.length === 0) improve.push('Nothing critical to flag — keep monitoring for consistency.');
+
+  // ── Suggestions ─────────────────────────────────────────────────────
+  var suggestions = [];
+  if (n < 10) suggestions.push('Small sample size (' + n + ' trades) — allow more trades before drawing strong conclusions.');
+  if (wr < 50 && pf >= 1.0) suggestions.push('Win rate is below 50% but profit factor is acceptable — this is a valid low-frequency, high-reward style. Keep position sizes consistent.');
+  if (wr >= 60 && pf < 1.0) suggestions.push('High win rate but low profit factor suggests winners are too small. Consider letting winners run longer before exiting.');
+  if (Math.abs(worst) > Math.abs(best) * 1.5) suggestions.push('Worst trade (' + cur + worst.toFixed(2) + ') is much larger than best trade (' + cur + '+' + best.toFixed(2) + '). Review if max loss limits are set correctly.');
+  if (days.length > 3) {
+    var profDays = days.filter(function(d){ return d.pnl > 0; }).length;
+    var profDayRate = profDays / days.length * 100;
+    suggestions.push(profDayRate.toFixed(0) + '% of trading days were profitable (' + profDays + ' of ' + days.length + '). ' + (profDayRate < 50 ? 'Focus on avoiding losig days, not just individual trades.' : 'Good daily consistency.'));
+  }
+  if (mkts.length > 1) {
+    var bestMkt = mkts.reduce(function(a,b){ return b.pnl > a.pnl ? b : a; });
+    suggestions.push(bestMkt.market + ' was the best-performing market with ' + cur + (bestMkt.pnl >= 0 ? '+' : '') + bestMkt.pnl.toFixed(2) + ' — consider allocating more capital there.');
+  }
+  if (suggestions.length === 0) suggestions.push('Continue current approach and review again after 30+ trades for statistically significant insights.');
+
+  // ── Day-by-Day Highlights ────────────────────────────────────────────
+  var dayLines = [];
+  if (days.length > 0) {
+    var topDays = days.slice().sort(function(a,b){ return Math.abs(b.pnl)-Math.abs(a.pnl); }).slice(0,5);
+    topDays.forEach(function(d) {
+      var sign = d.pnl >= 0 ? '+' : '';
+      dayLines.push(d.date + ': ' + cur + sign + d.pnl.toFixed(2) + '  (' + d.wins + 'W/' + d.losses + 'L, ' + (d.win_rate||0).toFixed(0) + '% win rate)');
+    });
+  }
+
+  // ── Assemble Markdown ────────────────────────────────────────────────
+  var parts = [];
+  parts.push('**Overall Assessment**\n' + overall.join(' '));
+  parts.push('**What\'s Working**\n' + working.map(function(l){ return '- ' + l; }).join('\n'));
+  parts.push('**What Needs Improvement**\n' + improve.map(function(l){ return '- ' + l; }).join('\n'));
+  parts.push('**Suggestions**\n' + suggestions.map(function(l){ return '- ' + l; }).join('\n'));
+  if (dayLines.length > 0) parts.push('**Day-by-Day Highlights** (top ' + dayLines.length + ' by impact)\n' + dayLines.map(function(l){ return '- ' + l; }).join('\n'));
+  return parts.join('\n\n');
+}
+
 // ── Report Generator ──────────────────────────────────────────────────────
 function _renderAIAnalysis(text) {
   // Convert the AI's markdown-style response to styled HTML for the dark report card
@@ -4907,27 +5012,34 @@ async function generateReport(mode) {
     return '<span class="pill-mkt pill-other">' + e(src) + '</span>';
   }
 
-  // ── AI Analysis (async, before building HTML) ─────────────────────────
+  // ── AI Analysis ─────────────────────────────────────────────────────────
   var aiResult = null;
   if (incAI) {
-    toast('🤖 Calling AI for analysis…', 20000);
+    var aiPayload = {
+      period: rangeDisplay, market: mktShort,
+      overall: {
+        total_trades: trades.length, wins: wins.length, losses: losses.length,
+        win_rate: winRate, total_pnl: totalPnl,
+        profit_factor: profitFactor > 99 ? 99 : profitFactor,
+        best_trade: best, worst_trade: worst, avg_pnl: avgPnl
+      },
+      per_day: days.map(function(d){ var dv=dayMap[d]; return { date:d, trades:dv.count, wins:dv.wins, losses:dv.losses, win_rate:dv.count?dv.wins/dv.count*100:0, pnl:dv.pnl }; }),
+      exit_reasons: Object.keys(exitMap).map(function(r){ var ev=exitMap[r]; return { reason:r, count:ev.count, win_rate:ev.count?ev.wins/ev.count*100:0, pnl:ev.pnl, avg_pnl:ev.count?ev.pnl/ev.count:0 }; }).sort(function(a,b){return b.count-a.count;}).slice(0,12),
+      markets: Object.keys(mktMap).map(function(m){ var mv=mktMap[m]; return { market:mktLabel[m]||m, trades:mv.count, win_rate:mv.count?mv.wins/mv.count*100:0, pnl:mv.pnl }; })
+    };
+    // Try Claude/OpenAI if configured, fall back to built-in engine
     try {
-      var aiPayload = {
-        period: rangeDisplay,
-        market: mktShort,
-        overall: {
-          total_trades: trades.length, wins: wins.length, losses: losses.length,
-          win_rate: winRate, total_pnl: totalPnl,
-          profit_factor: profitFactor > 99 ? 99 : profitFactor,
-          best_trade: best, worst_trade: worst, avg_pnl: avgPnl
-        },
-        per_day: days.map(function(d){ var dv=dayMap[d]; return { date:d, trades:dv.count, wins:dv.wins, losses:dv.losses, win_rate:dv.count?dv.wins/dv.count*100:0, pnl:dv.pnl }; }),
-        exit_reasons: Object.keys(exitMap).map(function(r){ var ev=exitMap[r]; return { reason:r, count:ev.count, win_rate:ev.count?ev.wins/ev.count*100:0, pnl:ev.pnl, avg_pnl:ev.count?ev.pnl/ev.count:0 }; }).sort(function(a,b){return b.count-a.count;}).slice(0,12),
-        markets: Object.keys(mktMap).map(function(m){ var mv=mktMap[m]; return { market:mktLabel[m]||m, trades:mv.count, win_rate:mv.count?mv.wins/mv.count*100:0, pnl:mv.pnl }; })
-      };
+      toast('🤖 Getting AI analysis…', 20000);
       var aiRes = await apiFetch('/api/report/analyze', { method:'POST', body:JSON.stringify(aiPayload) });
-      if (aiRes) aiResult = await aiRes.json();
+      if (aiRes) {
+        var aiJson = await aiRes.json();
+        if (aiJson.ok) { aiResult = aiJson; }
+      }
     } catch(ex) {}
+    // Built-in engine fallback (always free, no API key needed)
+    if (!aiResult || !aiResult.ok) {
+      aiResult = { ok: true, analysis: _runLocalAnalysis(aiPayload), provider: 'Built-in Analysis Engine' };
+    }
   }
 
   var genTime = new Date().toLocaleString();
