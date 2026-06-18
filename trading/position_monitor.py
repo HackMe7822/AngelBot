@@ -14,6 +14,8 @@ import threading
 import time
 import json
 import math
+import re as _re
+import logging as _logging
 from datetime import datetime, date as ddate, time as dtime, timezone, timedelta
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -23,6 +25,7 @@ from analysis.technical import _price_decimals
 _A   = lambda n: f"\033[{n}m"
 _R   = _A("0");    _G  = _A("1;92");  _RD = _A("1;91")
 _CY  = _A("1;96"); _YL = _A("1;93"); _DIM = _A("2")
+_ansi_re = _re.compile(r'\033\[[0-9;]*m')
 
 POLL_SECONDS  = 15          # how often to check each position price
 HEARTBEAT_MIN = 5           # print alive message every N minutes
@@ -84,6 +87,13 @@ class PositionMonitor:
         self._sl_breach_count = {}     # pos_id → int   (consecutive polls below SL)
         self._daily_sl_hits   = {}     # symbol → (date, count) — banned after 2 SL hits same day
         self._profit_since    = {}     # pos_id → float (time.time() when position first went profitable)
+        # Use the worker's rotating file logger so exit events appear in the portal log viewer
+        self._logger = _logging.getLogger(market) if market else None
+
+    def _log(self, msg):
+        """Strip ANSI codes and write to the market's rotating log file (portal log viewer)."""
+        if self._logger:
+            self._logger.info(_ansi_re.sub('', msg).strip())
 
     # ── State persistence — survives restarts ────────────────────────────────
     def save_state(self):
@@ -318,7 +328,8 @@ class PositionMonitor:
                 gain_pct = (exit_price - pos['entry_price']) / pos['entry_price'] * 100
                 cur  = self._currency
                 _c   = _G if gain_pct >= 0 else _RD
-                print(f"{_c}  [TRAIL EXIT] {symbol} {cur}{exit_price:.4f}  trail-SL hit  profit {gain_pct:+.2f}%{_R}")
+                _m = f"  [TRAIL EXIT] {symbol} {cur}{exit_price:.4f}  trail-SL hit  profit {gain_pct:+.2f}%"
+                print(f"{_c}{_m}{_R}"); self._log(_m)
                 self._exiting.add(pos_id)
                 threading.Thread(
                     target=self._scalp_exit, args=(pos, exit_price, 'TRAIL'), daemon=True
@@ -333,20 +344,23 @@ class PositionMonitor:
                 if pos_id not in self._sl_breach_time:
                     self._sl_breach_time[pos_id] = time.time()
                     cur = self._currency
-                    print(f"{_YL}  [SL WATCH]  {symbol} {cur}{price:.4f}  below SL — confirming ({count}/{SL_CONFIRM_POLLS} polls){_R}")
+                    _m = f"  [SL WATCH]  {symbol} {cur}{price:.4f}  below SL — confirming ({count}/{SL_CONFIRM_POLLS} polls)"
+                    print(f"{_YL}{_m}{_R}"); self._log(_m)
                 elif count >= SL_CONFIRM_POLLS:
                     # N consecutive polls below SL — genuine breakdown, not a wick
                     elapsed = time.time() - self._sl_breach_time.pop(pos_id)
                     self._sl_breach_count.pop(pos_id, None)
                     cur = self._currency
-                    print(f"{_RD}  [SL EXIT]   {symbol} {cur}{price:.4f}  confirmed {count} polls ({elapsed:.0f}s) below SL{_R}")
+                    _m = f"  [SL EXIT]   {symbol} {cur}{price:.4f}  confirmed {count} polls ({elapsed:.0f}s) below SL"
+                    print(f"{_RD}{_m}{_R}"); self._log(_m)
                     self._exiting.add(pos_id)
                     threading.Thread(
                         target=self._scalp_exit, args=(pos, price, 'SL'), daemon=True
                     ).start()
                 else:
                     cur = self._currency
-                    print(f"{_YL}  [SL WATCH]  {symbol} {cur}{price:.4f}  confirming ({count}/{SL_CONFIRM_POLLS} polls){_R}")
+                    _m = f"  [SL WATCH]  {symbol} {cur}{price:.4f}  confirming ({count}/{SL_CONFIRM_POLLS} polls)"
+                    print(f"{_YL}{_m}{_R}"); self._log(_m)
 
             elif at_target:
                 # Target hit — clear any pending SL watch, activate trailing stop
@@ -356,7 +370,8 @@ class PositionMonitor:
                 floor = round(pos['entry_price'] * 1.003, _price_decimals(pos['entry_price']))
                 self._trail_sl[pos_id] = floor
                 cur = self._currency
-                print(f"{_G}  [TRAIL ON]  {symbol} {cur}{price:.4f}  target hit — trail floor {cur}{floor:.4f}{_R}")
+                _m = f"  [TRAIL ON]  {symbol} {cur}{price:.4f}  target hit — trail floor {cur}{floor:.4f}"
+                print(f"{_G}{_m}{_R}"); self._log(_m)
 
             else:
                 # Price is above SL — cancel any pending breach watch
@@ -365,7 +380,8 @@ class PositionMonitor:
                     elapsed = time.time() - self._sl_breach_time.pop(pos_id)
                     if elapsed > 2:
                         cur = self._currency
-                        print(f"{_G}  [SL RECOVER] {symbol} {cur}{price:.4f}  bounced back above SL after {count} poll(s) ({elapsed:.0f}s) — holding{_R}")
+                        _m = f"  [SL RECOVER] {symbol} {cur}{price:.4f}  bounced back above SL after {count} poll(s) ({elapsed:.0f}s) — holding"
+                        print(f"{_G}{_m}{_R}"); self._log(_m)
 
                 # Time-based exit: free capital if position is stagnating (toggle via USE_TIME_EXIT in .env)
                 if not self._trail_active.get(pos_id) and pos_id not in self._exiting:
@@ -379,7 +395,8 @@ class PositionMonitor:
                                 pct_move  = (price - pos['entry_price']) / pos['entry_price']
                                 if mins_open >= MAX_HOLD_MINUTES and pct_move < _tgt_pct * 0.5:
                                     cur = self._currency
-                                    print(f"{_YL}  [TIME EXIT]  {symbol} {cur}{price:.4f}  {mins_open:.0f}min open ({pct_move*100:+.1f}%) — freeing capital{_R}")
+                                    _m = f"  [TIME EXIT]  {symbol} {cur}{price:.4f}  {mins_open:.0f}min open ({pct_move*100:+.1f}%) — freeing capital"
+                                    print(f"{_YL}{_m}{_R}"); self._log(_m)
                                     self._exiting.add(pos_id)
                                     threading.Thread(
                                         target=self._scalp_exit, args=(pos, price, 'TIME'), daemon=True
@@ -400,7 +417,8 @@ class PositionMonitor:
                                 if profit_mins >= PROFIT_TIMER_MINUTES:
                                     gain_pct = (price - pos['entry_price']) / pos['entry_price'] * 100
                                     cur = self._currency
-                                    print(f"{_G}  [PROFIT TIMER] {symbol} {cur}{price:.4f}  +{gain_pct:.2f}% for {profit_mins:.0f}min — taking profit{_R}")
+                                    _m = f"  [PROFIT TIMER] {symbol} {cur}{price:.4f}  +{gain_pct:.2f}% for {profit_mins:.0f}min — taking profit"
+                                    print(f"{_G}{_m}{_R}"); self._log(_m)
                                     self._exiting.add(pos_id)
                                     threading.Thread(
                                         target=self._scalp_exit, args=(pos, price, 'PROFIT_TIMER'), daemon=True
@@ -427,7 +445,8 @@ class PositionMonitor:
                 sign = "+" if pnl >= 0 else ""
                 cur  = self._currency
                 _c   = _G if pnl >= 0 else _RD
-                print(f"{_c}  [SOLD] {sym} @ {cur}{price:.4f}  P&L: {sign}{cur}{pnl:.4f} ({sign}{pct:.2f}%){_R}")
+                _m = f"  [SOLD] {sym} @ {cur}{price:.4f}  P&L: {sign}{cur}{pnl:.4f} ({sign}{pct:.2f}%)"
+                print(f"{_c}{_m}{_R}"); self._log(_m)
         except Exception as e:
             print(f"[Monitor] Scalp exit error for {sym}: {e}")
         finally:
