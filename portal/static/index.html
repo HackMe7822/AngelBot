@@ -1230,7 +1230,7 @@
         <summary>📊 Signal Quality (MIN_SIGNAL_SCORE) — How does it work?</summary>
         <div class="faq-body">
           <p class="faq-a">Before buying any stock, the bot checks multiple technical signals: RSI, volume spike, price momentum, candle pattern, and more. MIN_SIGNAL_SCORE is how many of these must say "BUY" before the bot actually places a trade.</p>
-          <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;">
+          <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:12px;">
             <div class="card" style="border-left:3px solid #cf222e;padding:12px;">
               <div style="font-weight:700;margin-bottom:4px;color:#cf222e;">Score 2 — Aggressive</div>
               <div style="font-size:12px;color:var(--muted);">Only 2 signals need to agree. Maximum trades. More noise and false entries. Use when you want as many setups as possible.</div>
@@ -1242,6 +1242,10 @@
             <div class="card" style="border-left:3px solid #1a7f37;padding:12px;">
               <div style="font-weight:700;margin-bottom:4px;color:#1a7f37;">Score 4 — Strict</div>
               <div style="font-size:12px;color:var(--muted);">4 signals agree. Fewest trades, highest confidence. Matched the original $300/4hr profitable session settings.</div>
+            </div>
+            <div class="card" style="border-left:3px solid #8250df;padding:12px;">
+              <div style="font-weight:700;margin-bottom:4px;color:#8250df;">Score 5 — Very Strict</div>
+              <div style="font-size:12px;color:var(--muted);">5+ signals align simultaneously. Ultra-selective — very few trades per day. Best on strong trending markets only.</div>
             </div>
           </div>
         </div>
@@ -1580,9 +1584,10 @@
         </div>
       </div>
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap;">
       <button class="btn" onclick="document.getElementById('report-overlay').style.display='none'">Cancel</button>
-      <button class="btn primary" onclick="generateReport()">Generate Report</button>
+      <button class="btn" onclick="generateReport('preview')" style="border-color:#0969da;color:#0969da;">&#128065; Preview</button>
+      <button class="btn primary" onclick="generateReport('download')">&#8595; Download</button>
     </div>
   </div>
 </div>
@@ -2754,9 +2759,10 @@ const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','US
 const _CONFIG_SELECTS = {
   MIN_SIGNAL_SCORE: {
     options: [
-      { val:'2', label:'2 — Aggressive', desc:'Any setup with 2+ signals. Most trades, highest frequency. Expect more false entries but maximum volume.' },
-      { val:'3', label:'3 — Moderate',   desc:'Balanced. More setups than 4, still filtered. Good for active days when market is trending.' },
-      { val:'4', label:'4 — Strict',     desc:'High-confidence only. Fewest trades, strongest setups. Matches the original $300/4hr profitable session.' },
+      { val:'2', label:'2 — Aggressive',   desc:'Any setup with 2+ signals. Most trades, highest frequency. Expect more false entries but maximum volume.' },
+      { val:'3', label:'3 — Moderate',     desc:'Balanced. More setups than 4, still filtered. Good for active days when market is trending.' },
+      { val:'4', label:'4 — Strict',       desc:'High-confidence only. Fewest trades, strongest setups. Matches the original $300/4hr profitable session.' },
+      { val:'5', label:'5 — Very Strict',  desc:'Maximum selectivity. Only exceptional setups where 5+ signals align simultaneously. Very few trades per day — best used on strong trending markets.' },
     ]
   }
 };
@@ -4238,9 +4244,10 @@ function _expToggle(btn) {
   var rect = btn.getBoundingClientRect();
   clone.setAttribute('style',
     'display:block;position:fixed;z-index:9999;' +
-    'background:var(--surface);border:1px solid var(--border);border-radius:6px;' +
-    'min-width:158px;padding:4px 0;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+    'background:#ffffff;border:1px solid #d1d5db;border-radius:8px;' +
+    'min-width:168px;padding:4px 0;box-shadow:0 8px 28px rgba(0,0,0,.18);'
   );
+  clone.querySelectorAll('div').forEach(function(d){ d.style.color='#24292f'; });
   clone.style.top  = (rect.bottom + 3) + 'px';
   clone.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
   clone._srcBtn = btn;
@@ -4392,7 +4399,7 @@ function _tradeSummaryRows(trades) {
 }
 
 // ── Report Generator ──────────────────────────────────────────────────────
-async function generateReport() {
+async function generateReport(mode) {
   var market  = document.getElementById('rpt-market').value;
   var range   = document.getElementById('rpt-range').value;
   var fromDt  = document.getElementById('rpt-from').value;
@@ -4402,6 +4409,7 @@ async function generateReport() {
   var incSym  = document.getElementById('rpt-inc-symbols').checked;
   var incDaily= document.getElementById('rpt-inc-daily').checked;
   var incList = document.getElementById('rpt-inc-trades').checked;
+  if (!mode) mode = 'preview';
 
   document.getElementById('report-overlay').style.display = 'none';
   toast('Generating report…', 8000);
@@ -4481,65 +4489,111 @@ async function generateReport() {
   var mktLabel = {'india_paper':'India (NSE)','us_paper':'US (Alpaca)','crypto_paper':'Crypto'};
 
   var rangeLabel = {'today':'Today','yesterday':'Yesterday','week':'Last 7 Days','month':'Last 30 Days','all':'All Time','custom':'Custom'};
-  var reportTitle = 'AngelBot Report — ' + (market ? (mktLabel[market+'_paper']||market) : 'All Markets') + ' — ' + (rangeLabel[range]||range);
+  var mktShort   = market ? (mktLabel[market+'_paper']||market) : 'All Markets';
+  var reportTitle = 'AngelBot Performance Report';
+  var reportSubtitle = mktShort + ' &nbsp;&#9642;&nbsp; ' + (rangeLabel[range]||range);
 
   var css = [
-    'body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:24px;background:#fff}',
-    'h1{font-size:20px;margin:0 0 4px}',
-    'h2{font-size:15px;font-weight:600;margin:24px 0 10px;padding-bottom:4px;border-bottom:2px solid #e0e0e0}',
-    '.meta{font-size:11px;color:#888;margin-bottom:20px}',
-    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:8px}',
-    '.kpi{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:8px;padding:14px}',
-    '.kpi-val{font-size:22px;font-weight:700;margin:4px 0 2px}',
-    '.kpi-label{font-size:11px;color:#888}',
-    'table{border-collapse:collapse;width:100%;margin-bottom:8px}',
-    'th,td{border:1px solid #ddd;padding:6px 10px;font-size:12px;text-align:left}',
-    'th{background:#f0f0f0;font-weight:600}',
-    'tr:nth-child(even){background:#fafafa}',
-    '.bar{display:inline-block;height:10px;background:#3b82f6;border-radius:3px;vertical-align:middle}',
-    '.pnl-pos{color:#006e2e;font-weight:600}.pnl-neg{color:#c0392b;font-weight:600}',
-    '.day-bar{display:inline-block;height:14px;min-width:3px;vertical-align:middle;border-radius:2px}',
-    'button{padding:7px 18px;border:1px solid #ccc;border-radius:5px;cursor:pointer;font-size:13px;margin-right:8px;margin-bottom:20px}',
-    '@media print{button{display:none}}'
-  ].join('');
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;color:#1e293b;background:#f1f5f9;min-height:100vh}',
+    '.report-header{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,#0f4c81 100%);color:#fff;padding:36px 40px 30px;position:relative;overflow:hidden}',
+    '.report-header::before{content:"";position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:rgba(255,255,255,.05);border-radius:50%}',
+    '.report-header::after{content:"";position:absolute;bottom:-80px;right:80px;width:160px;height:160px;background:rgba(255,255,255,.04);border-radius:50%}',
+    '.rh-logo{font-size:28px;font-weight:800;letter-spacing:-1px;margin-bottom:4px}',
+    '.rh-logo span{color:#38bdf8}',
+    '.rh-title{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:16px}',
+    '.rh-sub{font-size:12px;color:rgba(255,255,255,.5);margin-top:10px}',
+    '.rh-actions{position:absolute;top:28px;right:36px;display:flex;gap:8px}',
+    '.rh-btn{padding:8px 18px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:.15s}',
+    '.rh-btn-dl{background:#38bdf8;color:#0f172a}.rh-btn-dl:hover{background:#7dd3fc}',
+    '.rh-btn-pr{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25)}.rh-btn-pr:hover{background:rgba(255,255,255,.25)}',
+    '.report-body{max-width:1100px;margin:0 auto;padding:28px 24px}',
+    'h2{font-size:14px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.07em;margin:28px 0 14px;display:flex;align-items:center;gap:8px}',
+    'h2::after{content:"";flex:1;height:2px;background:linear-gradient(90deg,#e2e8f0,transparent)}',
+    '.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:8px}',
+    '.kpi{background:#fff;border-radius:10px;padding:16px 18px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-top:4px solid #e2e8f0;position:relative;overflow:hidden}',
+    '.kpi.green{border-top-color:#22c55e}.kpi.red{border-top-color:#ef4444}.kpi.blue{border-top-color:#3b82f6}.kpi.purple{border-top-color:#a855f7}.kpi.orange{border-top-color:#f97316}.kpi.teal{border-top-color:#14b8a6}',
+    '.kpi-val{font-size:24px;font-weight:800;margin:4px 0 2px;line-height:1.1}',
+    '.kpi-label{font-size:11px;color:#64748b;font-weight:500;text-transform:uppercase;letter-spacing:.04em}',
+    '.kpi-sub{font-size:10px;color:#94a3b8;margin-top:2px}',
+    'table{border-collapse:separate;border-spacing:0;width:100%;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:4px}',
+    'thead tr{background:linear-gradient(135deg,#1e3a5f,#1e40af)}',
+    'th{color:#fff;padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;text-align:left;border:none}',
+    'td{padding:9px 14px;font-size:12px;border-bottom:1px solid #f1f5f9;background:#fff}',
+    'tbody tr:last-child td{border-bottom:none}',
+    'tbody tr:nth-child(even) td{background:#f8fafc}',
+    'tbody tr:hover td{background:#eff6ff}',
+    '.pnl-pos{color:#16a34a;font-weight:700}.pnl-neg{color:#dc2626;font-weight:700}.pnl-neu{color:#64748b;font-weight:600}',
+    '.wr-good{color:#16a34a;font-weight:700}.wr-bad{color:#dc2626;font-weight:700}',
+    '.bar-wrap{display:flex;align-items:center;gap:6px}',
+    '.bar{height:8px;border-radius:4px;background:linear-gradient(90deg,#3b82f6,#60a5fa);min-width:2px}',
+    '.day-bar{display:inline-block;border-radius:3px;vertical-align:middle;min-width:3px}',
+    '.pill-mkt{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}',
+    '.pill-india{background:#fef3c7;color:#92400e}.pill-us{background:#dbeafe;color:#1e40af}.pill-crypto{background:#f3e8ff;color:#6b21a8}.pill-other{background:#f1f5f9;color:#475569}',
+    '.footer{text-align:center;padding:20px;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;margin-top:24px}',
+    '@media print{.rh-actions,.rh-btn{display:none!important}body{background:#fff}.report-header{print-color-adjust:exact;-webkit-print-color-adjust:exact}}',
+  ].join('\n');
 
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + e(reportTitle) + '</title><style>' + css + '</style></head><body>';
-  html += '<button onclick="window.print()">&#128438; Print / Save PDF</button>';
-  html += '<button onclick="window.close()">Close</button>';
-  html += '<h1>' + e(reportTitle) + '</h1>';
-  html += '<div class="meta">Generated ' + new Date().toLocaleString() + ' &nbsp;&middot;&nbsp; ' + trades.length + ' closed trades analysed</div>';
+  function _mktPill(src) {
+    if (!src) return '<span class="pill-mkt pill-other">—</span>';
+    if (src.indexOf('india')>=0) return '<span class="pill-mkt pill-india">IN</span>';
+    if (src.indexOf('us')>=0) return '<span class="pill-mkt pill-us">US</span>';
+    if (src.indexOf('crypto')>=0) return '<span class="pill-mkt pill-crypto">CRY</span>';
+    return '<span class="pill-mkt pill-other">' + e(src) + '</span>';
+  }
+
+  var genTime = new Date().toLocaleString();
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>' + e(reportTitle) + '</title><style>' + css + '</style></head><body>';
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  html += '<div class="report-header">';
+  html += '<div class="rh-actions no-print">';
+  html += '<button class="rh-btn rh-btn-pr" onclick="window.print()">&#128438; Print / PDF</button>';
+  html += '<button class="rh-btn rh-btn-dl" onclick="_dlReport()">&#8595; Download HTML</button>';
+  html += '</div>';
+  html += '<div class="rh-logo"><span>Angel</span>Bot</div>';
+  html += '<div style="font-size:22px;font-weight:700;margin:2px 0 6px;">' + e(reportTitle) + '</div>';
+  html += '<div class="rh-title">' + reportSubtitle + '</div>';
+  html += '<div class="rh-sub">Generated ' + genTime + ' &nbsp;&#9642;&nbsp; ' + trades.length + ' closed trades analysed</div>';
+  html += '</div>';
+
+  html += '<div class="report-body">';
 
   // ── Summary KPIs ──────────────────────────────────────────────────────
   if (incSum) {
-    html += '<h2>Performance Summary</h2><div class="grid">';
-    var kpis = [
-      ['Total Trades', trades.length, ''],
-      ['Win Rate', winRate.toFixed(1) + '%', winRate >= 50 ? '#006e2e' : '#c0392b'],
-      ['Total P&L', pnlSign(totalPnl), totalPnl >= 0 ? '#006e2e' : '#c0392b'],
-      ['Total Profit', '+' + totalWin.toFixed(2), '#006e2e'],
-      ['Total Loss', totalLoss.toFixed(2), '#c0392b'],
-      ['Avg P&L / Trade', pnlSign(avgPnl), avgPnl >= 0 ? '#006e2e' : '#c0392b'],
-      ['Best Trade', '+' + best.toFixed(2), '#006e2e'],
-      ['Worst Trade', worst.toFixed(2), '#c0392b'],
-      ['Wins', wins.length, '#006e2e'],
-      ['Losses', losses.length, '#c0392b'],
-      ['Profit Factor', profitFactor > 99 ? '∞' : profitFactor.toFixed(2), profitFactor >= 1 ? '#006e2e' : '#c0392b'],
+    html += '<h2>&#128200; Performance Summary</h2><div class="kpi-grid">';
+    var kpiDefs = [
+      { label:'Total Trades',   val:trades.length,                                     cls:'blue',   sub:wins.length+' W / '+losses.length+' L' },
+      { label:'Win Rate',       val:winRate.toFixed(1)+'%',                             cls:winRate>=50?'green':'red', sub:winRate>=50?'Profitable':'Needs improvement' },
+      { label:'Total P&L',      val:pnlSign(totalPnl),                                  cls:totalPnl>=0?'green':'red', sub:'Net profit/loss' },
+      { label:'Total Profit',   val:'+'+totalWin.toFixed(2),                            cls:'green',  sub:wins.length+' winning trades' },
+      { label:'Total Loss',     val:totalLoss.toFixed(2),                               cls:'red',    sub:losses.length+' losing trades' },
+      { label:'Avg P&L / Trade',val:pnlSign(avgPnl),                                    cls:avgPnl>=0?'teal':'orange', sub:'Per closed trade' },
+      { label:'Best Trade',     val:'+'+best.toFixed(2),                                cls:'green',  sub:'Single trade high' },
+      { label:'Worst Trade',    val:worst.toFixed(2),                                   cls:'red',    sub:'Single trade low' },
+      { label:'Profit Factor',  val:profitFactor>99?'&#8734;':profitFactor.toFixed(2),  cls:profitFactor>=1?'purple':'orange', sub:'>1 is profitable' },
     ];
-    kpis.forEach(function(k){
-      html += '<div class="kpi"><div class="kpi-label">' + e(k[0]) + '</div>';
-      html += '<div class="kpi-val" style="color:' + (k[2]||'#222') + '">' + e(String(k[1])) + '</div></div>';
+    kpiDefs.forEach(function(k){
+      var valColor = k.cls==='green'?'#16a34a':k.cls==='red'?'#dc2626':k.cls==='blue'?'#2563eb':k.cls==='purple'?'#9333ea':k.cls==='teal'?'#0d9488':'#ea580c';
+      html += '<div class="kpi '+k.cls+'">';
+      html += '<div class="kpi-label">'+k.label+'</div>';
+      html += '<div class="kpi-val" style="color:'+valColor+'">'+k.val+'</div>';
+      html += '<div class="kpi-sub">'+k.sub+'</div>';
+      html += '</div>';
     });
     html += '</div>';
 
     // Market breakdown (if all markets)
     if (Object.keys(mktMap).length > 1) {
-      html += '<h2>Market Breakdown</h2><table><thead><tr><th>Market</th><th>Trades</th><th>Wins</th><th>Win Rate</th><th>Total P&L</th></tr></thead><tbody>';
+      html += '<h2>&#127758; Market Breakdown</h2><table><thead><tr><th>Market</th><th>Trades</th><th>Wins</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th></tr></thead><tbody>';
       Object.keys(mktMap).forEach(function(m){
         var mv = mktMap[m];
-        var wr = (mv.wins/mv.count*100).toFixed(1);
-        html += '<tr><td>' + e(mktLabel[m]||m) + '</td><td>' + mv.count + '</td><td>' + mv.wins + '</td>';
-        html += '<td style="' + pnlStyle(parseFloat(wr)-50) + '">' + wr + '%</td>';
-        html += '<td style="' + pnlStyle(mv.pnl) + '">' + pnlSign(mv.pnl) + '</td></tr>';
+        var wr = mv.count ? (mv.wins/mv.count*100) : 0;
+        var avgM = mv.count ? mv.pnl/mv.count : 0;
+        html += '<tr><td>'+_mktPill(m)+' <strong>'+e(mktLabel[m]||m)+'</strong></td><td>'+mv.count+'</td><td>'+mv.wins+'</td>';
+        html += '<td class="'+(wr>=50?'wr-good':'wr-bad')+'">'+wr.toFixed(1)+'%</td>';
+        html += '<td class="'+(mv.pnl>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(mv.pnl)+'</td>';
+        html += '<td class="'+(avgM>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(avgM)+'</td></tr>';
       });
       html += '</tbody></table>';
     }
@@ -4547,84 +4601,112 @@ async function generateReport() {
 
   // ── Exit reason breakdown ──────────────────────────────────────────────
   if (incExits) {
-    html += '<h2>Exit Reason Breakdown</h2><table><thead><tr><th>Exit Reason</th><th>Count</th><th>%</th><th>Wins</th><th>Win Rate</th><th>Total P&L</th></tr></thead><tbody>';
+    var maxExitCnt = Math.max.apply(null, Object.values(exitMap).map(function(v){return v.count;})) || 1;
+    html += '<h2>&#128270; Exit Reason Breakdown</h2>';
+    html += '<table><thead><tr><th>Exit Reason</th><th>Count</th><th>Share</th><th>Wins</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th></tr></thead><tbody>';
     Object.keys(exitMap).sort(function(a,b){ return exitMap[b].count - exitMap[a].count; }).forEach(function(r){
       var ev = exitMap[r];
-      var pct = (ev.count / trades.length * 100).toFixed(1);
-      var wr  = (ev.wins / ev.count * 100).toFixed(1);
-      html += '<tr><td>' + e(r) + '</td><td>' + ev.count + '</td>';
-      html += '<td><span class="bar" style="width:' + pct + 'px"></span> ' + pct + '%</td>';
-      html += '<td>' + ev.wins + '</td>';
-      html += '<td style="' + pnlStyle(parseFloat(wr)-50) + '">' + wr + '%</td>';
-      html += '<td style="' + pnlStyle(ev.pnl) + '">' + pnlSign(ev.pnl) + '</td></tr>';
+      var pct = (ev.count / trades.length * 100);
+      var wr  = ev.count ? (ev.wins / ev.count * 100) : 0;
+      var avg = ev.count ? ev.pnl / ev.count : 0;
+      var barW = Math.round(ev.count / maxExitCnt * 80);
+      html += '<tr><td><strong>'+e(r)+'</strong></td>';
+      html += '<td style="color:#2563eb;font-weight:700;">'+ev.count+'</td>';
+      html += '<td><div class="bar-wrap"><span class="bar" style="width:'+barW+'px"></span><span style="color:#64748b;font-size:11px">'+pct.toFixed(1)+'%</span></div></td>';
+      html += '<td>'+ev.wins+'</td>';
+      html += '<td class="'+(wr>=50?'wr-good':'wr-bad')+'">'+wr.toFixed(1)+'%</td>';
+      html += '<td class="'+(ev.pnl>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(ev.pnl)+'</td>';
+      html += '<td class="'+(avg>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(avg)+'</td></tr>';
     });
     html += '</tbody></table>';
   }
 
   // ── Top / Bottom symbols ──────────────────────────────────────────────
   if (incSym && symbols.length) {
-    html += '<h2>Top 10 Symbols (by P&amp;L)</h2><table><thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead><tbody>';
-    topSym.forEach(function(s){
-      html += '<tr><td><strong>' + e(s.symbol) + '</strong></td><td>' + s.trades + '</td>';
-      html += '<td>' + (s.win_rate||0).toFixed(1) + '%</td>';
-      html += '<td style="' + pnlStyle(s.total_pnl) + '">' + pnlSign(s.total_pnl) + '</td>';
-      html += '<td style="' + pnlStyle(s.avg_pnl) + '">' + pnlSign(s.avg_pnl) + '</td>';
-      html += '<td class="pnl-pos">+' + (s.best||0).toFixed(2) + '</td>';
-      html += '<td class="pnl-neg">' + (s.worst||0).toFixed(2) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-    html += '<h2>Bottom 10 Symbols (by P&amp;L)</h2><table><thead><tr><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th></tr></thead><tbody>';
-    botSym.forEach(function(s){
-      html += '<tr><td><strong>' + e(s.symbol) + '</strong></td><td>' + s.trades + '</td>';
-      html += '<td>' + (s.win_rate||0).toFixed(1) + '%</td>';
-      html += '<td style="' + pnlStyle(s.total_pnl) + '">' + pnlSign(s.total_pnl) + '</td>';
-      html += '<td style="' + pnlStyle(s.avg_pnl) + '">' + pnlSign(s.avg_pnl) + '</td>';
-      html += '<td class="pnl-pos">+' + (s.best||0).toFixed(2) + '</td>';
-      html += '<td class="pnl-neg">' + (s.worst||0).toFixed(2) + '</td></tr>';
-    });
-    html += '</tbody></table>';
+    var symCols = '<th>#</th><th>Symbol</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Best</th><th>Worst</th>';
+    function _symRows(arr, isTop) {
+      return arr.map(function(s,i){
+        var wr = (s.win_rate||0);
+        return '<tr>'
+          +'<td style="color:#94a3b8;font-weight:600;">'+(i+1)+'</td>'
+          +'<td><strong style="font-size:13px;">'+e(s.symbol)+'</strong></td>'
+          +'<td style="color:#2563eb;">'+s.trades+'</td>'
+          +'<td class="'+(wr>=50?'wr-good':'wr-bad')+'">'+wr.toFixed(1)+'%</td>'
+          +'<td class="'+(s.total_pnl>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(s.total_pnl)+'</td>'
+          +'<td class="'+(s.avg_pnl>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(s.avg_pnl)+'</td>'
+          +'<td class="pnl-pos">+'+(s.best||0).toFixed(2)+'</td>'
+          +'<td class="pnl-neg">'+(s.worst||0).toFixed(2)+'</td></tr>';
+      }).join('');
+    }
+    html += '<h2>&#127942; Top 10 Symbols by P&amp;L</h2>';
+    html += '<table><thead><tr>'+symCols+'</tr></thead><tbody>'+_symRows(topSym,true)+'</tbody></table>';
+    html += '<h2>&#128683; Bottom 10 Symbols by P&amp;L</h2>';
+    html += '<table><thead><tr>'+symCols+'</tr></thead><tbody>'+_symRows(botSym,false)+'</tbody></table>';
   }
 
   // ── Daily breakdown ───────────────────────────────────────────────────
   if (incDaily && days.length) {
-    var maxAbsPnl = days.reduce(function(m,d){ return Math.max(m, Math.abs(dayMap[d].pnl)); }, 0);
-    html += '<h2>Daily P&amp;L Breakdown</h2><table><thead><tr><th>Date</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>P&amp;L</th><th>Visual</th></tr></thead><tbody>';
+    var maxAbsPnl = days.reduce(function(m,d){ return Math.max(m, Math.abs(dayMap[d].pnl)); }, 0.01);
+    html += '<h2>&#128197; Daily P&amp;L Breakdown</h2>';
+    html += '<table><thead><tr><th>Date</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>P&amp;L</th><th>Daily Bar</th></tr></thead><tbody>';
     days.forEach(function(d){
       var dv = dayMap[d];
-      var wr = (dv.wins/dv.count*100).toFixed(1);
-      var barW = maxAbsPnl > 0 ? Math.round(Math.abs(dv.pnl) / maxAbsPnl * 120) : 0;
-      var barCol = dv.pnl >= 0 ? '#006e2e' : '#c0392b';
-      html += '<tr><td>' + e(d) + '</td><td>' + dv.count + '</td><td>' + dv.wins + '</td><td>' + dv.losses + '</td>';
-      html += '<td style="' + pnlStyle(parseFloat(wr)-50) + '">' + wr + '%</td>';
-      html += '<td style="' + pnlStyle(dv.pnl) + '">' + pnlSign(dv.pnl) + '</td>';
-      html += '<td><span class="day-bar" style="width:' + barW + 'px;background:' + barCol + '"></span></td></tr>';
+      var wr = dv.count ? (dv.wins/dv.count*100) : 0;
+      var barW = Math.round(Math.abs(dv.pnl) / maxAbsPnl * 100);
+      var barCol = dv.pnl >= 0 ? 'linear-gradient(90deg,#22c55e,#86efac)' : 'linear-gradient(90deg,#ef4444,#fca5a5)';
+      html += '<tr>';
+      html += '<td style="color:#1e293b;font-weight:600;">'+e(d)+'</td>';
+      html += '<td style="color:#2563eb;">'+dv.count+'</td>';
+      html += '<td style="color:#16a34a;font-weight:600;">'+dv.wins+'</td>';
+      html += '<td style="color:#dc2626;font-weight:600;">'+dv.losses+'</td>';
+      html += '<td class="'+(wr>=50?'wr-good':'wr-bad')+'">'+wr.toFixed(1)+'%</td>';
+      html += '<td class="'+(dv.pnl>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(dv.pnl)+'</td>';
+      html += '<td><span class="day-bar" style="width:'+barW+'px;background:'+barCol+'"></span></td></tr>';
     });
     html += '</tbody></table>';
   }
 
   // ── Full trade list ───────────────────────────────────────────────────
   if (incList) {
-    html += '<h2>Full Trade List (' + trades.length + ' trades)</h2>';
-    html += '<table><thead><tr><th>#</th><th>Symbol</th><th>Market</th><th>Entry Time</th><th>Entry</th><th>Exit</th><th>P&L</th><th>%</th><th>Reason</th></tr></thead><tbody>';
+    html += '<h2>&#128203; Full Trade List ('+trades.length+' trades)</h2>';
+    html += '<table><thead><tr><th>#</th><th>Symbol</th><th>Mkt</th><th>Entry Time</th><th>Entry Price</th><th>Exit Price</th><th>P&L</th><th>%</th><th>Exit Reason</th></tr></thead><tbody>';
     trades.forEach(function(t){
       var pnlV = t.pnl||0;
-      html += '<tr><td>' + e(t.id) + '</td><td><strong>' + e(t.symbol) + '</strong></td>';
-      html += '<td>' + e(mktLabel[t.source]||t.source||'') + '</td>';
-      html += '<td style="color:#888;white-space:nowrap">' + e((t.entry_time||'').slice(0,16)) + '</td>';
-      html += '<td>' + (t.entry_price||0).toFixed(2) + '</td>';
-      html += '<td>' + (t.exit_price ? (t.exit_price).toFixed(2) : '—') + '</td>';
-      html += '<td style="' + pnlStyle(pnlV) + '">' + pnlSign(pnlV) + '</td>';
-      html += '<td style="' + pnlStyle(pnlV) + '">' + (t.pnl_pct != null ? (pnlV>=0?'+':'')+t.pnl_pct.toFixed(1)+'%' : '—') + '</td>';
-      html += '<td style="color:#888;font-size:11px">' + e(t.exit_reason||'—') + '</td></tr>';
+      var pnlPct = t.pnl_pct != null ? (pnlV>=0?'+':'')+t.pnl_pct.toFixed(2)+'%' : '—';
+      html += '<tr>';
+      html += '<td style="color:#94a3b8;font-size:11px;">'+e(t.id)+'</td>';
+      html += '<td><strong>'+e(t.symbol)+'</strong></td>';
+      html += '<td>'+_mktPill(t.source)+'</td>';
+      html += '<td style="color:#64748b;white-space:nowrap;font-size:11px;">'+e((t.entry_time||'').slice(0,16))+'</td>';
+      html += '<td>'+((t.entry_price||0)).toFixed(2)+'</td>';
+      html += '<td>'+(t.exit_price ? t.exit_price.toFixed(2) : '—')+'</td>';
+      html += '<td class="'+(pnlV>=0?'pnl-pos':'pnl-neg')+'">'+pnlSign(pnlV)+'</td>';
+      html += '<td class="'+(pnlV>=0?'pnl-pos':'pnl-neg')+'">'+pnlPct+'</td>';
+      html += '<td style="color:#64748b;font-size:11px;">'+e(t.exit_reason||'—')+'</td></tr>';
     });
     html += '</tbody></table>';
   }
 
+  html += '</div>';
+  html += '<div class="footer">AngelBot Portal &nbsp;&#9642;&nbsp; '+genTime+' &nbsp;&#9642;&nbsp; Paper Trading Only</div>';
+
+  // ── Download helper embedded in the report page ───────────────────────
+  html += '<script>function _dlReport(){var b=new Blob([document.documentElement.outerHTML],{type:"text/html"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="AngelBot-Report.html";a.click();}<\/script>';
+
   html += '</body></html>';
 
-  var w = window.open('','_blank','width=1100,height=800');
-  if (w) { w.document.write(html); w.document.close(); }
-  else toast('Allow popups to view report');
+  if (mode === 'download') {
+    var blob = new Blob([html], {type:'text/html;charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'AngelBot-Report-' + new Date().toISOString().slice(0,10) + '.html';
+    a.click();
+    toast('Report downloaded!');
+  } else {
+    var w = window.open('','_blank','width=1200,height=850,scrollbars=yes');
+    if (w) { w.document.write(html); w.document.close(); }
+    else toast('Allow popups to preview report');
+  }
 }
 
 // ── Patch exportTrades/exportDashTrades to include summary in CSV ──────────
