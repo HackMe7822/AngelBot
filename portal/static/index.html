@@ -1803,6 +1803,7 @@ let _dashRecentLimit = 10;
 var _tradesRaw     = [];
 var _dashTradesRaw = [];
 var _dashBuysRaw   = [];
+var _priceCache    = {};
 // export: per-table selection sets
 var _selTrades   = new Set();
 var _selPos      = new Set();
@@ -2304,6 +2305,28 @@ async function loadRecentTrades() {
   if (sub) sub.textContent = lim >= 99999 ? 'All closed' : 'Last ' + lim + ' closed';
 }
 
+function _cachedLpHtml(p, cur) {
+  var lp = _priceCache[p.symbol + '|' + (p.source || 'paper')];
+  if (lp == null) return '&#8212;';
+  var dp = lp < 1 ? 6 : 2, e = p.entry_price || 0;
+  return '<span style="color:' + (lp > e ? '#00c853' : lp < e ? '#cf222e' : 'var(--muted)') + ';font-weight:600">' + cur + lp.toFixed(dp) + '</span>';
+}
+function _cachedGainHtml(p, cur) {
+  var lp = _priceCache[p.symbol + '|' + (p.source || 'paper')];
+  if (lp == null) return '&#8212;';
+  var dp = lp < 1 ? 6 : 2, e = p.entry_price || 0, g = lp - e, pct = e > 0 ? g/e*100 : 0;
+  var cls = g > 0 ? 'pos' : g < 0 ? 'neg' : 'flat';
+  return '<span class="pnl-badge ' + cls + '">' + (g >= 0 ? '+' : '') + cur + Math.abs(g).toFixed(dp) + ' <span style="opacity:.75">(' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%)</span></span>';
+}
+function _cachedUpnlHtml(p, cur) {
+  var lp = _priceCache[p.symbol + '|' + (p.source || 'paper')];
+  if (lp == null) return '&#8212;';
+  var dp = lp < 1 ? 6 : 2, e = p.entry_price || 0, g = lp - e;
+  var u = g * (p.quantity || 0), inv = e * (p.quantity || 0), pct = inv > 0 ? u/inv*100 : 0;
+  var cls = u > 0 ? 'pos' : u < 0 ? 'neg' : 'flat';
+  return '<span class="pnl-badge ' + cls + '" style="font-size:13px;padding:4px 10px;">' + (u >= 0 ? '&#9650; +' : '&#9660; ') + cur + Math.abs(u).toFixed(2) + ' <span style="opacity:.75">(' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%)</span></span>';
+}
+
 async function loadRecentBuys() {
   const r = await apiFetch('/api/positions');
   if (!r) return;
@@ -2318,6 +2341,8 @@ async function loadRecentBuys() {
     '</tr></thead><tbody>' +
     rows.map(function(p) {
       var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      var _rbKey = p.symbol + '|' + (p.source || 'paper');
+      var _rbClp = _priceCache[_rbKey];
       return '<tr>' +
         '<td><strong>' + fmtSym(p.symbol, p.source) + '</strong></td>' +
         '<td>' + mktBadge(p.source) + '</td>' +
@@ -2325,9 +2350,9 @@ async function loadRecentBuys() {
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
-        '<td id="rb-lp-'   + p.id + '"><span class="price-loading"></span></td>' +
-        '<td id="rb-gain-' + p.id + '"><span class="price-loading"></span></td>' +
-        '<td id="rb-upnl-' + p.id + '"><span class="price-loading"></span></td>' +
+        '<td id="rb-lp-'   + p.id + '"' + (_rbClp != null ? ' data-price="' + _rbClp + '"' : '') + '>' + _cachedLpHtml(p, cur) + '</td>' +
+        '<td id="rb-gain-' + p.id + '">' + _cachedGainHtml(p, cur) + '</td>' +
+        '<td id="rb-upnl-' + p.id + '">' + _cachedUpnlHtml(p, cur) + '</td>' +
         '</tr>';
     }).join('') + '</tbody></table>';
   fetchLivePrices(rows, function(prices, normed) {
@@ -2351,6 +2376,7 @@ async function loadRecentBuys() {
       var dp      = lp < 1 ? 6 : 2;
       var prev    = parseFloat(lpEl.dataset.price || '0');
       lpEl.dataset.price = lp;
+      _priceCache[key] = lp;
       var entry   = p.entry_price || 0;
       var lpColor = lp > entry ? '#00c853' : lp < entry ? '#cf222e' : 'var(--muted)';
       var tickDir = prev > 0 ? (lp > prev ? 'up' : lp < prev ? 'down' : '') : '';
@@ -2504,15 +2530,17 @@ function _buildPositionsTable(positions) {
     '</tr></thead><tbody>' +
     positions.map(function(p) {
       var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      var _posKey = p.symbol + '|' + (p.source || 'paper');
+      var _posClp = _priceCache[_posKey];
       return '<tr id="pos-row-' + p.id + '">' +
         '<td style="padding:4px;"><input type="checkbox" class="row-chk" data-id="' + p.id + '" onclick="_cht(' + p.id + ',\'pos\')" ' + (_selPos.has(p.id)?'checked':'') + '></td>' +
         '<td><strong>' + fmtSym(p.symbol, p.source) + '</strong></td>' +
         '<td>' + mktBadge(p.source) + '</td>' +
         '<td style="color:var(--muted);white-space:nowrap">' + fmtDt(p.entry_time, p.source) + '</td>' +
         '<td>' + cur + (p.entry_price||0).toFixed(4) + '</td>' +
-        '<td id="lp-' + p.id + '"><span class="price-loading"></span></td>' +
-        '<td id="gain-' + p.id + '"><span class="price-loading"></span></td>' +
-        '<td id="upnl-' + p.id + '"><span class="price-loading"></span></td>' +
+        '<td id="lp-'   + p.id + '"' + (_posClp != null ? ' data-price="' + _posClp + '"' : '') + '>' + _cachedLpHtml(p, cur) + '</td>' +
+        '<td id="gain-' + p.id + '">' + _cachedGainHtml(p, cur) + '</td>' +
+        '<td id="upnl-' + p.id + '">' + _cachedUpnlHtml(p, cur) + '</td>' +
         '<td>' + p.quantity + '</td>' +
         '<td>' + cur + (p.capital_used||0).toFixed(2) + '</td>' +
         '<td class="pnl-neg">' + cur + (p.stop_loss||0).toFixed(4) + '</td>' +
@@ -2545,6 +2573,7 @@ function _refreshPositionPrices(positions) {
       const dp         = lp < 1 ? 6 : 2;
       const prevPrice  = parseFloat(lpEl.dataset.price || '0');
       lpEl.dataset.price = lp;
+      _priceCache[key] = lp;
       const entry   = p.entry_price || 0;
       const lpColor = lp > entry ? '#00c853' : lp < entry ? '#cf222e' : 'var(--muted)';
       const tickDir = prevPrice > 0 ? (lp > prevPrice ? 'up' : lp < prevPrice ? 'down' : '') : '';
