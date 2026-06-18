@@ -3655,10 +3655,10 @@ async function loadConfig() {
     if (!el) return;
     const rows = keys.filter(k => d[k] !== undefined).map(function(k) {
       const label = _CONFIG_LABELS[k] || k;
+      const rawVal = String(d[k]);
       const hintHtml = _CONFIG_HINT_FN[k] ? _CONFIG_HINT_FN[k](rawVal) : (_CONFIG_HINTS[k] || '');
       const hint  = hintHtml ? `<div id="cfg-hint-${k}" class="cfg-hint">${hintHtml}</div>` : '';
       let control = '';
-      const rawVal = String(d[k]);
       _cfgOriginal[k] = rawVal;
 
       if (_CONFIG_SELECTS[k]) {
