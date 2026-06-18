@@ -373,69 +373,73 @@
 <body>
 
 <!-- Login overlay -->
-<div id="login-overlay" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:linear-gradient(135deg,#0d1117 0%,#161b22 50%,#0d1117 100%);">
-  <!-- Subtle grid pattern -->
-  <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(9,105,218,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(9,105,218,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;"></div>
+<div id="login-overlay" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;
+  background:#eef2ff;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(99,102,241,.13) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(59,130,246,.1) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 60% 40%, rgba(139,92,246,.07) 0%, transparent 55%);
+">
+  <!-- Dot-grid pattern overlay -->
+  <div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(99,102,241,.18) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;opacity:.6;"></div>
 
-  <div style="position:relative;width:100%;max-width:420px;padding:20px;">
-    <!-- Glow ring behind card -->
-    <div style="position:absolute;inset:-2px;border-radius:20px;background:linear-gradient(135deg,rgba(9,105,218,.35),rgba(130,80,223,.2),rgba(9,105,218,.1));filter:blur(1px);z-index:-1;"></div>
+  <!-- Floating accent shapes -->
+  <div style="position:absolute;top:8%;left:6%;width:180px;height:180px;border-radius:50%;background:rgba(99,102,241,.07);filter:blur(40px);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:12%;right:8%;width:220px;height:220px;border-radius:50%;background:rgba(59,130,246,.08);filter:blur(50px);pointer-events:none;"></div>
 
-    <div style="background:#161b22;border:1px solid rgba(48,54,61,.9);border-radius:18px;padding:40px 36px;box-shadow:0 24px 80px rgba(0,0,0,.6);">
+  <div style="position:relative;width:100%;max-width:440px;padding:20px;">
+    <div style="background:#fff;border-radius:22px;padding:44px 40px 36px;box-shadow:0 8px 40px rgba(99,102,241,.18),0 2px 12px rgba(0,0,0,.06);border:1px solid rgba(199,210,254,.6);">
 
       <!-- Logo -->
       <div style="text-align:center;margin-bottom:32px;">
-        <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#0969da,#388bfd);display:inline-flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 24px rgba(9,105,218,.4);margin-bottom:16px;">🤖</div>
-        <div style="font-size:22px;font-weight:700;color:#e6edf3;letter-spacing:-.3px;">AngelBot Portal</div>
-        <div style="font-size:12px;color:#7d8590;margin-top:4px;letter-spacing:.3px;">ALGORITHMIC TRADING DASHBOARD</div>
-        <!-- Market pills -->
-        <div style="display:flex;gap:6px;justify-content:center;margin-top:14px;">
-          <span style="background:rgba(26,127,55,.15);border:1px solid rgba(26,127,55,.3);color:#3fb950;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.3px;">🇮🇳 NSE</span>
-          <span style="background:rgba(9,105,218,.15);border:1px solid rgba(9,105,218,.3);color:#58a6ff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.3px;">🇺🇸 NASDAQ</span>
-          <span style="background:rgba(130,80,223,.15);border:1px solid rgba(130,80,223,.3);color:#d2a8ff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.3px;">₿ CRYPTO</span>
+        <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#4f46e5 0%,#818cf8 100%);display:inline-flex;align-items:center;justify-content:center;font-size:34px;box-shadow:0 8px 28px rgba(79,70,229,.35);margin-bottom:18px;">🤖</div>
+        <div style="font-size:24px;font-weight:800;color:#1e1b4b;letter-spacing:-.5px;">AngelBot Portal</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:5px;letter-spacing:.8px;font-weight:600;text-transform:uppercase;">Algorithmic Trading Dashboard</div>
+        <div style="display:flex;gap:7px;justify-content:center;margin-top:14px;">
+          <span style="background:#dcfce7;color:#16a34a;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.2px;">🇮🇳 NSE</span>
+          <span style="background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.2px;">🇺🇸 NASDAQ</span>
+          <span style="background:#ede9fe;color:#6d28d9;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.2px;">₿ Crypto</span>
         </div>
       </div>
 
       <!-- Form -->
       <div style="display:grid;gap:16px;">
-        <!-- Username -->
         <div>
-          <label style="font-size:11px;font-weight:600;color:#7d8590;letter-spacing:.5px;display:block;margin-bottom:6px;">USERNAME</label>
+          <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">Username</label>
           <div style="position:relative;">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#7d8590;font-size:15px;">👤</span>
-            <input type="text" id="login-user" autocomplete="username" placeholder="admin"
-              style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:11px 12px 11px 36px;color:#e6edf3;font-size:14px;outline:none;transition:border-color .2s;"
-              onfocus="this.style.borderColor='#388bfd'" onblur="this.style.borderColor='#30363d'"
+            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">👤</span>
+            <input type="text" id="login-user" autocomplete="username" placeholder="Enter username"
+              style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px 12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
+              onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+              onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
               onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
           </div>
         </div>
-        <!-- Password -->
         <div>
-          <label style="font-size:11px;font-weight:600;color:#7d8590;letter-spacing:.5px;display:block;margin-bottom:6px;">PASSWORD</label>
+          <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">Password</label>
           <div style="position:relative;">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#7d8590;font-size:15px;">🔒</span>
-            <input type="password" id="login-pass" autocomplete="current-password" placeholder="••••••••"
-              style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:11px 36px 11px 36px;color:#e6edf3;font-size:14px;outline:none;transition:border-color .2s;"
-              onfocus="this.style.borderColor='#388bfd'" onblur="this.style.borderColor='#30363d'"
+            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">🔑</span>
+            <input type="password" id="login-pass" autocomplete="current-password" placeholder="Enter password"
+              style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
+              onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+              onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
               onkeydown="if(event.key==='Enter')doLogin()">
-            <span onclick="_toggleLoginPw(this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#7d8590;cursor:pointer;font-size:13px;user-select:none;" title="Show/hide">👁</span>
+            <span onclick="_toggleLoginPw(this)" style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;user-select:none;opacity:.5;" title="Show/hide password">👁</span>
           </div>
         </div>
 
-        <!-- Error -->
-        <div id="login-err" style="display:none;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:7px;padding:10px 12px;color:#f85149;font-size:12px;line-height:1.5;"></div>
+        <div id="login-err" style="display:none;align-items:center;gap:9px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:11px 14px;color:#dc2626;font-size:12.5px;line-height:1.5;"></div>
 
-        <!-- Sign In button -->
         <button id="login-btn" onclick="doLogin()"
-          style="width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(135deg,#0969da,#388bfd);color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.2px;transition:opacity .15s,transform .1s;box-shadow:0 4px 16px rgba(9,105,218,.35);"
-          onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
-          Sign In
+          style="width:100%;padding:13px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5 0%,#6366f1 100%);color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 18px rgba(79,70,229,.38);"
+          onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 24px rgba(79,70,229,.45)'"
+          onmouseout="this.style.transform='';this.style.boxShadow='0 4px 18px rgba(79,70,229,.38)'">
+          Sign In &nbsp;→
         </button>
       </div>
 
-      <!-- Footer -->
-      <div style="text-align:center;margin-top:24px;padding-top:20px;border-top:1px solid #21262d;">
-        <span style="font-size:11px;color:#484f58;">Paper trading mode &nbsp;·&nbsp; No real money at risk</span>
+      <div style="text-align:center;margin-top:24px;padding-top:18px;border-top:1px solid #f1f5f9;">
+        <span style="font-size:11px;color:#94a3b8;">🔒&nbsp; Paper trading only &nbsp;·&nbsp; No real money at risk</span>
       </div>
     </div>
   </div>
@@ -1846,7 +1850,7 @@ function showLogin(errMsg) {
   document.querySelector('aside.sidebar').style.visibility = 'hidden';
   document.querySelector('main.main').style.visibility = 'hidden';
   const e = document.getElementById('login-err');
-  if (errMsg) { e.textContent = errMsg; e.style.display = 'block'; }
+  if (errMsg) { e.innerHTML = '⚠️&nbsp; ' + errMsg; e.style.display = 'flex'; }
   else { e.style.display = 'none'; }
   setTimeout(function(){ const u = document.getElementById('login-user'); if(u && !u.value) u.focus(); }, 80);
 }
@@ -1865,8 +1869,8 @@ async function doLogin() {
   const errEl = document.getElementById('login-err');
   const btn   = document.getElementById('login-btn');
   if (!u || !p) {
-    errEl.textContent = 'Please enter your username and password.';
-    errEl.style.display = 'block';
+    errEl.innerHTML = '⚠️&nbsp; Please enter your username and password.';
+    errEl.style.display = 'flex';
     return;
   }
   btn.textContent = 'Signing in…';
@@ -1877,8 +1881,8 @@ async function doLogin() {
     const creds = btoa(unescape(encodeURIComponent(u + ':' + p)));
     const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
     if (r.status === 401) {
-      errEl.textContent = 'Incorrect username or password. Please try again.';
-      errEl.style.display = 'block';
+      errEl.innerHTML = '⚠️&nbsp; Incorrect username or password. Please try again.';
+      errEl.style.display = 'flex';
       document.getElementById('login-pass').value = '';
       document.getElementById('login-pass').focus();
       return;
@@ -1894,8 +1898,8 @@ async function doLogin() {
     checkUpdate();
     _checkAdminAccess();
   } catch(ex) {
-    errEl.textContent = 'Could not reach the portal server. Check your connection.';
-    errEl.style.display = 'block';
+    errEl.innerHTML = '⚠️&nbsp; Could not reach the portal server. Check your connection.';
+    errEl.style.display = 'flex';
   } finally {
     btn.textContent = 'Sign In';
     btn.disabled = false;
@@ -2891,7 +2895,7 @@ const _CONFIG_LABELS = {
   US_CANDLE_CONFIRM_REENTRY:'US Candle Re-entry Gate',
   CRYPTO_CAPITAL:'Crypto Balance (USDT)', CRYPTO_MAX_DAILY_TRADES:'Crypto Daily Trade Limit',
   CRYPTO_MAX_CONCURRENT:'Crypto Max Open Positions', CRYPTO_MAX_DEPLOYED_PCT:'Crypto Max Capital Deployed %',
-  CRYPTO_PEAK_DRAWDOWN_PCT:'Crypto Peak Drawdown Limit',
+  CRYPTO_PEAK_DRAWDOWN_PCT:'Crypto Peak Drawdown Limit', CRYPTO_MAX_DAILY_LOSS_PCT:'Crypto Daily Loss Limit',
   CRYPTO_TARGET_PCT:'Crypto Profit Target %', CRYPTO_SL_PCT:'Crypto Stop Loss %', CRYPTO_BTC_MIN_CHANGE:'BTC Sentiment Gate',
   PAPER_MODE:'India Paper Mode (Safe)', ALPACA_PAPER:'US Paper Mode (Safe)', BINANCE_PAPER:'Crypto Paper Mode (Safe)', SLIPPAGE_PCT:'Slippage Simulation',
   TELEGRAM_ALERTS_ENABLED:'Telegram Alerts Master Switch', TELEGRAM_ALERT_BUY:'Buy Alert',
@@ -2937,7 +2941,7 @@ const _CONFIG_SECTIONS = {
            'US_LOSS_BURST_COOLDOWN','US_CANDLE_CONFIRM_REENTRY']
   },
   crypto: {
-    keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_MAX_CONCURRENT','CRYPTO_MAX_DEPLOYED_PCT','CRYPTO_PEAK_DRAWDOWN_PCT','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
+    keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_MAX_CONCURRENT','CRYPTO_MAX_DEPLOYED_PCT','CRYPTO_PEAK_DRAWDOWN_PCT','CRYPTO_MAX_DAILY_LOSS_PCT','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
   },
   general: {
     keys: ['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','SLIPPAGE_PCT']
@@ -3038,6 +3042,7 @@ const _CONFIG_HINTS = {
   CRYPTO_MAX_CONCURRENT:    'Maximum number of crypto positions open at the same time. Default 8 (one per tradeable pair). Bot cannot hold two positions in the same coin.',
   CRYPTO_MAX_DEPLOYED_PCT:  'Never have more than this fraction of crypto balance in open positions. <strong>0.80</strong> = 80% max deployed. Wider than stocks (70%) because crypto runs 24/7.',
   CRYPTO_PEAK_DRAWDOWN_PCT: 'Pause new crypto buys if portfolio losses from today\'s peak hit this %. <strong>0.05</strong> = 5% (wider than stock 3% because crypto is more volatile). Only fires on real closed losses.',
+  CRYPTO_MAX_DAILY_LOSS_PCT: 'Stop all crypto buys for the day if total realized losses exceed this %. <strong>0.03</strong> = 3%.',
   CRYPTO_BTC_MIN_CHANGE:    'Block all crypto buys if BTC dropped more than this % in the last hour. <strong>-0.4</strong> = block if BTC down 0.4% (alt coins usually follow BTC down).',
   PAPER_MODE:               'India paper trading — bot simulates trades, no real Angel One orders. Cannot be disabled from portal.',
   ALPACA_PAPER:             'US paper trading — Alpaca sandbox, no real money. Cannot be disabled from portal.',
@@ -3233,6 +3238,9 @@ const _CONFIG_HINT_FN = {
   CRYPTO_PEAK_DRAWDOWN_PCT: function(v) {
     return 'Pause new crypto buys if portfolio losses from today\'s peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' (wider than stocks because crypto is more volatile). Only fires on real closed losses.';
   },
+  CRYPTO_MAX_DAILY_LOSS_PCT: function(v) {
+    return 'Stop all crypto buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' daily loss cap.';
+  },
   CRYPTO_TARGET_PCT: function(v) {
     return 'Close crypto position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' profit target.';
   },
@@ -3312,7 +3320,7 @@ const _KEY_WORKERS = {
   US_MAX_BUYS_PER_SCAN:['US'], US_LOSS_BURST_COUNT:['US'], US_LOSS_BURST_WINDOW:['US'],
   US_LOSS_BURST_COOLDOWN:['US'], US_CANDLE_CONFIRM_REENTRY:['US'],
   CRYPTO_CAPITAL:['Crypto'], CRYPTO_MAX_DAILY_TRADES:['Crypto'], CRYPTO_MAX_CONCURRENT:['Crypto'],
-  CRYPTO_MAX_DEPLOYED_PCT:['Crypto'], CRYPTO_PEAK_DRAWDOWN_PCT:['Crypto'],
+  CRYPTO_MAX_DEPLOYED_PCT:['Crypto'], CRYPTO_PEAK_DRAWDOWN_PCT:['Crypto'], CRYPTO_MAX_DAILY_LOSS_PCT:['Crypto'],
   CRYPTO_TARGET_PCT:['Crypto'], CRYPTO_SL_PCT:['Crypto'], CRYPTO_BTC_MIN_CHANGE:['Crypto'],
   PAPER_MODE:['India'], ALPACA_PAPER:['US'], BINANCE_PAPER:['Crypto'],
   SLIPPAGE_PCT:['India','US','Crypto'],
