@@ -148,6 +148,27 @@ WHATSAPP_ALERT_TUNNEL_URL = os.getenv("WHATSAPP_ALERT_TUNNEL_URL", "true").lower
 WHATSAPP_MIN_BUY_CAPITAL  = float(os.getenv("WHATSAPP_MIN_BUY_CAPITAL", "0"))
 WHATSAPP_MIN_PNL_ALERT    = float(os.getenv("WHATSAPP_MIN_PNL_ALERT",   "0"))
 
+# ── ntfy push notifications (ntfy.sh — free, no signup, no API key needed) ───
+# 1. Install the "ntfy" app on your phone (Android/iOS)
+# 2. Pick any unique topic name: e.g. "angelbot-yourname"
+# 3. Subscribe to it in the app — instant push when bot fires
+NTFY_TOPIC   = os.getenv("NTFY_TOPIC",  "")               # required — your unique topic name
+NTFY_SERVER  = os.getenv("NTFY_SERVER", "https://ntfy.sh") # change if self-hosting ntfy
+NTFY_TOKEN   = os.getenv("NTFY_TOKEN",  "")               # optional — for private topics or ntfy.sh Pro
+NTFY_ALERTS_ENABLED   = os.getenv("NTFY_ALERTS_ENABLED",   "false").lower() == "true"
+NTFY_ALERT_BUY        = os.getenv("NTFY_ALERT_BUY",        "true").lower() == "true"
+NTFY_ALERT_SELL       = os.getenv("NTFY_ALERT_SELL",       "true").lower() == "true"
+NTFY_ALERT_DAILY      = os.getenv("NTFY_ALERT_DAILY",      "true").lower() == "true"
+NTFY_ALERT_ERRORS     = os.getenv("NTFY_ALERT_ERRORS",     "true").lower() == "true"
+NTFY_ALERT_BOT_START  = os.getenv("NTFY_ALERT_BOT_START",  "true").lower() == "true"
+NTFY_ALERT_BURST      = os.getenv("NTFY_ALERT_BURST",      "true").lower() == "true"
+NTFY_ALERT_INDIA      = os.getenv("NTFY_ALERT_INDIA",      "true").lower() == "true"
+NTFY_ALERT_US         = os.getenv("NTFY_ALERT_US",         "true").lower() == "true"
+NTFY_ALERT_CRYPTO     = os.getenv("NTFY_ALERT_CRYPTO",     "true").lower() == "true"
+NTFY_ALERT_TUNNEL_URL = os.getenv("NTFY_ALERT_TUNNEL_URL", "true").lower() == "true"
+NTFY_MIN_BUY_CAPITAL  = float(os.getenv("NTFY_MIN_BUY_CAPITAL", "0"))
+NTFY_MIN_PNL_ALERT    = float(os.getenv("NTFY_MIN_PNL_ALERT",   "0"))
+
 # ── Portal UI refresh intervals (seconds) ────────────────────────────────────
 PORTAL_DASH_REFRESH    = int(os.getenv("PORTAL_DASH_REFRESH",    "30"))
 PORTAL_POS_REFRESH     = int(os.getenv("PORTAL_POS_REFRESH",     "30"))

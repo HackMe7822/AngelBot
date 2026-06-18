@@ -51,7 +51,8 @@ def send(message):
 
 _MAX_TG = 4000  # Telegram hard limit is 4096; leave headroom for safety
 
-_WA_MARKET_KEY = {'india': 'WHATSAPP_ALERT_INDIA', 'us': 'WHATSAPP_ALERT_US', 'crypto': 'WHATSAPP_ALERT_CRYPTO'}
+_WA_MARKET_KEY   = {'india': 'WHATSAPP_ALERT_INDIA', 'us': 'WHATSAPP_ALERT_US', 'crypto': 'WHATSAPP_ALERT_CRYPTO'}
+_NTFY_MARKET_KEY = {'india': 'NTFY_ALERT_INDIA',    'us': 'NTFY_ALERT_US',    'crypto': 'NTFY_ALERT_CRYPTO'}
 
 def _wa(type_key, msg, market=None):
     """Mirror alert to WhatsApp if the corresponding WA toggle is enabled."""
@@ -62,6 +63,18 @@ def _wa(type_key, msg, market=None):
     try:
         from reporting.whatsapp_alerts import send as _wa_send
         _wa_send(msg)
+    except Exception:
+        pass
+
+def _ntfy(type_key, msg, market=None, title='AngelBot', priority='default', tags=None):
+    """Mirror alert to ntfy if the corresponding ntfy toggle is enabled."""
+    if not _alert_enabled(type_key):
+        return
+    if market and not _alert_enabled(_NTFY_MARKET_KEY.get(market, '')):
+        return
+    try:
+        from reporting.ntfy_alerts import send as _ntfy_send
+        _ntfy_send(msg, title=title, priority=priority, tags=tags)
     except Exception:
         pass
 
@@ -116,6 +129,7 @@ def send_buy_alert(symbol, entry, stop_loss, target, capital_used, quantity,
         f"Reason:       {reason_s}"
     )
     _wa('WHATSAPP_ALERT_BUY', msg, market)
+    _ntfy('NTFY_ALERT_BUY', msg, market, title='Buy Order', priority='high', tags=['chart_increasing'])
     return send(msg)
 
 
@@ -136,6 +150,7 @@ def send_hold_alert(symbol, price, stop_loss, reason, balance):
         f"<i>Bot will keep monitoring — will exit if conditions worsen</i>"
     )
     _wa('WHATSAPP_ALERT_SELL', msg)
+    _ntfy('NTFY_ALERT_SELL', msg, title='Hold — Watching', priority='default', tags=['eyes'])
     return send(msg)
 
 def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, reason,
@@ -177,6 +192,9 @@ def send_sell_alert(symbol, entry, exit_price, pnl, pnl_pct, duration, balance, 
         f"Balance:  ₹{balance:.2f}"
     )
     _wa('WHATSAPP_ALERT_SELL', msg, market)
+    ntfy_tags = ['white_check_mark'] if pnl >= 0 else ['x']
+    ntfy_pri  = 'default' if pnl >= 0 else 'high'
+    _ntfy('NTFY_ALERT_SELL', msg, market, title='Trade Closed', priority=ntfy_pri, tags=ntfy_tags)
     return send(msg)
 
 def send_reload_alert(old_balance, new_balance, reload_count, total_invested, amount=None):
@@ -193,6 +211,7 @@ def send_reload_alert(old_balance, new_balance, reload_count, total_invested, am
         f"Bot continues learning and trading 🤖"
     )
     _wa('WHATSAPP_ALERT_SELL', msg)
+    _ntfy('NTFY_ALERT_SELL', msg, title='Auto-Reload', priority='default', tags=['moneybag'])
     return send(msg)
 
 def send_daily_summary(date, trades, wins, losses, day_pnl, balance,
@@ -228,6 +247,7 @@ def send_daily_summary(date, trades, wins, losses, day_pnl, balance,
 
     full = "\n".join(lines)
     _wa('WHATSAPP_ALERT_DAILY', full)
+    _ntfy('NTFY_ALERT_DAILY', full, title='India EOD Summary', priority='default', tags=['bar_chart'])
     return _send_chunked(full)
 
 
@@ -264,6 +284,7 @@ def send_us_daily_summary(date, trades, wins, losses, day_pnl, balance,
 
     full = "\n".join(lines)
     _wa('WHATSAPP_ALERT_DAILY', full)
+    _ntfy('NTFY_ALERT_DAILY', full, title='US EOD Summary', priority='default', tags=['bar_chart'])
     return _send_chunked(full)
 
 
@@ -300,6 +321,7 @@ def send_crypto_daily_summary(date, trades, wins, losses, day_pnl, balance,
 
     full = "\n".join(lines)
     _wa('WHATSAPP_ALERT_DAILY', full)
+    _ntfy('NTFY_ALERT_DAILY', full, title='Crypto EOD Summary', priority='default', tags=['bar_chart'])
     return _send_chunked(full)
 
 
@@ -349,6 +371,7 @@ def send_combined_summary(date, india_pnl, india_bal, india_trades,
 
     full = "\n".join(lines)
     _wa('WHATSAPP_ALERT_DAILY', full)
+    _ntfy('NTFY_ALERT_DAILY', full, title='Daily Comparison', priority='default', tags=['bar_chart'])
     return send(full)
 
 

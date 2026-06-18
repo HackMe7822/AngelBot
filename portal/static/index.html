@@ -822,6 +822,7 @@
       <button class="settings-tab" data-tab="general" onclick="showSettingsTab('general')">⚙️ General</button>
       <button class="settings-tab" data-tab="telegram" onclick="showSettingsTab('telegram')">📨 Telegram</button>
       <button class="settings-tab" data-tab="whatsapp" onclick="showSettingsTab('whatsapp')">📱 WhatsApp</button>
+      <button class="settings-tab" data-tab="ntfy" onclick="showSettingsTab('ntfy')">🔔 ntfy</button>
       <button class="settings-tab" data-tab="portal" onclick="showSettingsTab('portal')">🖥️ Portal</button>
     </div>
 
@@ -1043,6 +1044,90 @@
         </div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Get notified via WhatsApp when the Cloudflare tunnel URL changes (quick tunnels rotate on every restart).</div>
         <div id="config-whatsapp-tunnel"></div>
+      </div>
+
+    </div>
+
+    <!-- Tab: ntfy -->
+    <div id="tab-ntfy" class="tab-panel">
+
+      <!-- Master switch -->
+      <div class="card" style="border-left:4px solid #7c3aed;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div class="cfg-section-icon" style="background:rgba(124,58,237,.12);color:#7c3aed;font-size:20px;">🔔</div>
+            <div>
+              <div style="font-size:16px;font-weight:700;">ntfy Push Notifications</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Free push notifications to your phone — no API key, no signup, works instantly</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span id="ntfy-status-dot" style="width:9px;height:9px;border-radius:50%;background:var(--muted);display:inline-block;"></span>
+            <span id="ntfy-status-txt" style="font-size:12px;color:var(--muted);">–</span>
+            <button class="btn" style="font-size:12px;" onclick="testNtfy()">📡 Test Connection</button>
+            <div id="cfg-row-NTFY_ALERTS_ENABLED" style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:13px;color:var(--muted);">Enabled</span>
+              <div id="config-ntfy-master"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setup guide -->
+      <div class="card" style="border-left:4px solid #0969da;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+          <span style="background:rgba(9,105,218,.12);color:#0969da;border-radius:6px;padding:3px 8px;font-size:11px;">SETUP</span>
+          How to get started (takes 2 minutes)
+        </div>
+        <ol style="font-size:13px;line-height:2;margin:0;padding-left:20px;color:var(--fg);">
+          <li>Install the <strong>ntfy</strong> app on your phone — search <em>"ntfy"</em> on Android (Play Store) or iOS (App Store). It's free.</li>
+          <li>Open the app → tap <strong>+</strong> → type any unique topic name, e.g. <code style="background:var(--surface-2,#f6f8fa);padding:1px 5px;border-radius:4px;">angelbot-pete</code></li>
+          <li>Enter the same topic name in the <strong>Topic Name</strong> field below and save.</li>
+          <li>Click <strong>📡 Test Connection</strong> above — you should get a push notification on your phone within seconds.</li>
+          <li>Enable the master switch and you're done. No API keys, no verification.</li>
+        </ol>
+        <div style="margin-top:12px;padding:10px 14px;background:rgba(124,58,237,.06);border-radius:8px;font-size:12px;color:var(--muted);">
+          <strong>Privacy:</strong> ntfy.sh topics are public by default — pick a hard-to-guess name (add random numbers). For private topics, create an account at ntfy.sh and set an access token below.
+        </div>
+      </div>
+
+      <!-- Topic config -->
+      <div class="card" style="border-left:4px solid #7c3aed;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+          <span style="background:rgba(124,58,237,.12);color:#7c3aed;border-radius:6px;padding:3px 8px;font-size:11px;">CONFIG</span>
+          Connection Settings
+        </div>
+        <div id="config-ntfy-credentials"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <!-- Alert Types -->
+        <div class="card" style="border-left:4px solid #e36209;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <span style="background:rgba(227,98,9,.12);color:#e36209;border-radius:6px;padding:3px 8px;font-size:11px;">ALERTS</span>
+            Alert Types
+          </div>
+          <div id="config-ntfy-types"></div>
+        </div>
+        <!-- Market Filters -->
+        <div class="card" style="border-left:4px solid #1a7f37;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <span style="background:rgba(26,127,55,.12);color:#1a7f37;border-radius:6px;padding:3px 8px;font-size:11px;">MARKETS</span>
+            Per-Market Control
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enable or disable ntfy alerts for each market independently.</div>
+          <div id="config-ntfy-markets"></div>
+        </div>
+      </div>
+
+      <!-- Tunnel URL alert toggle -->
+      <div class="card" style="border-left:4px solid #f78166;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+          <span style="background:rgba(247,129,102,.12);color:#f78166;border-radius:6px;padding:3px 8px;font-size:11px;">TUNNEL</span>
+          Tunnel URL Notifications
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Get a push notification when the Cloudflare tunnel URL changes (tunnels rotate on every restart).</div>
+        <div id="config-ntfy-tunnel"></div>
       </div>
 
     </div>
@@ -2744,6 +2829,13 @@ const _CONFIG_LABELS = {
   WHATSAPP_ALERT_ERRORS:'Error / Crash Alert', WHATSAPP_ALERT_BOT_START:'Bot Start Alert',
   WHATSAPP_ALERT_BURST:'Loss Burst Alert', WHATSAPP_ALERT_TUNNEL_URL:'Tunnel URL Changed Alert',
   WHATSAPP_MIN_BUY_CAPITAL:'Min Buy Capital (WA)', WHATSAPP_MIN_PNL_ALERT:'Min PnL Alert (WA)',
+  NTFY_ALERTS_ENABLED:'ntfy Alerts Master Switch', NTFY_TOPIC:'Topic Name',
+  NTFY_SERVER:'Server URL', NTFY_TOKEN:'Access Token (optional)',
+  NTFY_ALERT_BUY:'Buy Alert', NTFY_ALERT_SELL:'Sell / Close Alert',
+  NTFY_ALERT_DAILY:'Daily Summary Alert', NTFY_ALERT_ERRORS:'Error / Crash Alert',
+  NTFY_ALERT_BOT_START:'Bot Start Alert', NTFY_ALERT_BURST:'Loss Burst Alert',
+  NTFY_ALERT_TUNNEL_URL:'Tunnel URL Changed Alert',
+  NTFY_MIN_BUY_CAPITAL:'Min Buy Capital (ntfy)', NTFY_MIN_PNL_ALERT:'Min PnL Alert (ntfy)',
   PORTAL_DASH_REFRESH:'Dashboard Refresh (sec)', PORTAL_POS_REFRESH:'Positions Refresh (sec)',
   PORTAL_LB_REFRESH:'Leaderboard Refresh (sec)', PORTAL_LOG_REFRESH:'Log Poll Interval (sec)',
   PORTAL_MONITOR_REFRESH:'Monitor Poll Interval (sec)',
@@ -2788,6 +2880,14 @@ const _CONFIG_SECTIONS = {
            'WHATSAPP_ALERT_INDIA','WHATSAPP_ALERT_US','WHATSAPP_ALERT_CRYPTO',
            'WHATSAPP_MIN_BUY_CAPITAL','WHATSAPP_MIN_PNL_ALERT']
   },
+  ntfy: {
+    keys: ['NTFY_ALERTS_ENABLED','NTFY_TOPIC','NTFY_SERVER','NTFY_TOKEN',
+           'NTFY_ALERT_BUY','NTFY_ALERT_SELL',
+           'NTFY_ALERT_DAILY','NTFY_ALERT_ERRORS','NTFY_ALERT_BOT_START',
+           'NTFY_ALERT_BURST','NTFY_ALERT_TUNNEL_URL',
+           'NTFY_ALERT_INDIA','NTFY_ALERT_US','NTFY_ALERT_CRYPTO',
+           'NTFY_MIN_BUY_CAPITAL','NTFY_MIN_PNL_ALERT']
+  },
   portal: {
     keys: ['PORTAL_DASH_REFRESH','PORTAL_POS_REFRESH','PORTAL_LB_REFRESH',
            'PORTAL_LOG_REFRESH','PORTAL_MONITOR_REFRESH']
@@ -2801,6 +2901,9 @@ const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','US
   'WHATSAPP_ALERTS_ENABLED','WHATSAPP_ALERT_BUY','WHATSAPP_ALERT_SELL','WHATSAPP_ALERT_DAILY',
   'WHATSAPP_ALERT_ERRORS','WHATSAPP_ALERT_BOT_START','WHATSAPP_ALERT_BURST','WHATSAPP_ALERT_TUNNEL_URL',
   'WHATSAPP_ALERT_INDIA','WHATSAPP_ALERT_US','WHATSAPP_ALERT_CRYPTO',
+  'NTFY_ALERTS_ENABLED','NTFY_ALERT_BUY','NTFY_ALERT_SELL','NTFY_ALERT_DAILY',
+  'NTFY_ALERT_ERRORS','NTFY_ALERT_BOT_START','NTFY_ALERT_BURST','NTFY_ALERT_TUNNEL_URL',
+  'NTFY_ALERT_INDIA','NTFY_ALERT_US','NTFY_ALERT_CRYPTO',
   'US_CANDLE_CONFIRM_REENTRY']);
 
 const _CONFIG_SELECTS = {
@@ -2872,6 +2975,19 @@ const _CONFIG_HINTS = {
   TELEGRAM_ALERT_CRYPTO:       'Receive alerts for Crypto (Binance) trades. Turn OFF to mute Crypto while keeping others active.',
   TELEGRAM_MIN_BUY_CAPITAL:    'Suppress buy alerts where capital deployed is below this amount. 0 = alert on every buy. Example: 200 = only alert if ₹200+ deployed.',
   TELEGRAM_MIN_PNL_ALERT:      'Suppress close alerts where |P&L| is below this amount. 0 = alert on every close. Example: 5 = only alert if gain or loss exceeds ₹5/$5.',
+  NTFY_TOPIC:            'Your unique ntfy topic name — install the ntfy app, subscribe to this topic, and notifications arrive instantly. Pick something hard to guess, e.g. "angelbot-pete-7823".',
+  NTFY_SERVER:           'ntfy server URL. Default: https://ntfy.sh (free public server). Change this if you self-host ntfy.',
+  NTFY_TOKEN:            'Optional access token for private topics or ntfy.sh Pro. Leave blank for public topics.',
+  NTFY_ALERTS_ENABLED:   'Master switch — disabling stops ALL ntfy push notifications instantly, no restart needed.',
+  NTFY_ALERT_BUY:        'Send a push notification every time a new position is opened.',
+  NTFY_ALERT_SELL:       'Send a push notification every time a position closes (profit, SL, or EOD).',
+  NTFY_ALERT_DAILY:      'Send the end-of-day P&amp;L summary for each market.',
+  NTFY_ALERT_ERRORS:     'Send a push notification when the bot crashes or encounters a critical error.',
+  NTFY_ALERT_BOT_START:  'Send a push notification when the bot starts up.',
+  NTFY_ALERT_BURST:      'Send a push notification when the US loss burst circuit breaker triggers.',
+  NTFY_ALERT_TUNNEL_URL: 'Get a push notification when the Cloudflare tunnel URL changes.',
+  NTFY_MIN_BUY_CAPITAL:  'Suppress buy alerts where capital deployed is below this amount. 0 = alert on every buy.',
+  NTFY_MIN_PNL_ALERT:    'Suppress close alerts where |P&L| is below this amount. 0 = alert on every close.',
   PORTAL_DASH_REFRESH:      'How often the dashboard widgets auto-refresh in seconds. Default 30.',
   PORTAL_POS_REFRESH:       'How often the open positions page auto-refreshes in seconds. Default 30.',
   PORTAL_LB_REFRESH:        'How often the leaderboard auto-refreshes in seconds. Default 60.',
@@ -2914,6 +3030,12 @@ const _KEY_WORKERS = {
   TELEGRAM_ALERT_CRYPTO:['Crypto'],
   TELEGRAM_MIN_BUY_CAPITAL:[],
   TELEGRAM_MIN_PNL_ALERT:[],
+  NTFY_TOPIC:[], NTFY_SERVER:[], NTFY_TOKEN:[],
+  NTFY_ALERTS_ENABLED:[], NTFY_ALERT_BUY:[], NTFY_ALERT_SELL:[],
+  NTFY_ALERT_DAILY:[], NTFY_ALERT_ERRORS:[], NTFY_ALERT_BOT_START:[],
+  NTFY_ALERT_BURST:[], NTFY_ALERT_TUNNEL_URL:[],
+  NTFY_ALERT_INDIA:[], NTFY_ALERT_US:[], NTFY_ALERT_CRYPTO:[],
+  NTFY_MIN_BUY_CAPITAL:[], NTFY_MIN_PNL_ALERT:[],
   PORTAL_DASH_REFRESH:[],
   PORTAL_POS_REFRESH:[],
   PORTAL_LB_REFRESH:[],
@@ -3089,6 +3211,94 @@ async function testWhatsApp() {
   }
 }
 
+function renderNtfyTab() {
+  const masterEl = document.getElementById('config-ntfy-master');
+  if (masterEl) {
+    const on = String(_cfgOriginal['NTFY_ALERTS_ENABLED'] ?? 'false').toLowerCase() === 'true';
+    masterEl.innerHTML = `<label class="toggle-wrap" style="margin:0;">
+      <input type="checkbox" id="cfg-NTFY_ALERTS_ENABLED" ${on?'checked':''} onchange="_onTgToggle('NTFY_ALERTS_ENABLED',this)" style="display:none;">
+      <div class="toggle-track" style="background:${on?'#7c3aed':''};" onclick="_onTgToggle('NTFY_ALERTS_ENABLED',document.getElementById('cfg-NTFY_ALERTS_ENABLED'))">
+        <div class="toggle-thumb" style="transform:translateX(${on?'20':'0'}px);"></div>
+      </div>
+    </label>`;
+  }
+  const credEl = document.getElementById('config-ntfy-credentials');
+  if (credEl) {
+    const topic  = _cfgOriginal['NTFY_TOPIC']  ?? '';
+    const server = _cfgOriginal['NTFY_SERVER'] ?? 'https://ntfy.sh';
+    const token  = _cfgOriginal['NTFY_TOKEN']  ?? '';
+    credEl.innerHTML = `
+      <div id="cfg-row-NTFY_TOPIC" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:16px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;">Topic Name</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Unique name you subscribed to in the ntfy app, e.g. <code style="font-size:11px;">angelbot-pete-7823</code></div>
+        </div>
+        <input type="text" id="cfg-NTFY_TOPIC" value="${topic}" placeholder="angelbot-yourname"
+          style="width:220px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:monospace;"
+          oninput="_markDirty('NTFY_TOPIC',this)">
+      </div>
+      <div id="cfg-row-NTFY_SERVER" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:16px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;">Server URL</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Leave as default unless you self-host ntfy</div>
+        </div>
+        <input type="text" id="cfg-NTFY_SERVER" value="${server}" placeholder="https://ntfy.sh"
+          style="width:220px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:monospace;"
+          oninput="_markDirty('NTFY_SERVER',this)">
+      </div>
+      <div id="cfg-row-NTFY_TOKEN" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;gap:16px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;">Access Token <span style="font-weight:400;color:var(--muted);">(optional)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Only needed for private topics or ntfy.sh Pro</div>
+        </div>
+        <input type="password" id="cfg-NTFY_TOKEN" value="${token}" placeholder="tk_…"
+          style="width:220px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:monospace;"
+          oninput="_markDirty('NTFY_TOKEN',this)">
+      </div>`;
+  }
+  const typesEl = document.getElementById('config-ntfy-types');
+  if (typesEl) typesEl.innerHTML = [
+    _tgToggle('NTFY_ALERT_BUY',       '📈 Buy / Open Position',   ''),
+    _tgToggle('NTFY_ALERT_SELL',      '📉 Sell / Close Position',  ''),
+    _tgToggle('NTFY_ALERT_DAILY',     '📊 Daily P&L Summary',      ''),
+    _tgToggle('NTFY_ALERT_BOT_START', '🤖 Bot Started',            ''),
+    _tgToggle('NTFY_ALERT_ERRORS',    '🚨 Crash / Error',          ''),
+    _tgToggle('NTFY_ALERT_BURST',     '⚡ Loss Burst Pause (US)',  ''),
+  ].join('');
+  const mktEl = document.getElementById('config-ntfy-markets');
+  if (mktEl) mktEl.innerHTML = [
+    _tgToggle('NTFY_ALERT_INDIA',  '🇮🇳 India (NSE)',        ''),
+    _tgToggle('NTFY_ALERT_US',     '🇺🇸 US (NASDAQ/NYSE)',    ''),
+    _tgToggle('NTFY_ALERT_CRYPTO', '₿  Crypto (Binance)',  ''),
+  ].join('');
+  const tunEl = document.getElementById('config-ntfy-tunnel');
+  if (tunEl) tunEl.innerHTML = _tgToggle('NTFY_ALERT_TUNNEL_URL', '🌐 Send new URL when tunnel restarts', '');
+  const dot = document.getElementById('ntfy-status-dot');
+  const txt = document.getElementById('ntfy-status-txt');
+  const enabled = String(_cfgOriginal['NTFY_ALERTS_ENABLED'] ?? 'false').toLowerCase() === 'true';
+  const hasTopic = !!(_cfgOriginal['NTFY_TOPIC'] ?? '').trim();
+  if (dot) dot.style.background = (enabled && hasTopic) ? '#3fb950' : enabled ? '#f0a030' : 'var(--muted)';
+  if (txt) {
+    txt.textContent = !hasTopic ? 'No topic set' : enabled ? 'Active' : 'Disabled';
+    txt.style.color  = (enabled && hasTopic) ? '#3fb950' : enabled ? '#f0a030' : 'var(--muted)';
+  }
+}
+
+async function testNtfy() {
+  const r = await apiFetch('/api/ntfy/test', { method: 'POST' });
+  const dot = document.getElementById('ntfy-status-dot');
+  const txt = document.getElementById('ntfy-status-txt');
+  if (!r) { if (dot) dot.style.background='#cf222e'; if (txt) { txt.textContent='No response'; txt.style.color='#cf222e'; } return; }
+  const d = await r.json();
+  if (d.ok) {
+    if (dot) dot.style.background='#3fb950'; if (txt) { txt.textContent='Connected'; txt.style.color='#3fb950'; }
+    toast('ntfy test notification sent — check your phone!');
+  } else {
+    if (dot) dot.style.background='#cf222e'; if (txt) { txt.textContent='Failed'; txt.style.color='#cf222e'; }
+    toast('ntfy test failed: ' + (d.error || 'set NTFY_TOPIC above and save first'), 5000);
+  }
+}
+
 // ── Tunnel URL card ──────────────────────────────────────────────────────────
 async function loadTunnelUrl() {
   const el   = document.getElementById('tunnel-url-display');
@@ -3191,6 +3401,7 @@ async function loadConfig() {
   renderSection('general',  _CONFIG_SECTIONS.general.keys);
   renderTelegramTab();
   renderWhatsAppTab();
+  renderNtfyTab();
   renderSection('portal',   _CONFIG_SECTIONS.portal.keys);
 
   // Update refresh intervals from loaded config values (applied on next navigation)

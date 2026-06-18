@@ -120,6 +120,13 @@ async def _watch_tunnel_url():
                     _wa(msg)
             except Exception:
                 pass
+            try:
+                from reporting.telegram_alerts import _alert_enabled as _ae3
+                if _ae3('NTFY_ALERT_TUNNEL_URL'):
+                    from reporting.ntfy_alerts import send as _ntfy
+                    _ntfy(msg, title='Tunnel URL Updated', priority='default', tags=['link'])
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -647,6 +654,12 @@ def get_config(user: str = Depends(require_auth)):
         'WHATSAPP_ALERT_BURST',
         'WHATSAPP_ALERT_INDIA','WHATSAPP_ALERT_US','WHATSAPP_ALERT_CRYPTO',
         'WHATSAPP_MIN_BUY_CAPITAL','WHATSAPP_MIN_PNL_ALERT','WHATSAPP_ALERT_TUNNEL_URL',
+        'NTFY_TOPIC','NTFY_SERVER','NTFY_TOKEN',
+        'NTFY_ALERTS_ENABLED','NTFY_ALERT_BUY','NTFY_ALERT_SELL',
+        'NTFY_ALERT_DAILY','NTFY_ALERT_ERRORS','NTFY_ALERT_BOT_START',
+        'NTFY_ALERT_BURST',
+        'NTFY_ALERT_INDIA','NTFY_ALERT_US','NTFY_ALERT_CRYPTO',
+        'NTFY_MIN_BUY_CAPITAL','NTFY_MIN_PNL_ALERT','NTFY_ALERT_TUNNEL_URL',
         'PORTAL_DASH_REFRESH','PORTAL_POS_REFRESH','PORTAL_LB_REFRESH',
         'PORTAL_LOG_REFRESH','PORTAL_MONITOR_REFRESH',
     ]
@@ -736,6 +749,21 @@ def test_whatsapp(user: str = Depends(require_auth)):
     try:
         from reporting.whatsapp_alerts import send
         ok = send("🤖 *AngelBot WhatsApp Test*\nConnection working correctly.")
+        return {"ok": ok}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/ntfy/test")
+def test_ntfy(user: str = Depends(require_auth)):
+    try:
+        from reporting.ntfy_alerts import send
+        ok = send(
+            "AngelBot ntfy connected!\nPaper trading mode ON. Trade alerts will appear here.",
+            title="AngelBot Test",
+            priority="default",
+            tags=["white_check_mark"]
+        )
         return {"ok": ok}
     except Exception as e:
         return {"ok": False, "error": str(e)}
