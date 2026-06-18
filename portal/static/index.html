@@ -3000,6 +3000,72 @@ const _CONFIG_HINTS = {
   PORTAL_MONITOR_REFRESH:   'How often the live monitor polls for new data in seconds. Default 2.',
 };
 
+// Dynamic hint functions — called with the live input value so the example updates as you type.
+// Keys here take precedence over the static _CONFIG_HINTS strings above.
+function _hintPct(v) {
+  var n = parseFloat(v);
+  return isNaN(n) ? (v || '?') : (n * 100).toFixed(2).replace(/\.?0+$/, '') + '%';
+}
+function _hintRem(v) {
+  var n = parseFloat(v);
+  return isNaN(n) ? '?%' : Math.round((1 - n) * 100) + '%';
+}
+const _CONFIG_HINT_FN = {
+  MAX_DEPLOYED_PCT: function(v) {
+    return 'Never have more than this fraction of India balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed, ' + _hintRem(v) + ' always stays as cash.';
+  },
+  US_MAX_DEPLOYED_PCT: function(v) {
+    return 'Never have more than this fraction of US balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed, ' + _hintRem(v) + ' always stays as cash.';
+  },
+  CRYPTO_MAX_DEPLOYED_PCT: function(v) {
+    return 'Never have more than this fraction of crypto balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed. Wider than stocks because crypto runs 24/7.';
+  },
+  PEAK_DRAWDOWN_PCT: function(v) {
+    return 'Pause India buys if actual portfolio losses hit this % from today\'s session peak. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Only fires on real closed losses, not on capital deployment.';
+  },
+  MAX_DAILY_LOSS_PCT: function(v) {
+    return 'Stop all India buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+  },
+  SCALP_TARGET_PCT: function(v) {
+    return 'Close India position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Wider = bigger win per trade, fewer fills.';
+  },
+  SCALP_SL_PCT: function(v) {
+    return 'Close India position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Tighter = smaller max loss but more false exits on normal price movement.';
+  },
+  US_PEAK_DRAWDOWN_PCT: function(v) {
+    return 'Pause US buys if actual losses from session peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+  },
+  US_MAX_DAILY_LOSS_PCT: function(v) {
+    return 'Stop all US buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+  },
+  US_SCALP_TARGET_PCT: function(v) {
+    return 'Close US position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+  },
+  US_SCALP_SL_PCT: function(v) {
+    return 'Close US position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Tighter = smaller max loss but more false exits.';
+  },
+  CRYPTO_PEAK_DRAWDOWN_PCT: function(v) {
+    return 'Pause new crypto buys if portfolio losses from today\'s peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' (wider than stock 3% because crypto is more volatile). Only fires on real closed losses.';
+  },
+  CRYPTO_TARGET_PCT: function(v) {
+    return 'Close crypto position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+  },
+  CRYPTO_SL_PCT: function(v) {
+    return 'Close crypto position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+  },
+  CRYPTO_BTC_MIN_CHANGE: function(v) {
+    var n = parseFloat(v);
+    var abs = isNaN(n) ? '?' : Math.abs(n).toFixed(1);
+    return 'Block all crypto buys if BTC dropped more than this % in the last hour. <strong>' + (v||'?') + '</strong> = block if BTC down ' + abs + '%. Alt coins usually follow BTC down.';
+  },
+  SLIPPAGE_PCT: function(v) {
+    return 'Added cost per paper trade to simulate real spread/slippage. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' per trade. Makes paper results more realistic.';
+  },
+  MOOD_FILTER_THRESHOLD: function(v) {
+    return 'Index drop % that triggers the block (negative). <strong>-0.5</strong> = very strict. <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Current: <strong>' + (v||'?') + '</strong>. Only active when Mood Filter is ON.';
+  },
+};
+
 // Track original loaded values to detect changes
 var _cfgOriginal = {};
 
@@ -3357,7 +3423,8 @@ async function loadConfig() {
     if (!el) return;
     const rows = keys.filter(k => d[k] !== undefined).map(function(k) {
       const label = _CONFIG_LABELS[k] || k;
-      const hint  = _CONFIG_HINTS[k] ? `<div class="cfg-hint">${_CONFIG_HINTS[k]}</div>` : '';
+      const hintHtml = _CONFIG_HINT_FN[k] ? _CONFIG_HINT_FN[k](rawVal) : (_CONFIG_HINTS[k] || '');
+      const hint  = hintHtml ? `<div id="cfg-hint-${k}" class="cfg-hint">${hintHtml}</div>` : '';
       let control = '';
       const rawVal = String(d[k]);
       _cfgOriginal[k] = rawVal;
@@ -3427,6 +3494,10 @@ function _markDirty(key, el) {
   const changed = String(el.value) !== String(_cfgOriginal[key] || '');
   row.style.background = changed ? 'rgba(9,105,218,.06)' : '';
   row.style.borderLeft = changed ? '3px solid var(--blue)' : '';
+  if (_CONFIG_HINT_FN[key]) {
+    const hintEl = document.getElementById('cfg-hint-' + key);
+    if (hintEl) hintEl.innerHTML = _CONFIG_HINT_FN[key](el.value);
+  }
 }
 
 function selectConfig(key, btn, val) {
