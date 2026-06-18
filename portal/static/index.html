@@ -373,24 +373,70 @@
 <body>
 
 <!-- Login overlay -->
-<div id="login-overlay" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:9999; align-items:center; justify-content:center;">
-  <div class="card" style="width:340px; padding:32px;">
-    <div style="text-align:center; margin-bottom:24px;">
-      <div style="font-size:36px; margin-bottom:8px;">🤖</div>
-      <h1 style="font-size:22px; font-weight:700; color:var(--blue);">AngelBot Portal</h1>
-      <p style="color:var(--muted); font-size:13px; margin-top:4px;">Sign in to continue</p>
-    </div>
-    <div style="display:grid; gap:12px;">
-      <div>
-        <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Username</label>
-        <input type="text" id="login-user" placeholder="admin" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+<div id="login-overlay" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:linear-gradient(135deg,#0d1117 0%,#161b22 50%,#0d1117 100%);">
+  <!-- Subtle grid pattern -->
+  <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(9,105,218,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(9,105,218,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;"></div>
+
+  <div style="position:relative;width:100%;max-width:420px;padding:20px;">
+    <!-- Glow ring behind card -->
+    <div style="position:absolute;inset:-2px;border-radius:20px;background:linear-gradient(135deg,rgba(9,105,218,.35),rgba(130,80,223,.2),rgba(9,105,218,.1));filter:blur(1px);z-index:-1;"></div>
+
+    <div style="background:#161b22;border:1px solid rgba(48,54,61,.9);border-radius:18px;padding:40px 36px;box-shadow:0 24px 80px rgba(0,0,0,.6);">
+
+      <!-- Logo -->
+      <div style="text-align:center;margin-bottom:32px;">
+        <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#0969da,#388bfd);display:inline-flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 24px rgba(9,105,218,.4);margin-bottom:16px;">🤖</div>
+        <div style="font-size:22px;font-weight:700;color:#e6edf3;letter-spacing:-.3px;">AngelBot Portal</div>
+        <div style="font-size:12px;color:#7d8590;margin-top:4px;letter-spacing:.3px;">ALGORITHMIC TRADING DASHBOARD</div>
+        <!-- Market pills -->
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:14px;">
+          <span style="background:rgba(26,127,55,.15);border:1px solid rgba(26,127,55,.3);color:#3fb950;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.3px;">🇮🇳 NSE</span>
+          <span style="background:rgba(9,105,218,.15);border:1px solid rgba(9,105,218,.3);color:#58a6ff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.3px;">🇺🇸 NASDAQ</span>
+          <span style="background:rgba(130,80,223,.15);border:1px solid rgba(130,80,223,.3);color:#d2a8ff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.3px;">₿ CRYPTO</span>
+        </div>
       </div>
-      <div>
-        <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Password</label>
-        <input type="password" id="login-pass" placeholder="Password" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+
+      <!-- Form -->
+      <div style="display:grid;gap:16px;">
+        <!-- Username -->
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#7d8590;letter-spacing:.5px;display:block;margin-bottom:6px;">USERNAME</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#7d8590;font-size:15px;">👤</span>
+            <input type="text" id="login-user" autocomplete="username" placeholder="admin"
+              style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:11px 12px 11px 36px;color:#e6edf3;font-size:14px;outline:none;transition:border-color .2s;"
+              onfocus="this.style.borderColor='#388bfd'" onblur="this.style.borderColor='#30363d'"
+              onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+          </div>
+        </div>
+        <!-- Password -->
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#7d8590;letter-spacing:.5px;display:block;margin-bottom:6px;">PASSWORD</label>
+          <div style="position:relative;">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#7d8590;font-size:15px;">🔒</span>
+            <input type="password" id="login-pass" autocomplete="current-password" placeholder="••••••••"
+              style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:11px 36px 11px 36px;color:#e6edf3;font-size:14px;outline:none;transition:border-color .2s;"
+              onfocus="this.style.borderColor='#388bfd'" onblur="this.style.borderColor='#30363d'"
+              onkeydown="if(event.key==='Enter')doLogin()">
+            <span onclick="_toggleLoginPw(this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#7d8590;cursor:pointer;font-size:13px;user-select:none;" title="Show/hide">👁</span>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div id="login-err" style="display:none;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:7px;padding:10px 12px;color:#f85149;font-size:12px;line-height:1.5;"></div>
+
+        <!-- Sign In button -->
+        <button id="login-btn" onclick="doLogin()"
+          style="width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(135deg,#0969da,#388bfd);color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.2px;transition:opacity .15s,transform .1s;box-shadow:0 4px 16px rgba(9,105,218,.35);"
+          onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
+          Sign In
+        </button>
       </div>
-      <div id="login-err" style="color:var(--red); font-size:12px; display:none;"></div>
-      <button class="btn primary" onclick="doLogin()" style="width:100%; justify-content:center; padding:10px;">Sign In</button>
+
+      <!-- Footer -->
+      <div style="text-align:center;margin-top:24px;padding-top:20px;border-top:1px solid #21262d;">
+        <span style="font-size:11px;color:#484f58;">Paper trading mode &nbsp;·&nbsp; No real money at risk</span>
+      </div>
     </div>
   </div>
 </div>
@@ -1788,17 +1834,21 @@ let _monitorPaused = false;
 let _monitorInterval = null;
 let _monitorStats = {err:0, warn:0, buy:0, sell:0};
 
-// ── Auth (Basic) ───────────────────────────────────────────────────────────
+// ── Auth ────────────────────────────────────────────────────────────────────
+function _toggleLoginPw(eye) {
+  const inp = document.getElementById('login-pass');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
 function showLogin(errMsg) {
   const overlay = document.getElementById('login-overlay');
   overlay.style.display = 'flex';
   document.querySelector('aside.sidebar').style.visibility = 'hidden';
   document.querySelector('main.main').style.visibility = 'hidden';
-  if (errMsg) {
-    const e = document.getElementById('login-err');
-    e.textContent = errMsg;
-    e.style.display = 'block';
-  }
+  const e = document.getElementById('login-err');
+  if (errMsg) { e.textContent = errMsg; e.style.display = 'block'; }
+  else { e.style.display = 'none'; }
+  setTimeout(function(){ const u = document.getElementById('login-user'); if(u && !u.value) u.focus(); }, 80);
 }
 
 function hideLogin(username) {
@@ -1812,24 +1862,45 @@ function hideLogin(username) {
 async function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value;
-  if (!u || !p) { document.getElementById('login-err').textContent = 'Enter username and password.'; document.getElementById('login-err').style.display='block'; return; }
-  const creds = btoa(u + ':' + p);
-  const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
-  if (r.status === 401) {
-    document.getElementById('login-err').textContent = 'Invalid username or password.';
-    document.getElementById('login-err').style.display = 'block';
+  const errEl = document.getElementById('login-err');
+  const btn   = document.getElementById('login-btn');
+  if (!u || !p) {
+    errEl.textContent = 'Please enter your username and password.';
+    errEl.style.display = 'block';
     return;
   }
-  localStorage.setItem('ab_creds', creds);
-  localStorage.setItem('ab_user', u);
-  _currentUser = u;
-  hideLogin(u);
-  apiFetch('/api/prefs').then(function(p){ if(p) _prefs = p; });
-  await loadConfig();
-  var startPage = _urlToPage();
-  showPage(startPage, false);
-  checkUpdate();
-  _checkAdminAccess();
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+  btn.style.opacity = '.7';
+  errEl.style.display = 'none';
+  try {
+    const creds = btoa(unescape(encodeURIComponent(u + ':' + p)));
+    const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+    if (r.status === 401) {
+      errEl.textContent = 'Incorrect username or password. Please try again.';
+      errEl.style.display = 'block';
+      document.getElementById('login-pass').value = '';
+      document.getElementById('login-pass').focus();
+      return;
+    }
+    localStorage.setItem('ab_creds', creds);
+    localStorage.setItem('ab_user', u);
+    _currentUser = u;
+    hideLogin(u);
+    apiFetch('/api/prefs').then(function(pr){ if(pr) _prefs = pr; });
+    await loadConfig();
+    var startPage = _urlToPage();
+    showPage(startPage, false);
+    checkUpdate();
+    _checkAdminAccess();
+  } catch(ex) {
+    errEl.textContent = 'Could not reach the portal server. Check your connection.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Sign In';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 }
 
 async function apiFetch(path, opts = {}) {

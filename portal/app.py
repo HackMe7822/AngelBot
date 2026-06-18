@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import base64
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -132,15 +132,27 @@ async def _watch_tunnel_url():
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
-_security = HTTPBasic()
+# Manual Basic-auth parsing — intentionally omits WWW-Authenticate: Basic so
+# the browser never shows its native credential dialog.
 
 def _hash_password(pw: str) -> str:
     return sha256(pw.encode()).hexdigest()
 
-def require_auth(credentials: HTTPBasicCredentials = Depends(_security)):
-    """Authenticate against the portal_users table in SQL Server."""
-    username = credentials.username
-    pw_hash  = _hash_password(credentials.password)
+def require_auth(request: Request):
+    """Authenticate against the portal_users table.
+    Parses Authorization: Basic header manually so browsers never see
+    WWW-Authenticate: Basic and never pop up their native login dialog.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Basic "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    try:
+        decoded  = base64.b64decode(auth[6:]).decode("utf-8", errors="replace")
+        username, _, password = decoded.partition(":")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    pw_hash = _hash_password(password)
     conn = get_conn()
     c    = conn.cursor()
     c.execute(
@@ -150,12 +162,7 @@ def require_auth(credentials: HTTPBasicCredentials = Depends(_security)):
     row = c.fetchone()
     if not row:
         conn.close()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    # Update last_login
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     c.execute(
         "UPDATE portal_users SET last_login=? WHERE username=?",
         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username)
