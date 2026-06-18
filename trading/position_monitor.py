@@ -274,7 +274,13 @@ class PositionMonitor:
                             self._eod_closed_date != now_ist.date() and
                             self.trader.open_positions and
                             not is_paused()):
-                        self._force_close_all(now_ist)
+                        from config import ALLOW_OVERNIGHT
+                        if ALLOW_OVERNIGHT:
+                            self._eod_closed_date = now_ist.date()
+                            n = len(self.trader.open_positions)
+                            print(f"{_YL}[Monitor] Overnight carry ON — keeping {n} position(s) open into next session{_R}")
+                        else:
+                            self._force_close_all(now_ist)
 
                     elif self._market_open_fn() and self.trader.open_positions and not is_paused():
                         # Subscribe any newly opened positions to the live feed

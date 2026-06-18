@@ -2930,6 +2930,7 @@ const _CONFIG_LABELS = {
   USE_TIME_EXIT:'Force Time Exit', MAX_HOLD_MINUTES:'Max Hold Time (minutes)',
   USE_PROFIT_TIMER:'Profit Timer Exit', PROFIT_TIMER_MINUTES:'Profit Timer (minutes)',
   USE_LOSS_TIMER:'Loss Timer Exit', LOSS_TIMER_MINUTES:'Loss Timer (minutes)',
+  ALLOW_OVERNIGHT:'Allow Overnight Carry',
   CAPITAL:'India Capital (₹)', MAX_DAILY_TRADES:'India Daily Trade Limit', MAX_DEPLOYED_PCT:'India Max Capital Deployed %',
   PEAK_DRAWDOWN_PCT:'India Peak Drawdown Limit', SCALP_TARGET_PCT:'India Profit Target %', SCALP_SL_PCT:'India Stop Loss %',
   SL_CONFIRM_POLLS:'SL Confirmation Polls', MAX_DAILY_LOSS_PCT:'India Daily Loss Limit', MIN_STOCK_PRICE:'India Min Stock Price (₹)',
@@ -2973,7 +2974,8 @@ const _CONFIG_SECTIONS = {
            'USE_SECTOR_CAP','MAX_SECTOR_POSITIONS',
            'MAX_CONCURRENT_POSITIONS','USE_TIME_EXIT','MAX_HOLD_MINUTES',
            'USE_PROFIT_TIMER','PROFIT_TIMER_MINUTES',
-           'USE_LOSS_TIMER','LOSS_TIMER_MINUTES']
+           'USE_LOSS_TIMER','LOSS_TIMER_MINUTES',
+           'ALLOW_OVERNIGHT']
   },
   india: {
     keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
@@ -3022,7 +3024,7 @@ const _CONFIG_SECTIONS = {
   }
 };
 
-const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP','USE_PROFIT_TIMER','USE_LOSS_TIMER',
+const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP','USE_PROFIT_TIMER','USE_LOSS_TIMER','ALLOW_OVERNIGHT',
   'TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL','TELEGRAM_ALERT_DAILY',
   'TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START','TELEGRAM_ALERT_BURST','TELEGRAM_ALERT_TUNNEL_URL',
   'TELEGRAM_ALERT_INDIA','TELEGRAM_ALERT_US','TELEGRAM_ALERT_CRYPTO',
@@ -3058,6 +3060,7 @@ const _CONFIG_HINTS = {
   PROFIT_TIMER_MINUTES:     'Minutes a position must be continuously in profit before the bot sells it (without waiting for the full target). <strong>2–3 min</strong> = grab quick profits fast. <strong>5+ min</strong> = more patient. Only active when Profit Timer is ON.',
   USE_LOSS_TIMER:           '<strong>ON:</strong> If a position stays in loss for N consecutive minutes without recovering, sell it and cut the loss early — before it hits the full stop-loss. <strong>OFF:</strong> Only exit at SL, target, or time exit. Applies to all markets (India, US, Crypto).',
   LOSS_TIMER_MINUTES:       'Minutes a position must be continuously in loss before the bot cuts it early. <strong>3–5 min</strong> = cut losses fast. <strong>10+ min</strong> = more patient, give it time to recover. Only active when Loss Timer is ON.',
+  ALLOW_OVERNIGHT:          '<strong>ON:</strong> Skip EOD force-close — positions carry over to the next trading session. The bot resumes monitoring at your original entry/SL/target next morning. <strong>OFF:</strong> All positions are force-closed at India 3:00 PM IST / US 3:55 PM ET. Crypto is unaffected (24/7). Use this only in paper trading — real trading overnight requires exchange margin approval.',
   CAPITAL:                  'India paper trading starting balance in ₹. Position sizes scale as a % of this. Update when you add funds.',
   MAX_DAILY_TRADES:         'Stop new India buys after N completed trades per day (wins + losses combined). Default 30.',
   MAX_DEPLOYED_PCT:         'Never have more than this fraction of India balance in open positions. <strong>0.70</strong> = 70% max deployed, 30% always stays as cash.',
@@ -3178,6 +3181,11 @@ const _CONFIG_HINT_FN = {
   LOSS_TIMER_MINUTES: function(v) {
     var n = parseInt(v);
     return 'Minutes a position must stay continuously in loss before the bot cuts it early. <strong>' + (v||'?') + ' min</strong> = ' + (isNaN(n)?'?':(n<=3?'aggressive (cut losses fast)':n<=7?'moderate':'patient — gives more time to recover')) + '. Only active when Loss Timer is ON.';
+  },
+  ALLOW_OVERNIGHT: function(v) {
+    return v === 'true'
+      ? '<strong style="color:#f59e0b">ON:</strong> EOD force-close is <em>disabled</em>. Positions carry over — bot resumes monitoring next session at original entry/SL/target. Daily report still sends as normal.'
+      : '<strong style="color:var(--muted)">OFF:</strong> Positions force-closed at India 3:00 PM IST / US 3:55 PM ET. Crypto is unaffected (24/7).';
   },
   // ── India ─────────────────────────────────────────────────────────────
   CAPITAL: function(v) {
@@ -3358,6 +3366,7 @@ const _KEY_WORKERS = {
   USE_TIME_EXIT:['India'], MAX_HOLD_MINUTES:['India'],
   USE_PROFIT_TIMER:['India','US','Crypto'], PROFIT_TIMER_MINUTES:['India','US','Crypto'],
   USE_LOSS_TIMER:['India','US','Crypto'], LOSS_TIMER_MINUTES:['India','US','Crypto'],
+  ALLOW_OVERNIGHT:['India','US'],
   CAPITAL:['India'], MAX_DAILY_TRADES:['India'], MAX_DEPLOYED_PCT:['India'],
   PEAK_DRAWDOWN_PCT:['India'], SCALP_TARGET_PCT:['India'], SCALP_SL_PCT:['India'],
   SL_CONFIRM_POLLS:['India'], MAX_DAILY_LOSS_PCT:['India'], MIN_STOCK_PRICE:['India'],

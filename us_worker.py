@@ -198,18 +198,23 @@ def run_us_scan():
     # ── EOD force-close at 3:55 PM ET ────────────────────────────────────────
     if et.time() >= US_FORCE_CLOSE and _eod_done_date != today_et:
         _eod_done_date = today_et
+        from config import ALLOW_OVERNIGHT
         if us_trader.open_positions:
-            sp()
-            cprint(f"[US EOD] Force-closing all positions @ {et.strftime('%I:%M %p')} {'EDT' if _is_dst() else 'EST'}", YL)
-            for pos in list(us_trader.open_positions):
-                price = get_us_live_price(pos['symbol']) or pos['entry_price']
-                with us_trader._lock:
-                    still = next((p for p in us_trader.open_positions if p['id'] == pos['id']), None)
-                    if still:
-                        pnl, _ = us_trader.sell(still, price, 'US EOD force-close')
-                        if pnl != 0.0:
-                            c = G if pnl >= 0 else RD
-                            cprint(f"  [US EOD CLOSE] {pos['symbol']} @ ${price:.2f}  P&L: ${pnl:+.2f}", c)
+            if ALLOW_OVERNIGHT:
+                sp()
+                cprint(f"[US EOD] Overnight carry ON — keeping {len(us_trader.open_positions)} position(s) open into next session", YL)
+            else:
+                sp()
+                cprint(f"[US EOD] Force-closing all positions @ {et.strftime('%I:%M %p')} {'EDT' if _is_dst() else 'EST'}", YL)
+                for pos in list(us_trader.open_positions):
+                    price = get_us_live_price(pos['symbol']) or pos['entry_price']
+                    with us_trader._lock:
+                        still = next((p for p in us_trader.open_positions if p['id'] == pos['id']), None)
+                        if still:
+                            pnl, _ = us_trader.sell(still, price, 'US EOD force-close')
+                            if pnl != 0.0:
+                                c = G if pnl >= 0 else RD
+                                cprint(f"  [US EOD CLOSE] {pos['symbol']} @ ${price:.2f}  P&L: ${pnl:+.2f}", c)
 
         # ── Send US daily report ──────────────────────────────────────────────
         stats = us_trader.get_daily_stats()
