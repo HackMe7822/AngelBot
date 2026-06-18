@@ -3010,59 +3010,205 @@ function _hintRem(v) {
   var n = parseFloat(v);
   return isNaN(n) ? '?%' : Math.round((1 - n) * 100) + '%';
 }
+function _hintIst(minAfter915) {
+  var n = parseInt(minAfter915);
+  if (isNaN(n)) return '?';
+  var tot = 9*60 + 15 + n;
+  var h = Math.floor(tot/60) % 24, m = tot % 60;
+  var ap = h >= 12 ? 'PM' : 'AM', h12 = h > 12 ? h-12 : (h===0?12:h);
+  return h12 + ':' + (m<10?'0'+m:m) + ' ' + ap + ' IST';
+}
+function _hintSec(v) {
+  var n = parseInt(v);
+  if (isNaN(n)) return '?';
+  if (n >= 3600) return (n/3600).toFixed(1).replace(/\.0$/,'') + ' hr';
+  if (n >= 60) { var mins=Math.floor(n/60), secs=n%60; return mins+'min'+(secs?' '+secs+'s':''); }
+  return n + 's';
+}
 const _CONFIG_HINT_FN = {
+  // ── Strategy ──────────────────────────────────────────────────────────
+  MOOD_FILTER_THRESHOLD: function(v) {
+    return 'Index drop % that blocks new buys (enter as negative). <strong>-0.5</strong> = very strict. <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Current: <strong>' + (v||'?') + '</strong>. Only active when Mood Filter is ON.';
+  },
+  MAX_SECTOR_POSITIONS: function(v) {
+    var n = parseInt(v);
+    return 'Max open positions per sector at once. <strong>' + (v||'?') + '</strong> = max ' + (isNaN(n)?'?':n) + ' stock' + (n===1?'':'s') + ' per sector simultaneously. Only applies when Sector Cap is ON.';
+  },
+  MAX_CONCURRENT_POSITIONS: function(v) {
+    var n = parseInt(v);
+    return 'Hard cap on simultaneous India open positions. <strong>' + (v||'?') + '</strong> = max ' + (isNaN(n)?'?':n) + ' positions open at once. Does NOT affect US (set US Max Open Positions separately).';
+  },
+  MAX_HOLD_MINUTES: function(v) {
+    var n = parseInt(v);
+    var hrs = isNaN(n) ? '?' : (n >= 60 ? Math.floor(n/60)+'h '+(n%60?n%60+'min':'') : n+'min');
+    return 'Force-close stuck positions after this many minutes (when Time Exit is ON). <strong>' + (v||'?') + ' min</strong> = close after ' + hrs + '. India session is 6 hours (360 min) total.';
+  },
+  PROFIT_TIMER_MINUTES: function(v) {
+    var n = parseInt(v);
+    return 'Minutes a position must stay continuously in profit before the bot sells it early. <strong>' + (v||'?') + ' min</strong> = ' + (isNaN(n)?'?':(n<=3?'aggressive (grab quick profits)':n<=5?'moderate':'patient')) + '. Only active when Profit Timer is ON.';
+  },
+  // ── India ─────────────────────────────────────────────────────────────
+  CAPITAL: function(v) {
+    var n = parseFloat(v);
+    var pos = isNaN(n) ? '?' : '₹' + (n*0.05).toFixed(0);
+    return 'India paper trading starting balance in ₹. <strong>₹' + (v||'?') + '</strong> → each position is ~5% = <strong>' + pos + '</strong> per trade. Update when you add funds.';
+  },
+  MAX_DAILY_TRADES: function(v) {
+    var n = parseInt(v);
+    return 'Stop new India buys after N completed trades per day. <strong>' + (v||'?') + '</strong> = halt after ' + (isNaN(n)?'?':n) + ' trades (wins + losses combined).';
+  },
   MAX_DEPLOYED_PCT: function(v) {
     return 'Never have more than this fraction of India balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed, ' + _hintRem(v) + ' always stays as cash.';
+  },
+  PEAK_DRAWDOWN_PCT: function(v) {
+    return 'Pause India buys if actual portfolio losses hit this % from today\'s session peak. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' drawdown limit. Only fires on real closed losses, not on capital deployment.';
+  },
+  MAX_DAILY_LOSS_PCT: function(v) {
+    return 'Stop all India buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' daily loss cap.';
+  },
+  SCALP_TARGET_PCT: function(v) {
+    return 'Close India position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' profit target. Wider = bigger win per trade, fewer fills.';
+  },
+  SCALP_SL_PCT: function(v) {
+    return 'Close India position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' stop-loss. Tighter = smaller max loss but more false exits on normal price movement.';
+  },
+  SL_CONFIRM_POLLS: function(v) {
+    var n = parseInt(v);
+    var secs = isNaN(n) ? '?' : n * 15;
+    return 'Consecutive 15-second polls below SL price before actually selling. <strong>' + (v||'?') + '</strong> = ' + (isNaN(n)?'?':n) + ' × 15s = <strong>' + secs + 's</strong> confirmation window. Prevents false exits from brief price wicks.';
+  },
+  MIN_STOCK_PRICE: function(v) {
+    return 'Skip India stocks below this ₹ price. <strong>₹' + (v||'?') + '</strong> = ignore any stock trading under ₹' + (v||'?') + '. Cheap stocks have tiny SL gaps vs spread — hard to scalp profitably.';
+  },
+  ENTRY_START_MIN: function(v) {
+    return 'Minutes after 9:15 AM IST to start placing entries. <strong>' + (v||'?') + ' min</strong> = entries start at <strong>' + _hintIst(v) + '</strong>.';
+  },
+  ENTRY_END_MIN: function(v) {
+    return 'Minutes after 9:15 AM IST to stop new entries. <strong>' + (v||'?') + ' min</strong> = entries stop at <strong>' + _hintIst(v) + '</strong>. Bot only exits existing positions after this.';
+  },
+  // ── US ────────────────────────────────────────────────────────────────
+  US_CAPITAL: function(v) {
+    var n = parseFloat(v);
+    var pos = isNaN(n) ? '?' : '$' + (n*0.05).toFixed(0);
+    return 'US Alpaca paper trading balance in $. <strong>$' + (v||'?') + '</strong> → each position is ~5% = <strong>' + pos + '</strong> per trade.';
+  },
+  US_MAX_DAILY_TRADES: function(v) {
+    var n = parseInt(v);
+    return 'Stop new US buys after N completed trades today. <strong>' + (v||'?') + '</strong> = halt after ' + (isNaN(n)?'?':n) + ' trades.';
+  },
+  US_MAX_DAILY_LOSS_PCT: function(v) {
+    return 'Stop all US buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' daily loss cap.';
+  },
+  US_MAX_CONCURRENT_POSITIONS: function(v) {
+    var n = parseInt(v);
+    var tier = isNaN(n)?'':n<=5?' (conservative)':n<=10?' (moderate)':n<=20?' (active)':' (aggressive)';
+    return '<strong>KEY SETTING.</strong> Hard cap on simultaneous US open positions. <strong>' + (v||'?') + '</strong> = max ' + (isNaN(n)?'?':n) + ' stocks open at once' + tier + '.';
   },
   US_MAX_DEPLOYED_PCT: function(v) {
     return 'Never have more than this fraction of US balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed, ' + _hintRem(v) + ' always stays as cash.';
   },
-  CRYPTO_MAX_DEPLOYED_PCT: function(v) {
-    return 'Never have more than this fraction of crypto balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed. Wider than stocks because crypto runs 24/7.';
-  },
-  PEAK_DRAWDOWN_PCT: function(v) {
-    return 'Pause India buys if actual portfolio losses hit this % from today\'s session peak. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Only fires on real closed losses, not on capital deployment.';
-  },
-  MAX_DAILY_LOSS_PCT: function(v) {
-    return 'Stop all India buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
-  },
-  SCALP_TARGET_PCT: function(v) {
-    return 'Close India position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Wider = bigger win per trade, fewer fills.';
-  },
-  SCALP_SL_PCT: function(v) {
-    return 'Close India position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Tighter = smaller max loss but more false exits on normal price movement.';
-  },
   US_PEAK_DRAWDOWN_PCT: function(v) {
-    return 'Pause US buys if actual losses from session peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
-  },
-  US_MAX_DAILY_LOSS_PCT: function(v) {
-    return 'Stop all US buys for the day if total realized losses exceed this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+    return 'Pause US buys if actual losses from session peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' drawdown limit.';
   },
   US_SCALP_TARGET_PCT: function(v) {
-    return 'Close US position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+    return 'Close US position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' profit target.';
   },
   US_SCALP_SL_PCT: function(v) {
-    return 'Close US position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '. Tighter = smaller max loss but more false exits.';
+    return 'Close US position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' stop-loss.';
+  },
+  US_MIN_STOCK_PRICE: function(v) {
+    return 'Skip US stocks below this $ price. <strong>$' + (v||'?') + '</strong> = ignore any stock trading under $' + (v||'?') + '. Penny stocks are erratic and hard to scalp.';
+  },
+  US_MAX_BUYS_PER_SCAN: function(v) {
+    var n = parseInt(v);
+    var note = isNaN(n)?'':n>=50?' (effectively unlimited)':n<=3?' (very staggered)':' new positions';
+    return 'Max new positions opened in a single 1-min scan cycle. <strong>' + (v||'?') + '</strong> = up to ' + (isNaN(n)?'?':n) + note + ' per scan.';
+  },
+  US_LOSS_BURST_COUNT: function(v) {
+    var n = parseInt(v);
+    return 'If this many positions hit SL within the burst window, all new US buys pause. <strong>' + (v||'?') + '</strong> = pause after ' + (isNaN(n)?'?':n) + ' rapid SL hits.';
+  },
+  US_LOSS_BURST_WINDOW: function(v) {
+    return 'Seconds to look back when counting burst SL hits. <strong>' + (v||'?') + 's</strong> = <strong>' + _hintSec(v) + '</strong> lookback window.';
+  },
+  US_LOSS_BURST_COOLDOWN: function(v) {
+    return 'Seconds to pause all new US buys after a loss burst triggers. <strong>' + (v||'?') + 's</strong> = <strong>' + _hintSec(v) + '</strong> cooldown pause.';
+  },
+  // ── Crypto ────────────────────────────────────────────────────────────
+  CRYPTO_CAPITAL: function(v) {
+    var n = parseFloat(v);
+    var pos = isNaN(n) ? '?' : '$' + (n*0.05).toFixed(0);
+    return 'Binance paper trading balance in USDT. <strong>$' + (v||'?') + '</strong> → each position is ~5% = <strong>' + pos + '</strong> per trade. No real money ever spent.';
+  },
+  CRYPTO_MAX_DAILY_TRADES: function(v) {
+    var n = parseInt(v);
+    return 'Stop new crypto buys after N completed trades today. <strong>' + (v||'?') + '</strong> = halt after ' + (isNaN(n)?'?':n) + ' trades.';
+  },
+  CRYPTO_MAX_CONCURRENT: function(v) {
+    var n = parseInt(v);
+    return 'Max crypto positions open simultaneously. <strong>' + (v||'?') + '</strong> = up to ' + (isNaN(n)?'?':n) + ' open at once (one per coin pair — bot never holds two positions in the same coin).';
+  },
+  CRYPTO_MAX_DEPLOYED_PCT: function(v) {
+    return 'Never have more than this fraction of crypto balance in open positions. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' max deployed, ' + _hintRem(v) + ' stays as reserve. Wider than stocks because crypto runs 24/7.';
   },
   CRYPTO_PEAK_DRAWDOWN_PCT: function(v) {
-    return 'Pause new crypto buys if portfolio losses from today\'s peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' (wider than stock 3% because crypto is more volatile). Only fires on real closed losses.';
+    return 'Pause new crypto buys if portfolio losses from today\'s peak hit this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' (wider than stocks because crypto is more volatile). Only fires on real closed losses.';
   },
   CRYPTO_TARGET_PCT: function(v) {
-    return 'Close crypto position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+    return 'Close crypto position for profit when it gains this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' profit target.';
   },
   CRYPTO_SL_PCT: function(v) {
-    return 'Close crypto position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + '.';
+    return 'Close crypto position for loss when it drops this %. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' stop-loss.';
   },
   CRYPTO_BTC_MIN_CHANGE: function(v) {
     var n = parseFloat(v);
     var abs = isNaN(n) ? '?' : Math.abs(n).toFixed(1);
     return 'Block all crypto buys if BTC dropped more than this % in the last hour. <strong>' + (v||'?') + '</strong> = block if BTC down ' + abs + '%. Alt coins usually follow BTC down.';
   },
+  // ── General ───────────────────────────────────────────────────────────
   SLIPPAGE_PCT: function(v) {
     return 'Added cost per paper trade to simulate real spread/slippage. <strong>' + (v||'?') + '</strong> = ' + _hintPct(v) + ' per trade. Makes paper results more realistic.';
   },
-  MOOD_FILTER_THRESHOLD: function(v) {
-    return 'Index drop % that triggers the block (negative). <strong>-0.5</strong> = very strict. <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Current: <strong>' + (v||'?') + '</strong>. Only active when Mood Filter is ON.';
+  // ── Alerts thresholds ─────────────────────────────────────────────────
+  TELEGRAM_MIN_BUY_CAPITAL: function(v) {
+    var n = parseFloat(v);
+    return 'Suppress buy alerts where capital deployed is below this amount. <strong>' + (v||'0') + '</strong> = ' + (isNaN(n)||n===0 ? 'alert on every buy.' : 'only alert if ₹/$ ' + n + '+ is deployed.');
+  },
+  TELEGRAM_MIN_PNL_ALERT: function(v) {
+    var n = parseFloat(v);
+    return 'Suppress close alerts where |P&amp;L| is below this amount. <strong>' + (v||'0') + '</strong> = ' + (isNaN(n)||n===0 ? 'alert on every close.' : 'only alert if gain or loss exceeds ₹/$ ' + n + '.');
+  },
+  WHATSAPP_MIN_BUY_CAPITAL: function(v) {
+    var n = parseFloat(v);
+    return 'Suppress buy alerts where capital deployed is below this amount. <strong>' + (v||'0') + '</strong> = ' + (isNaN(n)||n===0 ? 'alert on every buy.' : 'only alert if ₹/$ ' + n + '+ is deployed.');
+  },
+  WHATSAPP_MIN_PNL_ALERT: function(v) {
+    var n = parseFloat(v);
+    return 'Suppress close alerts where |P&amp;L| is below this amount. <strong>' + (v||'0') + '</strong> = ' + (isNaN(n)||n===0 ? 'alert on every close.' : 'only alert if gain or loss exceeds ₹/$ ' + n + '.');
+  },
+  NTFY_MIN_BUY_CAPITAL: function(v) {
+    var n = parseFloat(v);
+    return 'Suppress buy alerts where capital deployed is below this amount. <strong>' + (v||'0') + '</strong> = ' + (isNaN(n)||n===0 ? 'alert on every buy.' : 'only alert if ₹/$ ' + n + '+ is deployed.');
+  },
+  NTFY_MIN_PNL_ALERT: function(v) {
+    var n = parseFloat(v);
+    return 'Suppress close alerts where |P&amp;L| is below this amount. <strong>' + (v||'0') + '</strong> = ' + (isNaN(n)||n===0 ? 'alert on every close.' : 'only alert if gain or loss exceeds ₹/$ ' + n + '.');
+  },
+  // ── Portal refresh ────────────────────────────────────────────────────
+  PORTAL_DASH_REFRESH: function(v) {
+    return 'How often the dashboard widgets auto-refresh. <strong>' + (v||'?') + 's</strong> = updates every <strong>' + _hintSec(v) + '</strong>.';
+  },
+  PORTAL_POS_REFRESH: function(v) {
+    return 'How often the open positions page auto-refreshes. <strong>' + (v||'?') + 's</strong> = updates every <strong>' + _hintSec(v) + '</strong>.';
+  },
+  PORTAL_LB_REFRESH: function(v) {
+    return 'How often the leaderboard auto-refreshes. <strong>' + (v||'?') + 's</strong> = updates every <strong>' + _hintSec(v) + '</strong>.';
+  },
+  PORTAL_LOG_REFRESH: function(v) {
+    return 'How often the live log view polls for new lines. <strong>' + (v||'?') + 's</strong> = polls every <strong>' + _hintSec(v) + '</strong>.';
+  },
+  PORTAL_MONITOR_REFRESH: function(v) {
+    return 'How often the live monitor polls for new data. <strong>' + (v||'?') + 's</strong> = polls every <strong>' + _hintSec(v) + '</strong>.';
   },
 };
 
@@ -3185,7 +3331,7 @@ function renderTelegramTab() {
       <div id="cfg-row-TELEGRAM_MIN_BUY_CAPITAL" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:16px;">
         <div>
           <div style="font-size:13px;font-weight:600;">Min capital to send Buy alert</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px;">${_CONFIG_HINTS['TELEGRAM_MIN_BUY_CAPITAL']}</div>
+          <div id="cfg-hint-TELEGRAM_MIN_BUY_CAPITAL" style="font-size:11px;color:var(--muted);margin-top:3px;">${(_CONFIG_HINT_FN['TELEGRAM_MIN_BUY_CAPITAL']||function(x){return x;})(minCap)}</div>
         </div>
         <input type="number" id="cfg-TELEGRAM_MIN_BUY_CAPITAL" value="${minCap}" min="0" step="1"
           style="width:90px;text-align:right;padding:6px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;"
@@ -3194,7 +3340,7 @@ function renderTelegramTab() {
       <div id="cfg-row-TELEGRAM_MIN_PNL_ALERT" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;gap:16px;">
         <div>
           <div style="font-size:13px;font-weight:600;">Min |P&L| to send Close alert</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px;">${_CONFIG_HINTS['TELEGRAM_MIN_PNL_ALERT']}</div>
+          <div id="cfg-hint-TELEGRAM_MIN_PNL_ALERT" style="font-size:11px;color:var(--muted);margin-top:3px;">${(_CONFIG_HINT_FN['TELEGRAM_MIN_PNL_ALERT']||function(x){return x;})(minPnl)}</div>
         </div>
         <input type="number" id="cfg-TELEGRAM_MIN_PNL_ALERT" value="${minPnl}" min="0" step="0.5"
           style="width:90px;text-align:right;padding:6px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;"
@@ -3247,13 +3393,19 @@ function renderWhatsAppTab() {
     const minPnl = _cfgOriginal['WHATSAPP_MIN_PNL_ALERT']   ?? '0';
     thrEl.innerHTML = `
       <div id="cfg-row-WHATSAPP_MIN_BUY_CAPITAL" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);gap:16px;">
-        <div><div style="font-size:13px;font-weight:600;">Min capital to send Buy alert</div></div>
+        <div>
+          <div style="font-size:13px;font-weight:600;">Min capital to send Buy alert</div>
+          <div id="cfg-hint-WHATSAPP_MIN_BUY_CAPITAL" style="font-size:11px;color:var(--muted);margin-top:3px;">${(_CONFIG_HINT_FN['WHATSAPP_MIN_BUY_CAPITAL']||function(x){return x;})(minCap)}</div>
+        </div>
         <input type="number" id="cfg-WHATSAPP_MIN_BUY_CAPITAL" value="${minCap}" min="0" step="1"
           style="width:90px;text-align:right;padding:6px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;"
           oninput="_markDirty('WHATSAPP_MIN_BUY_CAPITAL',this)">
       </div>
       <div id="cfg-row-WHATSAPP_MIN_PNL_ALERT" style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;gap:16px;">
-        <div><div style="font-size:13px;font-weight:600;">Min |P&L| to send Close alert</div></div>
+        <div>
+          <div style="font-size:13px;font-weight:600;">Min |P&L| to send Close alert</div>
+          <div id="cfg-hint-WHATSAPP_MIN_PNL_ALERT" style="font-size:11px;color:var(--muted);margin-top:3px;">${(_CONFIG_HINT_FN['WHATSAPP_MIN_PNL_ALERT']||function(x){return x;})(minPnl)}</div>
+        </div>
         <input type="number" id="cfg-WHATSAPP_MIN_PNL_ALERT" value="${minPnl}" min="0" step="0.5"
           style="width:90px;text-align:right;padding:6px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;"
           oninput="_markDirty('WHATSAPP_MIN_PNL_ALERT',this)">
