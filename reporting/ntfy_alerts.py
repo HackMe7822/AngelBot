@@ -23,21 +23,42 @@ def _alert_enabled(key):
             return str(row[0]).lower() not in ('false', '0', 'no')
     except Exception:
         pass
+    # Master switch defaults to OFF if not in DB (safe default — user must explicitly enable)
+    if key == 'NTFY_ALERTS_ENABLED':
+        return False
     return True
 
 def _get_config():
     topic = server = token = ''
+    # DB is primary (portal saves here; process env isn't updated until restart)
     try:
-        import config as cfg
-        topic  = getattr(cfg, 'NTFY_TOPIC',  '') or ''
-        server = getattr(cfg, 'NTFY_SERVER', '') or ''
-        token  = getattr(cfg, 'NTFY_TOKEN',  '') or ''
+        from data.database import get_conn
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute(
+            "SELECT setting_key, setting_value FROM bot_settings "
+            "WHERE setting_key IN ('NTFY_TOPIC','NTFY_SERVER','NTFY_TOKEN')"
+        )
+        rows = {r[0]: r[1] for r in c.fetchall()}
+        conn.close()
+        topic  = rows.get('NTFY_TOPIC',  '') or ''
+        server = rows.get('NTFY_SERVER', '') or ''
+        token  = rows.get('NTFY_TOKEN',  '') or ''
     except Exception:
         pass
-    topic  = os.getenv('NTFY_TOPIC',  topic).strip()
-    server = os.getenv('NTFY_SERVER', server).strip() or 'https://ntfy.sh'
-    token  = os.getenv('NTFY_TOKEN',  token).strip()
-    return topic, server.rstrip('/'), token
+    # Fall back to module config / env if DB had nothing
+    if not topic:
+        try:
+            import config as cfg
+            topic  = getattr(cfg, 'NTFY_TOPIC',  '') or ''
+            server = server or getattr(cfg, 'NTFY_SERVER', '') or ''
+            token  = token  or getattr(cfg, 'NTFY_TOKEN',  '') or ''
+        except Exception:
+            pass
+        topic  = os.getenv('NTFY_TOPIC',  topic).strip()
+        server = os.getenv('NTFY_SERVER', server).strip()
+        token  = os.getenv('NTFY_TOKEN',  token).strip()
+    return topic, (server.rstrip('/') or 'https://ntfy.sh'), token
 
 def send(message, title='AngelBot', priority='default', tags=None):
     """Send a push notification via ntfy.sh (or self-hosted ntfy server)."""

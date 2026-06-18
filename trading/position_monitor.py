@@ -83,6 +83,7 @@ class PositionMonitor:
         self._sl_breach_time  = {}     # pos_id → float (time.time() when SL first breached)
         self._sl_breach_count = {}     # pos_id → int   (consecutive polls below SL)
         self._daily_sl_hits   = {}     # symbol → (date, count) — banned after 2 SL hits same day
+        self._profit_since    = {}     # pos_id → float (time.time() when position first went profitable)
 
     # ── State persistence — survives restarts ────────────────────────────────
     def save_state(self):
@@ -386,6 +387,28 @@ class PositionMonitor:
                             except Exception:
                                 pass
 
+                # Profit timer: if in profit for N minutes without hitting target, take it
+                if not self._trail_active.get(pos_id) and pos_id not in self._exiting:
+                    from config import USE_PROFIT_TIMER, PROFIT_TIMER_MINUTES
+                    if USE_PROFIT_TIMER:
+                        in_profit = price > pos['entry_price']
+                        if in_profit:
+                            if pos_id not in self._profit_since:
+                                self._profit_since[pos_id] = time.time()
+                            else:
+                                profit_mins = (time.time() - self._profit_since[pos_id]) / 60
+                                if profit_mins >= PROFIT_TIMER_MINUTES:
+                                    gain_pct = (price - pos['entry_price']) / pos['entry_price'] * 100
+                                    cur = self._currency
+                                    print(f"{_G}  [PROFIT TIMER] {symbol} {cur}{price:.4f}  +{gain_pct:.2f}% for {profit_mins:.0f}min — taking profit{_R}")
+                                    self._exiting.add(pos_id)
+                                    threading.Thread(
+                                        target=self._scalp_exit, args=(pos, price, 'PROFIT_TIMER'), daemon=True
+                                    ).start()
+                        else:
+                            # Dipped below entry — reset the clock
+                            self._profit_since.pop(pos_id, None)
+
     # ── Scalp exit — instant sell, no re-analysis ────────────────────────────
     def _scalp_exit(self, pos, price, trigger):
         sym = pos['symbol']
@@ -396,7 +419,7 @@ class PositionMonitor:
                 )
                 if still_open is None:
                     return
-                reason_map = {'TARGET': 'profit target', 'TRAIL': 'trailing stop', 'SL': 'stop-loss', 'TIME': 'time exit — stagnating'}
+                reason_map = {'TARGET': 'profit target', 'TRAIL': 'trailing stop', 'SL': 'stop-loss', 'TIME': 'time exit — stagnating', 'PROFIT_TIMER': 'profit timer — partial profit taken'}
                 reason = f"Scalp {reason_map.get(trigger, 'exit')} hit"
                 pnl, pct = self.trader.sell(still_open, price, reason)
                 if pnl == 0.0 and pct == 0.0:
@@ -413,6 +436,7 @@ class PositionMonitor:
             self._trail_sl.pop(pos['id'], None)
             self._sl_breach_time.pop(pos['id'], None)
             self._sl_breach_count.pop(pos['id'], None)
+            self._profit_since.pop(pos['id'], None)
             if trigger == 'SL':
                 # Full cooldown: time gate + price gate + daily SL counter
                 self._sl_cooldown[sym] = (datetime.now(_IST), price)
@@ -428,6 +452,9 @@ class PositionMonitor:
             elif trigger == 'TIME':
                 # Light cooldown: 15 min — stock was stagnant, not a directional failure
                 self._sl_cooldown[sym] = (datetime.now(_IST) - timedelta(minutes=15), price)
+            elif trigger == 'PROFIT_TIMER':
+                # Light cooldown: 10 min — we took profit early, allow re-entry soon
+                self._sl_cooldown[sym] = (datetime.now(_IST) - timedelta(minutes=20), price)
             # Persist updated state so a restart picks up current cooldowns and day bans
             threading.Thread(target=self.save_state, daemon=True).start()
 

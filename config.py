@@ -46,6 +46,10 @@ MAX_CONCURRENT_POSITIONS = int(os.getenv("MAX_CONCURRENT_POSITIONS", "5"))
 USE_TIME_EXIT    = os.getenv("USE_TIME_EXIT",    "false").lower() == "true"
 MAX_HOLD_MINUTES = int(os.getenv("MAX_HOLD_MINUTES", "90"))
 
+# Profit timer — if in profit for N consecutive minutes without hitting target, take the partial profit
+USE_PROFIT_TIMER     = os.getenv("USE_PROFIT_TIMER",     "false").lower() == "true"
+PROFIT_TIMER_MINUTES = int(os.getenv("PROFIT_TIMER_MINUTES", "3"))
+
 # Market mood filter — if OFF, trades regardless of NIFTY/S&P direction (matches original profitable session)
 USE_MOOD_FILTER       = os.getenv("USE_MOOD_FILTER",       "true").lower() == "true"
 MOOD_FILTER_THRESHOLD = float(os.getenv("MOOD_FILTER_THRESHOLD", "-1.5"))  # block if index down this %
@@ -131,7 +135,12 @@ TELEGRAM_MIN_BUY_CAPITAL  = float(os.getenv("TELEGRAM_MIN_BUY_CAPITAL",  "0"))
 TELEGRAM_MIN_PNL_ALERT    = float(os.getenv("TELEGRAM_MIN_PNL_ALERT",    "0"))
 TELEGRAM_ALERT_TUNNEL_URL = os.getenv("TELEGRAM_ALERT_TUNNEL_URL", "true").lower() == "true"
 
-# ── WhatsApp alerts (CallMeBot — free, save +34 644 82 13 90 and send "I allow callmebot to send me messages") ──
+# ── WhatsApp alerts — UltraMsg (preferred: scan QR once, works instantly) or CallMeBot (API key by email) ──
+# UltraMsg: sign up at ultramsg.com → create instance → scan QR with WhatsApp → copy Instance ID + Token
+ULTRAMSG_INSTANCE  = os.getenv("ULTRAMSG_INSTANCE",  "")  # e.g. "instance12345"
+ULTRAMSG_TOKEN     = os.getenv("ULTRAMSG_TOKEN",     "")  # token from UltraMsg dashboard
+# CallMeBot fallback (used when UltraMsg not configured):
+# save +34 644 82 13 90, send "I allow callmebot to send me messages", get API key by WhatsApp reply
 WHATSAPP_PHONE     = os.getenv("WHATSAPP_PHONE",     "")
 WHATSAPP_API_KEY   = os.getenv("WHATSAPP_API_KEY",   "")
 WHATSAPP_ALERTS_ENABLED   = os.getenv("WHATSAPP_ALERTS_ENABLED",   "false").lower() == "true"
