@@ -87,6 +87,7 @@ class PositionMonitor:
         self._sl_breach_count = {}     # pos_id → int   (consecutive polls below SL)
         self._daily_sl_hits   = {}     # symbol → (date, count) — banned after 2 SL hits same day
         self._profit_since    = {}     # pos_id → float (time.time() when position first went profitable)
+        self._loss_since      = {}     # pos_id → float (time.time() when position first went into loss)
         # Use the worker's rotating file logger so exit events appear in the portal log viewer
         self._logger = _logging.getLogger(market) if market else None
 
@@ -427,6 +428,29 @@ class PositionMonitor:
                             # Dipped below entry — reset the clock
                             self._profit_since.pop(pos_id, None)
 
+                # Loss timer: if in loss for N minutes without recovering, cut it early
+                if not self._trail_active.get(pos_id) and pos_id not in self._exiting:
+                    from config import USE_LOSS_TIMER, LOSS_TIMER_MINUTES
+                    if USE_LOSS_TIMER:
+                        in_loss = price < pos['entry_price']
+                        if in_loss:
+                            if pos_id not in self._loss_since:
+                                self._loss_since[pos_id] = time.time()
+                            else:
+                                loss_mins = (time.time() - self._loss_since[pos_id]) / 60
+                                if loss_mins >= LOSS_TIMER_MINUTES:
+                                    loss_pct = (price - pos['entry_price']) / pos['entry_price'] * 100
+                                    cur = self._currency
+                                    _m = f"  [LOSS TIMER] {symbol} {cur}{price:.4f}  {loss_pct:.2f}% for {loss_mins:.0f}min — cutting loss"
+                                    print(f"{_RD}{_m}{_R}"); self._log(_m)
+                                    self._exiting.add(pos_id)
+                                    threading.Thread(
+                                        target=self._scalp_exit, args=(pos, price, 'LOSS_TIMER'), daemon=True
+                                    ).start()
+                        else:
+                            # Recovered above entry — reset the clock
+                            self._loss_since.pop(pos_id, None)
+
     # ── Scalp exit — instant sell, no re-analysis ────────────────────────────
     def _scalp_exit(self, pos, price, trigger):
         sym = pos['symbol']
@@ -437,7 +461,7 @@ class PositionMonitor:
                 )
                 if still_open is None:
                     return
-                reason_map = {'TARGET': 'profit target', 'TRAIL': 'trailing stop', 'SL': 'stop-loss', 'TIME': 'time exit — stagnating', 'PROFIT_TIMER': 'profit timer — partial profit taken'}
+                reason_map = {'TARGET': 'profit target', 'TRAIL': 'trailing stop', 'SL': 'stop-loss', 'TIME': 'time exit — stagnating', 'PROFIT_TIMER': 'profit timer — partial profit taken', 'LOSS_TIMER': 'loss timer — cut early'}
                 reason = f"Scalp {reason_map.get(trigger, 'exit')} hit"
                 pnl, pct = self.trader.sell(still_open, price, reason)
                 if pnl == 0.0 and pct == 0.0:
@@ -456,6 +480,7 @@ class PositionMonitor:
             self._sl_breach_time.pop(pos['id'], None)
             self._sl_breach_count.pop(pos['id'], None)
             self._profit_since.pop(pos['id'], None)
+            self._loss_since.pop(pos['id'], None)
             if trigger == 'SL':
                 # Full cooldown: time gate + price gate + daily SL counter
                 self._sl_cooldown[sym] = (datetime.now(_IST), price)
@@ -474,6 +499,9 @@ class PositionMonitor:
             elif trigger == 'PROFIT_TIMER':
                 # Light cooldown: 10 min — we took profit early, allow re-entry soon
                 self._sl_cooldown[sym] = (datetime.now(_IST) - timedelta(minutes=20), price)
+            elif trigger == 'LOSS_TIMER':
+                # Moderate cooldown: 20 min — position was going wrong direction, wait before re-entry
+                self._sl_cooldown[sym] = (datetime.now(_IST) - timedelta(minutes=10), price)
             # Persist updated state so a restart picks up current cooldowns and day bans
             threading.Thread(target=self.save_state, daemon=True).start()
 

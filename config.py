@@ -50,6 +50,10 @@ MAX_HOLD_MINUTES = int(os.getenv("MAX_HOLD_MINUTES", "90"))
 USE_PROFIT_TIMER     = os.getenv("USE_PROFIT_TIMER",     "false").lower() == "true"
 PROFIT_TIMER_MINUTES = int(os.getenv("PROFIT_TIMER_MINUTES", "3"))
 
+# Loss timer — if in loss for N consecutive minutes without recovering, cut the loss early
+USE_LOSS_TIMER     = os.getenv("USE_LOSS_TIMER",     "false").lower() == "true"
+LOSS_TIMER_MINUTES = int(os.getenv("LOSS_TIMER_MINUTES", "5"))
+
 # Market mood filter — if OFF, trades regardless of NIFTY/S&P direction (matches original profitable session)
 USE_MOOD_FILTER       = os.getenv("USE_MOOD_FILTER",       "true").lower() == "true"
 MOOD_FILTER_THRESHOLD = float(os.getenv("MOOD_FILTER_THRESHOLD", "-1.5"))  # block if index down this %
