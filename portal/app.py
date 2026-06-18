@@ -779,6 +779,113 @@ def test_ntfy(user: str = Depends(require_auth)):
         return {"ok": False, "error": str(e)}
 
 
+class ReportAnalysisRequest(BaseModel):
+    period: str
+    market: str
+    overall: dict
+    per_day: list
+    exit_reasons: list
+    markets: list
+
+@app.post("/api/report/analyze")
+def analyze_report(req: ReportAnalysisRequest, user: str = Depends(require_auth)):
+    """Call AI API (Anthropic Claude or OpenAI) to analyse trade data and return plain-English insights."""
+    # Read API keys from .env only (secrets — not stored in bot_settings)
+    anthropic_key = openai_key = ''
+    env_path = _BOT_DIR / '.env'
+    try:
+        for line in env_path.read_text(encoding='utf-8').splitlines():
+            k, _, v = line.partition('=')
+            k = k.strip()
+            if k == 'ANTHROPIC_API_KEY': anthropic_key = v.strip()
+            elif k == 'OPENAI_API_KEY':  openai_key    = v.strip()
+    except Exception:
+        pass
+
+    d = req
+    per_day_lines = '\n'.join(
+        f"  {r['date']}: {r['trades']} trades, {r['win_rate']:.0f}% WR, "
+        f"P&L: {'+' if r['pnl']>=0 else ''}{r['pnl']:.2f}"
+        for r in d.per_day[:60]
+    )
+    exit_lines = '\n'.join(
+        f"  {r['reason']}: {r['count']} trades, {r['win_rate']:.0f}% WR, "
+        f"total P&L {r['pnl']:.2f}, avg {r['avg_pnl']:.2f}"
+        for r in d.exit_reasons[:12]
+    )
+    mkt_lines = '\n'.join(
+        f"  {m['market']}: {m['trades']} trades, {m['win_rate']:.0f}% WR, P&L {m['pnl']:.2f}"
+        for m in d.markets
+    )
+
+    prompt = (
+        "You are a friendly trading performance coach reviewing paper-trading results for AngelBot.\n\n"
+        "Analyse the data below and respond with EXACTLY these five sections — no other headings:\n\n"
+        "**Overall Assessment**\n"
+        "2-3 sentences. Be direct — is this profitable, improving, or struggling?\n\n"
+        "**What's Working**\n"
+        "2-4 bullet points on genuine strengths (specific exit reasons, strong days, markets doing well).\n\n"
+        "**What Needs Improvement**\n"
+        "2-4 bullet points on clear weaknesses (losing patterns, bad exit reasons, losing days).\n\n"
+        "**Suggestions**\n"
+        "3-5 actionable bullet points based only on what the data shows.\n\n"
+        "**Day-by-Day Highlights**\n"
+        "Brief note on the best day, worst day, and any streak patterns. Skip this section if only 1 day.\n\n"
+        "Rules: plain English, no jargon, use actual numbers, be concise.\n\n"
+        f"Period: {d.period}\nMarket: {d.market}\n\n"
+        f"Overall:\n"
+        f"  Trades: {d.overall['total_trades']} ({d.overall['wins']}W / {d.overall['losses']}L)\n"
+        f"  Win Rate: {d.overall['win_rate']:.1f}%\n"
+        f"  Total P&L: {d.overall['total_pnl']:.2f}\n"
+        f"  Profit Factor: {d.overall['profit_factor']:.2f}\n"
+        f"  Best Trade: +{d.overall['best_trade']:.2f}   Worst: {d.overall['worst_trade']:.2f}\n"
+        f"  Avg P&L/trade: {d.overall['avg_pnl']:.2f}\n\n"
+        f"Per-Day:\n{per_day_lines}\n\n"
+        f"Exit Reasons:\n{exit_lines}\n\n"
+        f"Markets:\n{mkt_lines}"
+    )
+
+    if anthropic_key:
+        try:
+            r = requests.post(
+                'https://api.anthropic.com/v1/messages',
+                headers={
+                    'x-api-key': anthropic_key,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                },
+                json={
+                    'model': 'claude-haiku-4-5-20251001',
+                    'max_tokens': 1400,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                },
+                timeout=40,
+            )
+            if r.status_code == 200:
+                return {'ok': True, 'analysis': r.json()['content'][0]['text'], 'provider': 'Claude'}
+        except Exception as e:
+            pass
+
+    if openai_key:
+        try:
+            r = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={'Authorization': f'Bearer {openai_key}', 'Content-Type': 'application/json'},
+                json={
+                    'model': 'gpt-4o-mini',
+                    'max_tokens': 1400,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                },
+                timeout=40,
+            )
+            if r.status_code == 200:
+                return {'ok': True, 'analysis': r.json()['choices'][0]['message']['content'], 'provider': 'GPT-4o Mini'}
+        except Exception as e:
+            pass
+
+    return {'ok': False, 'error': 'No AI API key found. Add ANTHROPIC_API_KEY or OPENAI_API_KEY in Settings → API Keys.'}
+
+
 @app.get("/api/tunnel/url")
 def get_tunnel_url(user: str = Depends(require_auth)):
     """Return the current Cloudflare Tunnel URL parsed from the tunnel log."""
@@ -1284,6 +1391,8 @@ _CREDENTIAL_KEYS = [
     'ALPACA_KEY', 'ALPACA_SECRET',
     'BINANCE_KEY', 'BINANCE_SECRET',
     'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID',
+    'WHATSAPP_PHONE', 'ULTRAMSG_INSTANCE', 'ULTRAMSG_TOKEN',
+    'ANTHROPIC_API_KEY', 'OPENAI_API_KEY',
     'PORTAL_PASS', 'SQL_SA_PASS',
 ]
 
