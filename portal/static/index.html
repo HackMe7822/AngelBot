@@ -4791,10 +4791,17 @@ async function generateReport(mode) {
   var pnlSign  = function(v){ return (v >= 0 ? '+' : '') + v.toFixed(2); };
   var mktLabel = {'india_paper':'India (NSE)','us_paper':'US (Alpaca)','crypto_paper':'Crypto'};
 
-  var rangeLabel = {'today':'Today','yesterday':'Yesterday','week':'Last 7 Days','month':'Last 30 Days','all':'All Time','custom':'Custom'};
+  var rangeLabel = {'today':'Today','yesterday':'Yesterday','week':'Last 7 Days','month':'Last 30 Days','all':'All Time'};
   var mktShort   = market ? (mktLabel[market+'_paper']||market) : 'All Markets';
   var reportTitle = 'AngelBot Performance Report';
-  var reportSubtitle = mktShort + ' &nbsp;&#9642;&nbsp; ' + (rangeLabel[range]||range);
+  var rangeDisplay = rangeLabel[range] || range;
+  if (range === 'custom') {
+    if (fromDt && toDt) rangeDisplay = fromDt + ' → ' + toDt;
+    else if (fromDt) rangeDisplay = 'From ' + fromDt;
+    else if (toDt) rangeDisplay = 'To ' + toDt;
+    else rangeDisplay = 'Custom Range';
+  }
+  var reportSubtitle = mktShort + ' &nbsp;&#9642;&nbsp; ' + rangeDisplay;
 
   var css = [
     '*{box-sizing:border-box;margin:0;padding:0}',
@@ -4950,15 +4957,42 @@ async function generateReport(mode) {
   // ── Daily breakdown ───────────────────────────────────────────────────
   if (incDaily && days.length) {
     var maxAbsPnl = days.reduce(function(m,d){ return Math.max(m, Math.abs(dayMap[d].pnl)); }, 0.01);
-    html += '<h2>&#128197; Daily P&amp;L Breakdown</h2>';
-    html += '<table><thead><tr><th>Date</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>P&amp;L</th><th>Daily Bar</th></tr></thead><tbody>';
+    html += '<h2>&#128197; Daily Breakdown — '+days.length+' day'+(days.length>1?'s':'')+'</h2>';
+
+    // Per-day KPI cards (side by side)
+    html += '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">';
+    days.forEach(function(d){
+      var dv = dayMap[d];
+      var wr = dv.count ? (dv.wins/dv.count*100) : 0;
+      var pnlCol    = dv.pnl >= 0 ? '#16a34a' : '#dc2626';
+      var borderCol = dv.pnl >= 0 ? '#22c55e' : '#ef4444';
+      var bgCol     = dv.pnl >= 0 ? '#f0fdf4' : '#fef2f2';
+      html += '<div style="background:#fff;border-radius:10px;padding:14px 16px;box-shadow:0 1px 5px rgba(0,0,0,.09);border-top:4px solid '+borderCol+';min-width:160px;flex:1;max-width:210px;">';
+      html += '<div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">'+e(d)+'</div>';
+      html += '<div style="font-size:22px;font-weight:800;color:'+pnlCol+';margin-bottom:2px;">'+(dv.pnl>=0?'+':'')+dv.pnl.toFixed(2)+'</div>';
+      html += '<div style="font-size:10px;color:#94a3b8;margin-bottom:10px;">Total P&amp;L</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 8px;font-size:11px;">';
+      html += '<div><div style="color:#94a3b8;font-size:10px;">Trades</div><strong style="font-size:14px;color:#1e293b;">'+dv.count+'</strong></div>';
+      html += '<div><div style="color:#94a3b8;font-size:10px;">Win Rate</div><strong style="font-size:14px;color:'+(wr>=50?'#16a34a':'#dc2626')+';">'+wr.toFixed(0)+'%</strong></div>';
+      html += '<div><div style="color:#94a3b8;font-size:10px;">Wins</div><strong style="font-size:13px;color:#16a34a;">'+dv.wins+'</strong></div>';
+      html += '<div><div style="color:#94a3b8;font-size:10px;">Losses</div><strong style="font-size:13px;color:#dc2626;">'+dv.losses+'</strong></div>';
+      html += '</div>';
+      // Mini P&L bar
+      var bw = Math.round(Math.abs(dv.pnl)/maxAbsPnl*100);
+      html += '<div style="margin-top:10px;height:5px;border-radius:3px;background:'+(dv.pnl>=0?'linear-gradient(90deg,#22c55e,#86efac)':'linear-gradient(90deg,#ef4444,#fca5a5)')+';width:'+bw+'%;min-width:4px;"></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Summary table
+    html += '<table><thead><tr><th>Date</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>P&amp;L</th><th>Bar</th></tr></thead><tbody>';
     days.forEach(function(d){
       var dv = dayMap[d];
       var wr = dv.count ? (dv.wins/dv.count*100) : 0;
       var barW = Math.round(Math.abs(dv.pnl) / maxAbsPnl * 100);
       var barCol = dv.pnl >= 0 ? 'linear-gradient(90deg,#22c55e,#86efac)' : 'linear-gradient(90deg,#ef4444,#fca5a5)';
       html += '<tr>';
-      html += '<td style="color:#1e293b;font-weight:600;">'+e(d)+'</td>';
+      html += '<td style="color:#1e293b;font-weight:600;white-space:nowrap;">'+e(d)+'</td>';
       html += '<td style="color:#2563eb;">'+dv.count+'</td>';
       html += '<td style="color:#16a34a;font-weight:600;">'+dv.wins+'</td>';
       html += '<td style="color:#dc2626;font-weight:600;">'+dv.losses+'</td>';

@@ -360,6 +360,8 @@ def get_trades(
     status_filter: Optional[str] = None,
     pnl_filter: Optional[str] = None,
     date_filter: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     sort_by: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
@@ -386,12 +388,19 @@ def get_trades(
     elif pnl_filter == 'losses':
         where.append("pnl < 0")
 
-    # Date filter
+    # Date filter (preset ranges)
     date_sql, date_params = _build_date_clause(date_filter)
     if date_sql:
-        # Strip leading "AND " since we handle it via where list
         where.append(date_sql.lstrip("AND ").strip())
         params.extend(date_params)
+
+    # Custom date range (YYYY-MM-DD) — used by report generator
+    if date_from:
+        where.append("entry_time >= ?")
+        params.append(date_from + ' 00:00:00')
+    if date_to:
+        where.append("entry_time <= ?")
+        params.append(date_to + ' 23:59:59')
 
     _sort_map = {
         'date_desc':  'entry_time DESC',
