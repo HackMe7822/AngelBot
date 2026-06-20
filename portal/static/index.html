@@ -1625,23 +1625,11 @@
       <button class="btn sm" onclick="clearMonitor()">Clear</button>
       <button class="btn sm" id="monitor-pause-btn" onclick="toggleMonitorPause()">&#9208; Pause</button>
     </div>
-    <!-- Tunnel status card -->
-    <div class="card" id="tunnel-status-card" style="margin-bottom:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
-        <span style="font-size:16px;">🌐</span>
-        <div style="min-width:0;">
-          <div style="font-size:12px;color:var(--muted);font-weight:500;">Cloudflare Tunnel</div>
-          <div id="tunnel-url-display" style="font-size:13px;font-weight:600;word-break:break-all;">
-            <span style="color:var(--muted);">Loading…</span>
-          </div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <span id="tunnel-svc-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(101,109,118,.15);color:var(--muted);">–</span>
-        <button class="btn sm" onclick="copyTunnelUrl()" id="tunnel-copy-btn" style="display:none;">📋 Copy</button>
-        <button class="btn sm" onclick="restartTunnel()">↺ Restart Tunnel</button>
-        <button class="btn sm" onclick="loadTunnelUrl()">⟳ Refresh</button>
-      </div>
+    <!-- Static portal URL -->
+    <div class="card" style="margin-bottom:12px;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:16px;">🌐</span>
+      <div style="font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap;">Portal URL</div>
+      <a href="https://trading.creationsit.com" target="_blank" style="font-size:13px;font-weight:600;color:var(--blue);text-decoration:none;">https://trading.creationsit.com</a>
     </div>
 
     <div style="position:relative;">
@@ -2111,7 +2099,7 @@ function showPage(name, pushState) {
   if (name === 'users')       loadUsers();
   if (name === 'logs')        { applyDefault('logs'); loadLogDates(); }
   if (name === 'symbols')     loadSymbols();
-  if (name === 'monitor')     { startMonitor(); loadTunnelUrl(); }
+  if (name === 'monitor')     { startMonitor(); }
   if (name !== 'monitor')     stopMonitor();
 }
 
@@ -3668,44 +3656,6 @@ async function testNtfy() {
   }
 }
 
-// ── Tunnel URL card ──────────────────────────────────────────────────────────
-async function loadTunnelUrl() {
-  const el   = document.getElementById('tunnel-url-display');
-  const badge = document.getElementById('tunnel-svc-badge');
-  const copyBtn = document.getElementById('tunnel-copy-btn');
-  const r = await apiFetch('/api/tunnel/url');
-  if (!r) return;
-  const d = await r.json();
-  const color = d.status === 'running' ? '#3fb950' : '#cf222e';
-  if (badge) { badge.textContent = d.status || '–'; badge.style.background = color + '22'; badge.style.color = color; }
-  if (el) {
-    if (d.url) {
-      el.innerHTML = `<a href="${d.url}" target="_blank" style="color:var(--blue);text-decoration:none;word-break:break-all;">${d.url}</a>`;
-      if (copyBtn) copyBtn.style.display = '';
-    } else {
-      el.innerHTML = '<span style="color:var(--muted);">No URL found — tunnel may not be running</span>';
-      if (copyBtn) copyBtn.style.display = 'none';
-    }
-  }
-}
-
-function copyTunnelUrl() {
-  const a = document.querySelector('#tunnel-url-display a');
-  if (a) { navigator.clipboard.writeText(a.href).then(function(){ toast('Tunnel URL copied!'); }); }
-}
-
-async function restartTunnel() {
-  if (!await showConfirm('Restart Tunnel', 'Restart the Cloudflare tunnel service? The public URL will change.', 'Restart')) return;
-  const r = await apiFetch('/api/services/AngelBot-Tunnel/restart', { method: 'POST' });
-  if (!r) { toast('Restart failed — no response', 4000); return; }
-  const d = await r.json();
-  if (d.ok) {
-    toast('Tunnel restarting… URL will update in ~10 seconds');
-    setTimeout(loadTunnelUrl, 12000);
-  } else {
-    toast('Restart failed: ' + (d.detail || d.message || ''), 5000);
-  }
-}
 
 async function loadConfig() {
   const r = await apiFetch('/api/config');

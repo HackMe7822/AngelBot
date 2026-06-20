@@ -80,55 +80,10 @@ def _sync_db_to_env():
         print(f"[Portal] DB→.env sync: {e}")
 
 
-_last_tunnel_url_notified: str = ""
-
 @app.on_event("startup")
 async def _on_startup():
     _ensure_settings_table()
     _sync_db_to_env()
-    asyncio.create_task(_watch_tunnel_url())
-
-async def _watch_tunnel_url():
-    """Background task: detect when cloudflared gets a new URL and notify Telegram + WhatsApp."""
-    global _last_tunnel_url_notified
-    log_path = _BOT_DIR / "logs" / "AngelBot-Tunnel.log"
-    pattern  = _re.compile(r'https://[a-z0-9-]+\.trycloudflare\.com')
-    while True:
-        await asyncio.sleep(12)
-        try:
-            if not log_path.exists():
-                continue
-            text = log_path.read_text(encoding='utf-8', errors='ignore')
-            matches = pattern.findall(text)
-            if not matches:
-                continue
-            latest = matches[-1]
-            if latest == _last_tunnel_url_notified:
-                continue
-            _last_tunnel_url_notified = latest
-            msg = f"🌐 <b>AngelBot Tunnel URL updated</b>\n{latest}\n<i>Save this link — it changes on every restart.</i>"
-            try:
-                from reporting.telegram_alerts import send as _tg, _alert_enabled as _ae
-                if _ae('TELEGRAM_ALERTS_ENABLED') and _ae('TELEGRAM_ALERT_TUNNEL_URL'):
-                    _tg(msg)
-            except Exception:
-                pass
-            try:
-                from reporting.telegram_alerts import _alert_enabled as _ae2
-                if _ae2('WHATSAPP_ALERT_TUNNEL_URL'):
-                    from reporting.whatsapp_alerts import send as _wa
-                    _wa(msg)
-            except Exception:
-                pass
-            try:
-                from reporting.telegram_alerts import _alert_enabled as _ae3
-                if _ae3('NTFY_ALERT_TUNNEL_URL'):
-                    from reporting.ntfy_alerts import send as _ntfy
-                    _ntfy(msg, title='Tunnel URL Updated', priority='default', tags=['link'])
-            except Exception:
-                pass
-        except Exception:
-            pass
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1181,7 +1136,7 @@ def get_log_live(market: str, lines: int = 200, user: str = Depends(require_auth
 
 
 # ── Services ──────────────────────────────────────────────────────────────────
-_SERVICE_NAMES = ['AngelBot-India', 'AngelBot-US', 'AngelBot-Crypto', 'AngelBot-Portal', 'AngelBot-Tunnel']
+_SERVICE_NAMES = ['AngelBot-India', 'AngelBot-US', 'AngelBot-Crypto', 'AngelBot-Portal', 'cloudflared']
 
 def _sc_status(name: str) -> str:
     """Query a Windows service status via sc.exe."""
