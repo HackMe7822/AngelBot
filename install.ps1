@@ -553,13 +553,14 @@ New-NetFirewallRule -DisplayName "SQL Server 1433"      -Direction Inbound -Prot
 OK "Firewall rules added (8080, 80, 1433)"
 
 # -----------------------------------------------------------------------------
-# STEP 10 -- Cloudflare Tunnel  (free public URL, no port-forwarding needed)
+# STEP 10 -- Cloudflare Tunnel
 # -----------------------------------------------------------------------------
-Step 10 "Cloudflare Tunnel (free remote access from anywhere)"
+Step 10 "Cloudflare Tunnel (trading.creationsit.com)"
 
 $cfDest     = "C:\Windows\cloudflared.exe"
 $cfBundled  = "$BOT_DIR\prerequisite\setup\cloudflared\cloudflared.exe"
 $cfTmpExe   = "$tmp\cloudflared.exe"
+$CF_HOSTNAME = "trading.creationsit.com"
 
 # Install binary ---------------------------------------------------------------
 if (-not (Test-Path $cfDest)) {
@@ -578,7 +579,87 @@ if (-not (Test-Path $cfDest)) {
 
 $script:cfPublicUrl = $null
 
-if ($cfDest -and (Test-Path $cfDest)) {
+# ─────────────────────────────────────────────────────────────────────────────
+# CASE A: Existing 'cloudflared' Windows service (e.g. installed by MeshCentral)
+#   Add trading.creationsit.com to the existing config and restart — do NOT
+#   create a second tunnel service or touch any other ingress rules.
+# ─────────────────────────────────────────────────────────────────────────────
+$existingCfSvc = Get-Service -Name "cloudflared" -ErrorAction SilentlyContinue
+
+if ($existingCfSvc) {
+    Info "Existing 'cloudflared' service detected — patching config for $CF_HOSTNAME ..."
+
+    # Locate the config.yml used by the running service
+    $cfConfigPath = $null
+    try {
+        $svcPath = (Get-WmiObject Win32_Service -Filter "Name='cloudflared'").PathName
+        if ($svcPath -match '--config[= ]"?([^"]+\.yml)"?') { $cfConfigPath = $Matches[1] }
+    } catch {}
+    if (-not $cfConfigPath -or -not (Test-Path $cfConfigPath)) {
+        foreach ($candidate in @("C:\cloudflared\config.yml",
+                                  "$env:USERPROFILE\.cloudflared\config.yml",
+                                  "C:\ProgramData\cloudflared\config.yml")) {
+            if (Test-Path $candidate) { $cfConfigPath = $candidate; break }
+        }
+    }
+
+    if ($cfConfigPath -and (Test-Path $cfConfigPath)) {
+        OK "Config found: $cfConfigPath"
+        $cfContent = Get-Content $cfConfigPath -Raw
+
+        if ($cfContent -match [regex]::Escape($CF_HOSTNAME)) {
+            OK "$CF_HOSTNAME already in config — no changes needed"
+            $script:cfPublicUrl = "https://$CF_HOSTNAME"
+        } else {
+            # Insert before the final catch-all line, preserving all existing rules
+            $newEntry  = "  - hostname: $CF_HOSTNAME`r`n    service: http://localhost:8080"
+            $cfContent = $cfContent -replace '(\r?\n\s*-\s+service:\s+http_status:404)', "`r`n$newEntry`$1"
+            Set-Content $cfConfigPath $cfContent.TrimEnd() -Encoding ASCII -Force
+            OK "Added $CF_HOSTNAME -> http://localhost:8080 to config"
+
+            # Get tunnel name/UUID for DNS route
+            $tunnelId = $null
+            if ($cfContent -match '(?m)^tunnel:\s+(\S+)') { $tunnelId = $Matches[1] }
+
+            if ($tunnelId -and (Test-Path $cfDest)) {
+                Info "Creating DNS route: $CF_HOSTNAME -> tunnel $tunnelId ..."
+                $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+                & $cfDest tunnel route dns $tunnelId $CF_HOSTNAME 2>&1
+                $ErrorActionPreference = $oldPref2
+                OK "DNS CNAME created"
+            } else {
+                Warn "Could not auto-create DNS route — run manually:"
+                Write-Host "      cloudflared tunnel route dns <TUNNEL-NAME> $CF_HOSTNAME" -ForegroundColor White
+            }
+
+            # Restart the existing service (Restart-Service works for both native and NSSM installs)
+            Info "Restarting cloudflared service ..."
+            try {
+                Restart-Service -Name "cloudflared" -Force -ErrorAction Stop
+                if (Wait-ServiceRunning "cloudflared" 30) {
+                    OK "cloudflared restarted — $CF_HOSTNAME is live"
+                    $script:cfPublicUrl = "https://$CF_HOSTNAME"
+                } else {
+                    Warn "cloudflared restart may have stalled — check: sc query cloudflared"
+                }
+            } catch {
+                Warn "Restart-Service failed ($_) — try manually: net stop cloudflared && net start cloudflared"
+            }
+        }
+    } else {
+        Warn "Could not find cloudflared config.yml — add $CF_HOSTNAME manually:"
+        Write-Host ""
+        Write-Host "  1. Edit config.yml and add:" -ForegroundColor Yellow
+        Write-Host "       - hostname: $CF_HOSTNAME" -ForegroundColor White
+        Write-Host "         service: http://localhost:8080" -ForegroundColor White
+        Write-Host "  2. cloudflared tunnel route dns <TUNNEL-NAME> $CF_HOSTNAME" -ForegroundColor White
+        Write-Host "  3. net stop cloudflared && net start cloudflared" -ForegroundColor White
+    }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CASE B: No existing cloudflared service — set up a fresh tunnel
+# ─────────────────────────────────────────────────────────────────────────────
+} elseif ($cfDest -and (Test-Path $cfDest)) {
 
     Write-Host ""
     Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
@@ -588,9 +669,9 @@ if ($cfDest -and (Test-Path $cfDest)) {
     Write-Host "  |      Example: https://abc-xyz.trycloudflare.com          |" -ForegroundColor Cyan
     Write-Host "  |      Note: URL changes every restart                     |" -ForegroundColor Cyan
     Write-Host "  |                                                          |" -ForegroundColor Cyan
-    Write-Host "  |  [2] Named tunnel  - stable URL, free Cloudflare acct    |" -ForegroundColor Cyan
-    Write-Host "  |      Example: https://portal.yourdomain.com              |" -ForegroundColor Cyan
-    Write-Host "  |      Requires: domain on Cloudflare (free plan OK)       |" -ForegroundColor Cyan
+    Write-Host "  |  [2] Named tunnel  - trading.creationsit.com             |" -ForegroundColor Cyan
+    Write-Host "  |      Stable URL, requires Cloudflare login               |" -ForegroundColor Cyan
+    Write-Host "  |      Domain creationsit.com must be on Cloudflare        |" -ForegroundColor Cyan
     Write-Host "  |                                                          |" -ForegroundColor Cyan
     Write-Host "  |  [N] Skip tunnel setup                                   |" -ForegroundColor Cyan
     Write-Host "  +----------------------------------------------------------+" -ForegroundColor Cyan
@@ -623,10 +704,10 @@ if ($cfDest -and (Test-Path $cfDest)) {
         } else {
             Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log for URL"
         }
-    # -- OPTION 2: Named tunnel -----------------------------------------------
+
+    # -- OPTION 2: Named tunnel (trading.creationsit.com) ---------------------
     } elseif ($cfChoice -eq "2") {
 
-        # Step 2a: Login (opens browser or prints auth URL)
         Write-Host ""
         Write-Host "  Opening Cloudflare login page..." -ForegroundColor Yellow
         Write-Host "  (If no browser opens, copy the URL from below into any browser)" -ForegroundColor DarkGray
@@ -641,83 +722,59 @@ if ($cfDest -and (Test-Path $cfDest)) {
         } else {
             OK "Logged in to Cloudflare"
 
-            # Step 2b: Create tunnel
-            $tunnelName = "angelbot"
-            Write-Host ""
+            # Create tunnel named after this VM
+            $tunnelName = "creationsit-vm"
             Info "Creating tunnel: $tunnelName ..."
             $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
             $createOut = & $cfDest tunnel create $tunnelName 2>&1
             $ErrorActionPreference = $oldPref2
             Write-Host ($createOut | Out-String).Trim() -ForegroundColor DarkGray
 
-            # Find credentials file (UUID.json in .cloudflared)
+            # Find credentials file
             $cfCredDir  = "$env:USERPROFILE\.cloudflared"
             $credFile   = Get-ChildItem $cfCredDir -Filter "*.json" -ErrorAction SilentlyContinue |
                           Sort-Object LastWriteTime -Descending | Select-Object -First 1
             $tunnelUUID = if ($credFile) { $credFile.BaseName } else { $null }
 
-            if (-not $tunnelUUID) { Warn "Could not find tunnel credentials -- check .cloudflared folder"; return }
-            OK "Tunnel UUID: $tunnelUUID"
+            if (-not $tunnelUUID) { Warn "Could not find tunnel credentials -- check .cloudflared folder" }
+            else {
+                OK "Tunnel UUID: $tunnelUUID"
 
-            # Step 2c: Hostname
-            Write-Host ""
-            Write-Host "  Enter the public hostname for the portal." -ForegroundColor Cyan
-            Write-Host "  Your domain must be on Cloudflare (free plan OK)." -ForegroundColor DarkGray
-            Write-Host "  Example: portal.yourdomain.com" -ForegroundColor DarkGray
-            $cfHostname = Read-Host "  Hostname"
-
-            # Step 2d: Write config
-            $cfConfigPath = "$BOT_DIR\cloudflared.yml"
-            if ($cfHostname) {
+                # Write config — trading.creationsit.com hardcoded as the hostname
+                $cfConfigPath = "C:\cloudflared\config.yml"
+                New-Item -ItemType Directory -Force -Path "C:\cloudflared" | Out-Null
                 @"
 tunnel: $tunnelUUID
 credentials-file: $($credFile.FullName)
+
 ingress:
-  - hostname: $cfHostname
+  - hostname: $CF_HOSTNAME
     service: http://localhost:8080
   - service: http_status:404
 "@ | Out-File $cfConfigPath -Encoding ASCII -Force
-                # Create DNS CNAME automatically
-                $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-                & $cfDest tunnel route dns $tunnelName $cfHostname 2>&1 | Out-Null
-                $ErrorActionPreference = $oldPref2
-                OK "DNS route created: $cfHostname -> tunnel"
-                $script:cfPublicUrl = "https://$cfHostname"
-            } else {
-                @"
-tunnel: $tunnelUUID
-credentials-file: $($credFile.FullName)
-ingress:
-  - service: http://localhost:8080
-"@ | Out-File $cfConfigPath -Encoding ASCII -Force
-            }
-            OK "Config written: $cfConfigPath"
+                OK "Config written: $cfConfigPath"
 
-            # Step 2e: Register NSSM service
-            $cfSvcName = "AngelBot-Tunnel"
-            $cfLog     = "$BOT_DIR\logs\AngelBot-Tunnel.log"
-            $existing  = Get-Service -Name $cfSvcName -ErrorAction SilentlyContinue
-            if ($existing) {
-                Stop-Service $cfSvcName -Force -ErrorAction SilentlyContinue
-                & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
-                Start-Sleep -Seconds 2
-            }
-            & $nssmDest install $cfSvcName $cfDest "tunnel --no-autoupdate --config `"$cfConfigPath`" run" 2>&1 | Out-Null
-            & $nssmDest set $cfSvcName AppDirectory    $BOT_DIR            2>&1 | Out-Null
-            & $nssmDest set $cfSvcName AppStdout       $cfLog              2>&1 | Out-Null
-            & $nssmDest set $cfSvcName AppStderr       $cfLog              2>&1 | Out-Null
-            & $nssmDest set $cfSvcName AppRotateFiles  1                   2>&1 | Out-Null
-            & $nssmDest set $cfSvcName AppRotateBytes  5242880             2>&1 | Out-Null
-            & $nssmDest set $cfSvcName Start           SERVICE_AUTO_START  2>&1 | Out-Null
-            Start-Service $cfSvcName -ErrorAction SilentlyContinue
-            if (Wait-ServiceRunning $cfSvcName 30) {
-                OK "AngelBot-Tunnel service running"
-            } else {
-                Warn "Tunnel service installed -- check logs\AngelBot-Tunnel.log"
+                # Create DNS CNAME
+                $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+                & $cfDest tunnel route dns $tunnelName $CF_HOSTNAME 2>&1 | Out-Null
+                $ErrorActionPreference = $oldPref2
+                OK "DNS route created: $CF_HOSTNAME -> tunnel"
+                $script:cfPublicUrl = "https://$CF_HOSTNAME"
+
+                # Register as native Windows service (matches how MeshCentral installs it)
+                $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+                & $cfDest --config $cfConfigPath service install 2>&1 | Out-Null
+                $ErrorActionPreference = $oldPref2
+                Start-Service cloudflared -ErrorAction SilentlyContinue
+                if (Wait-ServiceRunning "cloudflared" 30) {
+                    OK "cloudflared service running — $CF_HOSTNAME is live"
+                } else {
+                    Warn "cloudflared service may not have started -- check: sc query cloudflared"
+                }
             }
         }
     } else {
-        Info "Skipping tunnel -- run: cloudflared tunnel --url http://localhost:8080 (for a quick public URL)"
+        Info "Skipping tunnel -- portal available at http://localhost:8080"
     }
 }
 
@@ -730,13 +787,15 @@ Write-Host "    Portal (local)    : http://localhost:8080" -ForegroundColor Gree
 Write-Host "    Portal (via IIS)  : http://localhost" -ForegroundColor Green
 if ($script:cfPublicUrl) {
 Write-Host "    Portal (public)   : $($script:cfPublicUrl)" -ForegroundColor Green
+} else {
+Write-Host "    Portal (public)   : https://trading.creationsit.com  (after tunnel restart)" -ForegroundColor DarkGray
 }
 Write-Host "    Default login     : admin / AngelBot@1234" -ForegroundColor Green
 Write-Host "    SQL Server        : .\ANGELBOT  (SA password in .env)" -ForegroundColor Green
 Write-Host "    Logs              : $BOT_DIR\logs\" -ForegroundColor Green
 Write-Host "    Config            : $BOT_DIR\.env" -ForegroundColor Green
-Write-Host "    5 services auto-start on every reboot." -ForegroundColor Green
-Write-Host "    (India, US, Crypto, Portal, Tunnel)" -ForegroundColor Green
+Write-Host "    4 bot services + cloudflared auto-start on every reboot." -ForegroundColor Green
+Write-Host "    (India, US, Crypto, Portal + Cloudflare tunnel)" -ForegroundColor Green
 Write-Host "  ============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  NEXT: Open the portal and go to API Keys to enter your" -ForegroundColor Yellow
