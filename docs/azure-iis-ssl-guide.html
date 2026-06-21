@@ -1,0 +1,278 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>AngelBot — Azure + IIS + SSL Setup Guide</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f6f8fa; color: #1a1a2e; line-height: 1.6; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; color: #0f172a; }
+  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 36px; }
+
+  h2 { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  h3 { font-size: 14px; font-weight: 700; color: #374151; margin: 14px 0 8px; }
+
+  .part { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px 24px; margin-bottom: 20px; }
+  .part-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #4f46e5; color: #fff; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+
+  ol { padding-left: 22px; }
+  ol li { margin-bottom: 10px; font-size: 14px; }
+  ul { padding-left: 20px; }
+  ul li { margin-bottom: 6px; font-size: 14px; }
+
+  code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 6px; font-family: 'Consolas', 'Courier New', monospace; font-size: 12.5px; color: #c7254e; }
+
+  .cmd-block { background: #0f172a; border-radius: 8px; padding: 14px 18px; margin: 10px 0; overflow-x: auto; }
+  .cmd-block code { background: none; border: none; color: #a5f3fc; font-size: 13px; padding: 0; display: block; white-space: pre; }
+  .cmd-block .comment { color: #64748b; }
+
+  .note { background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #1e40af; }
+  .warn { background: #fff7ed; border-left: 3px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #92400e; }
+  .ok   { background: #f0fdf4; border-left: 3px solid #22c55e; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #15803d; }
+
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .badge-blue   { background: #dbeafe; color: #1e40af; }
+  .badge-green  { background: #dcfce7; color: #15803d; }
+  .badge-purple { background: #f3e8ff; color: #6b21a8; }
+  .badge-orange { background: #ffedd5; color: #c2410c; }
+
+  .step-grid { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+  .step-row { display: flex; gap: 12px; align-items: flex-start; }
+  .step-dot { width: 22px; height: 22px; border-radius: 50%; background: #e0e7ff; color: #4f46e5; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+
+  .arch { background: #0f172a; border-radius: 10px; padding: 20px; margin: 12px 0; font-family: 'Consolas', monospace; font-size: 13px; color: #94a3b8; line-height: 2; }
+  .arch .hl { color: #a5f3fc; }
+  .arch .arr { color: #475569; }
+
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+  .tbl th { background: #f8fafc; padding: 8px 12px; text-align: left; border: 1px solid #e2e8f0; font-weight: 700; color: #374151; }
+  .tbl td { padding: 8px 12px; border: 1px solid #e2e8f0; color: #374151; vertical-align: top; }
+  .tbl tr:hover td { background: #f8fafc; }
+
+  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
+  .footer { text-align: center; color: #94a3b8; font-size: 12px; margin-top: 40px; }
+
+  @media (max-width: 600px) {
+    .wrap { padding: 20px 14px 48px; }
+    h1 { font-size: 20px; }
+  }
+</style>
+<div class="wrap">
+
+  <h1>Azure VM &rarr; IIS &rarr; SSL Setup Guide</h1>
+  <p class="subtitle">AngelBot portal &nbsp;&bull;&nbsp; Direct internet exposure without Cloudflare Tunnel &nbsp;&bull;&nbsp; Free wildcard certificate</p>
+
+  <div class="ok">
+    <strong>When to use this guide:</strong> You have moved AngelBot to an Azure VM that has a real public IP. The Cloudflare Tunnel is no longer needed — traffic flows directly from the internet through Azure's firewall to IIS on the VM.
+  </div>
+
+  <div class="arch">
+    Internet<br>
+    <span class="arr">&nbsp;&nbsp;&darr;</span><br>
+    <span class="hl">Cloudflare Edge</span> &nbsp;<span style="color:#64748b">(proxy ON, SSL terminated here)</span><br>
+    <span class="arr">&nbsp;&nbsp;&darr;&nbsp; port 443</span><br>
+    <span class="hl">Azure NSG</span> &nbsp;<span style="color:#64748b">(inbound rule: allow 443)</span><br>
+    <span class="arr">&nbsp;&nbsp;&darr;</span><br>
+    <span class="hl">Azure VM public IP</span><br>
+    <span class="arr">&nbsp;&nbsp;&darr;</span><br>
+    <span class="hl">IIS</span> &nbsp;<span style="color:#64748b">(HTTPS 443 &rarr; reverse proxy &rarr; port 8080)</span><br>
+    <span class="arr">&nbsp;&nbsp;&darr;</span><br>
+    <span class="hl">AngelBot Portal</span>
+  </div>
+
+  <!-- PART 1 -->
+  <div class="part">
+    <h2><span class="part-num">1</span> Open Port 443 in Azure NSG</h2>
+    <p style="font-size:14px;color:#64748b;margin-bottom:14px;">Azure VMs have a Network Security Group that blocks inbound traffic by default. You must add a rule to allow HTTPS.</p>
+    <ol>
+      <li>Go to <strong>Azure Portal</strong> → search for your VM → click it.</li>
+      <li>In the left panel click <strong>Networking</strong>.</li>
+      <li>Click <strong>Add inbound port rule</strong>.</li>
+      <li>Fill in:
+        <ul>
+          <li><strong>Source:</strong> Any</li>
+          <li><strong>Source port ranges:</strong> *</li>
+          <li><strong>Destination:</strong> Any</li>
+          <li><strong>Destination port ranges:</strong> <code>443</code></li>
+          <li><strong>Protocol:</strong> TCP</li>
+          <li><strong>Action:</strong> Allow</li>
+          <li><strong>Priority:</strong> 300 (or any number lower than the Deny rules)</li>
+          <li><strong>Name:</strong> <code>Allow-HTTPS-443</code></li>
+        </ul>
+      </li>
+      <li>Click <strong>Add</strong>. Takes about 30 seconds to apply.</li>
+    </ol>
+    <div class="note">Port 80 should already be open from the install script. If not, add a second rule for port 80 the same way — Cloudflare uses it to redirect HTTP → HTTPS automatically.</div>
+
+    <h3>Also — open port 443 in Windows Firewall on the VM</h3>
+    <p style="font-size:14px;margin-bottom:8px;">Run in cmd as Administrator on the VM:</p>
+    <div class="cmd-block"><code>netsh advfirewall firewall add rule name="HTTPS 443" dir=in action=allow protocol=TCP localport=443</code></div>
+  </div>
+
+  <!-- PART 2 -->
+  <div class="part">
+    <h2><span class="part-num">2</span> Get the VM's Public IP</h2>
+    <ol>
+      <li>In Azure Portal → VM → <strong>Overview</strong>.</li>
+      <li>Copy the <strong>Public IP address</strong> shown there (e.g. <code>20.123.45.67</code>).</li>
+    </ol>
+    <div class="warn">Make sure the public IP is <strong>Static</strong>, not Dynamic. Azure Portal → VM → Networking → click the IP → change Assignment to <strong>Static</strong> → Save. A dynamic IP changes on every VM restart and will break DNS.</div>
+  </div>
+
+  <!-- PART 3 -->
+  <div class="part">
+    <h2><span class="part-num">3</span> Generate Free Wildcard Certificate (Cloudflare Origin)</h2>
+    <p style="font-size:14px;color:#64748b;margin-bottom:14px;">Cloudflare gives you a free wildcard certificate that covers <code>*.creationsit.com</code> and <code>creationsit.com</code>. Valid for 15 years — no renewal needed.</p>
+
+    <div class="note"><strong>Important:</strong> This certificate is only trusted by Cloudflare's edge. Cloudflare proxy must stay ON (orange cloud) in DNS. If you turn the proxy off, browsers will show an untrusted cert warning. This is the normal and recommended setup.</div>
+
+    <ol>
+      <li>Go to <strong>Cloudflare dashboard</strong> → click <strong>creationsit.com</strong>.</li>
+      <li>Left menu → <strong>SSL/TLS</strong> → <strong>Origin Server</strong>.</li>
+      <li>Click <strong>Create Certificate</strong>.</li>
+      <li>Settings:
+        <ul>
+          <li><strong>Let Cloudflare generate a private key:</strong> selected</li>
+          <li><strong>Hostnames:</strong> make sure both <code>*.creationsit.com</code> and <code>creationsit.com</code> are listed (they are added by default)</li>
+          <li><strong>Certificate Validity:</strong> 15 years</li>
+        </ul>
+      </li>
+      <li>Click <strong>Create</strong>.</li>
+      <li>You'll see two text boxes:
+        <ul>
+          <li><strong>Origin Certificate</strong> — the certificate (starts with <code>-----BEGIN CERTIFICATE-----</code>)</li>
+          <li><strong>Private Key</strong> — the key (starts with <code>-----BEGIN PRIVATE KEY-----</code>)</li>
+        </ul>
+      </li>
+      <li>Copy each and save them as files on the VM:
+        <ul>
+          <li>Certificate → save as <code>C:\ssl\origin.pem</code></li>
+          <li>Private Key → save as <code>C:\ssl\origin.key</code></li>
+        </ul>
+      </li>
+    </ol>
+    <div class="warn">Save these files now — Cloudflare will never show the private key again after you close this page.</div>
+  </div>
+
+  <!-- PART 4 -->
+  <div class="part">
+    <h2><span class="part-num">4</span> Convert Certificate to PFX (Windows Format)</h2>
+    <p style="font-size:14px;color:#64748b;margin-bottom:14px;">Windows and IIS need the certificate in <strong>PFX</strong> format (certificate + private key bundled together). Git is already installed on the VM — it includes OpenSSL.</p>
+
+    <p style="font-size:14px;margin-bottom:8px;">Run in cmd as Administrator on the VM:</p>
+    <div class="cmd-block"><code><span class="comment">REM Create the SSL folder if not there</span>
+mkdir C:\ssl
+
+<span class="comment">REM Convert PEM + KEY to PFX (OpenSSL from Git)</span>
+"C:\Program Files\Git\usr\bin\openssl.exe" pkcs12 -export ^
+  -out C:\ssl\angelbot.pfx ^
+  -inkey C:\ssl\origin.key ^
+  -in C:\ssl\origin.pem ^
+  -passout pass:angelbot123</code></div>
+
+    <div class="note">The <code>-passout pass:angelbot123</code> sets a password on the PFX. You can change <code>angelbot123</code> to anything — you'll need it when importing into IIS. Or use <code>-passout pass:</code> (empty) for no password.</div>
+
+    <p style="font-size:14px;margin-top:10px;">If OpenSSL is not in Git's path, find it:</p>
+    <div class="cmd-block"><code>where openssl
+<span class="comment">REM Or search:</span>
+dir "C:\Program Files\Git\usr\bin\openssl.exe"</code></div>
+  </div>
+
+  <!-- PART 5 -->
+  <div class="part">
+    <h2><span class="part-num">5</span> Import Certificate into Windows</h2>
+    <p style="font-size:14px;margin-bottom:12px;">Run in PowerShell as Administrator on the VM:</p>
+    <div class="cmd-block"><code>Import-PfxCertificate `
+  -FilePath "C:\ssl\angelbot.pfx" `
+  -CertStoreLocation "Cert:\LocalMachine\My" `
+  -Password (ConvertTo-SecureString -String "angelbot123" -AsPlainText -Force)</code></div>
+    <p style="font-size:14px;margin-top:10px;">The certificate is now in the Windows certificate store and ready to be picked by IIS.</p>
+    <div class="note">To verify it imported: open <code>certlm.msc</code> → Personal → Certificates — you should see <code>*.creationsit.com</code> listed there.</div>
+  </div>
+
+  <!-- PART 6 -->
+  <div class="part">
+    <h2><span class="part-num">6</span> Add HTTPS Binding in IIS</h2>
+    <p style="font-size:14px;margin-bottom:12px;">This is where you choose your hostname. You can use any subdomain of <code>creationsit.com</code> — <code>trading</code>, <code>portal</code>, <code>bot</code>, anything.</p>
+    <ol>
+      <li>Open <strong>IIS Manager</strong> on the VM (search "IIS" in Start menu → Internet Information Services Manager).</li>
+      <li>In the left panel expand the server name → click <strong>Sites</strong> → click <strong>Default Web Site</strong>.</li>
+      <li>In the right panel click <strong>Bindings…</strong></li>
+      <li>Click <strong>Add…</strong></li>
+      <li>Fill in:
+        <ul>
+          <li><strong>Type:</strong> https</li>
+          <li><strong>IP address:</strong> All Unassigned</li>
+          <li><strong>Port:</strong> 443</li>
+          <li><strong>Host name:</strong> <code>trading.creationsit.com</code> (or whatever subdomain you want)</li>
+          <li><strong>SSL certificate:</strong> select <code>*.creationsit.com</code> from the dropdown</li>
+        </ul>
+      </li>
+      <li>Click <strong>OK</strong> → <strong>Close</strong>.</li>
+      <li>In the right panel click <strong>Restart</strong> to restart IIS.</li>
+    </ol>
+    <div class="note">Because the install script already put a reverse proxy rule in <code>C:\inetpub\wwwroot\web.config</code> that forwards all traffic to <code>http://localhost:8080</code>, IIS will automatically pass the HTTPS traffic through to the AngelBot portal — no extra config needed.</div>
+  </div>
+
+  <!-- PART 7 -->
+  <div class="part">
+    <h2><span class="part-num">7</span> Update DNS in Cloudflare</h2>
+    <ol>
+      <li>Go to <strong>Cloudflare dashboard</strong> → <strong>creationsit.com</strong> → <strong>DNS</strong>.</li>
+      <li>Find the <code>trading</code> record (currently a CNAME pointing to the tunnel).</li>
+      <li>Click <strong>Edit</strong> → change it to:
+        <ul>
+          <li><strong>Type:</strong> A</li>
+          <li><strong>Name:</strong> trading</li>
+          <li><strong>IPv4 address:</strong> your Azure VM public IP (from Part 2)</li>
+          <li><strong>Proxy status:</strong> <span class="badge badge-orange">Proxied</span> — keep orange cloud ON</li>
+        </ul>
+      </li>
+      <li>Click <strong>Save</strong>. DNS propagates in under 1 minute since it goes through Cloudflare.</li>
+    </ol>
+    <div class="warn">Do <strong>not</strong> turn the orange cloud off. The Cloudflare Origin Certificate is only trusted by Cloudflare's edge. Proxy ON = Cloudflare handles public SSL, then forwards to your VM using the origin cert.</div>
+  </div>
+
+  <!-- PART 8 -->
+  <div class="part">
+    <h2><span class="part-num">8</span> Stop and Remove the Tunnel (Cleanup)</h2>
+    <p style="font-size:14px;margin-bottom:12px;">Once the direct connection is working, the Cloudflare Tunnel is no longer needed. Run in cmd as Administrator:</p>
+    <div class="cmd-block"><code><span class="comment">REM If tunnel was installed via NSSM (AngelBot-Tunnel service):</span>
+nssm stop AngelBot-Tunnel
+nssm remove AngelBot-Tunnel confirm
+
+<span class="comment">REM If tunnel runs as native Windows service (cloudflared service):</span>
+net stop cloudflared
+cloudflared service uninstall</code></div>
+    <div class="note">Run only the block that matches how your tunnel is installed. Check with <code>sc query AngelBot-Tunnel</code> or <code>sc query cloudflared</code> to see which exists.</div>
+  </div>
+
+  <!-- PART 9 -->
+  <div class="part">
+    <h2><span class="part-num">9</span> Verify Everything Works</h2>
+    <div class="step-grid">
+      <div class="step-row"><div class="step-dot">1</div><div style="font-size:14px;">Open <strong>https://trading.creationsit.com</strong> in a browser. Should load the AngelBot login page with a green padlock.</div></div>
+      <div class="step-row"><div class="step-dot">2</div><div style="font-size:14px;">Click the padlock → Certificate → should show issuer as <strong>Cloudflare</strong>.</div></div>
+      <div class="step-row"><div class="step-dot">3</div><div style="font-size:14px;">On the VM run <code>sc query W3SVC</code> — should show <strong>RUNNING</strong>.</div></div>
+      <div class="step-row"><div class="step-dot">4</div><div style="font-size:14px;">On the VM run <code>sc query AngelBot-Portal</code> — should show <strong>RUNNING</strong>.</div></div>
+    </div>
+  </div>
+
+  <!-- SUMMARY TABLE -->
+  <div class="part">
+    <h2><span class="part-num" style="background:#0f172a;">✓</span> Quick Reference</h2>
+    <table class="tbl">
+      <tr><th>Item</th><th>Value / Location</th></tr>
+      <tr><td>Certificate file</td><td><code>C:\ssl\angelbot.pfx</code></td></tr>
+      <tr><td>Certificate covers</td><td><code>*.creationsit.com</code> + <code>creationsit.com</code></td></tr>
+      <tr><td>Certificate validity</td><td>15 years — no renewal needed</td></tr>
+      <tr><td>Windows cert store</td><td>certlm.msc → Personal → Certificates</td></tr>
+      <tr><td>IIS binding</td><td>HTTPS 443, SNI enabled, host name = your subdomain</td></tr>
+      <tr><td>Cloudflare DNS</td><td>A record → Azure public IP, proxy ON (orange cloud)</td></tr>
+      <tr><td>Azure NSG rule</td><td>Inbound TCP 443 Allow</td></tr>
+      <tr><td>Portal still runs on</td><td>port 8080 internally — IIS reverse proxies to it</td></tr>
+    </table>
+  </div>
+
+  <div class="footer">AngelBot &nbsp;&bull;&nbsp; Azure + IIS + SSL Guide &nbsp;&bull;&nbsp; Keep this file for reference when migrating to Azure</div>
+</div>
