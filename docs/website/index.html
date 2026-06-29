@@ -270,9 +270,48 @@ h1.name em{font-style:normal;color:var(--ac)}
 .cc{
   background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);
   padding:17px 18px;display:flex;gap:15px;align-items:flex-start;
-  transition:border-color .2s;color:inherit;
+  transition:border-color .2s;color:inherit;cursor:pointer;
 }
 .cc:hover{border-color:var(--ac)}
+
+/* ─── Lightbox ──────────────────────────────────────────────────────────── */
+.lb{
+  display:none;position:fixed;inset:0;z-index:2000;
+  background:rgba(0,0,0,.88);
+  align-items:center;justify-content:center;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  padding:20px;
+}
+.lb.open{display:flex}
+.lb-box{
+  position:relative;max-width:880px;width:100%;
+  display:flex;flex-direction:column;align-items:center;gap:16px;
+}
+.lb-img{
+  max-width:100%;max-height:76vh;
+  border-radius:8px;
+  box-shadow:0 32px 80px rgba(0,0,0,.75);
+  object-fit:contain;display:block;
+}
+.lb-x{
+  position:absolute;top:-16px;right:-16px;
+  width:36px;height:36px;
+  background:var(--bg2);border:1px solid var(--bd2);
+  border-radius:50%;color:var(--tx);
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;cursor:pointer;line-height:1;
+  transition:background .15s;
+}
+.lb-x:hover{background:var(--bd)}
+.lb-verify{
+  display:none;align-items:center;gap:8px;
+  background:var(--ac);color:#fff;
+  font-size:14px;font-weight:600;
+  padding:10px 22px;border-radius:var(--r);
+  transition:background .15s;
+}
+.lb-verify:hover{background:var(--acl);color:#fff}
+.lb-verify.show{display:inline-flex}
 .cbx{
   width:44px;height:44px;flex-shrink:0;border-radius:8px;
   display:flex;align-items:center;justify-content:center;
@@ -603,31 +642,31 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 <section class="sec fi-anim" id="certs">
   <div class="sh"><h2>Certifications</h2><div class="shl"></div></div>
   <div class="cert-grid">
-    <a class="cc" href="https://learn.microsoft.com/api/credentials/share/en-us/PulkitArora-8771/E87FB5925428C1BD?sharingId=8D81E04CCD60AD91" target="_blank" rel="noopener">
+    <div class="cc" onclick="openCert('az104')">
       <div class="cbx c-az">AZ-104</div>
       <div class="ci"><h4>Azure Administrator Associate</h4><p>Microsoft</p><div class="cv">Valid May 2026 &ndash; May 2027</div></div>
-    </a>
-    <a class="cc" href="https://learn.microsoft.com/api/credentials/share/en-us/PulkitArora-8771/E87FB5925428C1BD?sharingId=8D81E04CCD60AD91" target="_blank" rel="noopener">
+    </div>
+    <div class="cc" onclick="openCert('md102')">
       <div class="cbx c-md">MD-102</div>
       <div class="ci"><h4>Endpoint Administrator Associate</h4><p>Microsoft 365</p><div class="cv">Valid Jun 2026 &ndash; Jun 2027</div></div>
-    </a>
-    <div class="cc">
-      <div class="cbx c-hp">HPE</div>
-      <div class="ci"><h4>Networking Concepts with Security</h4><p>Hewlett Packard Enterprise</p></div>
     </div>
-    <div class="cc">
+    <div class="cc" onclick="openCert('ninja')">
       <div class="cbx c-ni">NCT</div>
-      <div class="ci"><h4>NinjaOne Certified Technician</h4><p>Automation Specialist &middot; MSP</p></div>
+      <div class="ci"><h4>NinjaOne Certified Automation Specialist</h4><p>NinjaOne Academy</p><div class="cv">Valid Apr 2026 &ndash; Apr 2027</div></div>
     </div>
-    <div class="cc">
+    <div class="cc" onclick="openCert('halopsa1')">
       <div class="cbx c-ha">HALO</div>
-      <div class="ci"><h4>HaloPSA Foundations P1 &amp; P2</h4><p>HaloPSA</p></div>
+      <div class="ci"><h4>HaloPSA Foundations Part 1</h4><p>HaloPSA</p><div class="cv">Issued 03/02/2026</div></div>
     </div>
-    <div class="cc">
+    <div class="cc" onclick="openCert('halopsa2')">
+      <div class="cbx c-ha">HALO</div>
+      <div class="ci"><h4>HaloPSA Foundations Part 2</h4><p>HaloPSA</p><div class="cv">Issued 19/05/2026</div></div>
+    </div>
+    <div class="cc" onclick="openCert('claude101')">
       <div class="cbx c-ai">AI</div>
       <div class="ci">
-        <h4>Claude 101 &middot; AI Fluency &middot; Claude Code</h4>
-        <p>Anthropic</p>
+        <h4>Claude 101 &mdash; Certificate of Completion</h4>
+        <p>Anthropic</p><div class="cv">Issued May 2026 &middot; No. ybigduk6f4fe</div>
         <div class="ci-prog">In progress: AZ-500 &middot; AZ-305 &middot; Sentinel</div>
       </div>
     </div>
@@ -658,10 +697,44 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
   </div>
 </footer>
 
+<!-- ─── Lightbox ───────────────────────────────────────────────────────── -->
+<div id="lb" class="lb" onclick="lbBgClick(event)">
+  <div class="lb-box">
+    <button class="lb-x" onclick="closeLb()" aria-label="Close">&#xd7;</button>
+    <img id="lb-img" class="lb-img" src="" alt="Certificate">
+    <a id="lb-verify" class="lb-verify" href="#" target="_blank" rel="noopener">&#10003;&nbsp; Verify Online — Microsoft Learn</a>
+  </div>
+</div>
+
 <script>
+const CERTS = {
+  az104:    { img:'images/cert-az104.jpg',    verify:'https://learn.microsoft.com/en-us/users/pulkitarora-8771/credentials/certification/azure-administrator?tab=credentials-tab' },
+  md102:    { img:'images/cert-md102.jpg',    verify:'https://learn.microsoft.com/en-us/users/pulkitarora-8771/credentials/certification/modern-desktop?tab=credentials-tab' },
+  ninja:    { img:'images/cert-ninja.jpg' },
+  halopsa1: { img:'images/cert-halopsa1.jpg' },
+  halopsa2: { img:'images/cert-halopsa2.jpg' },
+  claude101:{ img:'images/cert-claude101.jpg' }
+};
+
+function openCert(key) {
+  var c = CERTS[key];
+  document.getElementById('lb-img').src = c.img;
+  var v = document.getElementById('lb-verify');
+  if (c.verify) { v.href = c.verify; v.classList.add('show'); }
+  else { v.classList.remove('show'); }
+  document.getElementById('lb').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLb() {
+  document.getElementById('lb').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function lbBgClick(e) { if (e.target === document.getElementById('lb')) closeLb(); }
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLb(); });
+
 const obs = new IntersectionObserver(
-  entries => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); obs.unobserve(e.target); } }),
+  function(entries){ entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('vis'); obs.unobserve(e.target); } }); },
   { threshold: 0.07 }
 );
-document.querySelectorAll('.fi-anim').forEach(el => obs.observe(el));
+document.querySelectorAll('.fi-anim').forEach(function(el){ obs.observe(el); });
 </script>
