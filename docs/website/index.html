@@ -807,9 +807,8 @@ statObs.observe(document.querySelector('.stats-wrap'));
 (function() {
   var C = document.getElementById('bgc');
   var cx = C.getContext('2d');
-  var W = 0, H = 0, scrollY = 0, TAU = Math.PI * 2;
+  var W = 0, H = 0, scrollY = 0, TAU = Math.PI * 2, t0 = null;
 
-  // 4 star layers: tiny background → massive hero stars
   var LAYERS = [
     { n:300, spd:0.08, rMin:0.3, rMax:0.9,  aMin:0.18, aMax:0.60 },
     { n:150, spd:0.20, rMin:0.8, rMax:1.9,  aMin:0.45, aMax:0.90 },
@@ -818,7 +817,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
   ];
   var stars = [[],[],[],[]];
 
-  // Nebula clouds
   var blobs = [
     { px:0.10, py:0.14, r:0.52, c:'120,40,220',  a:0.09, vx:0.000090, vy:0.000060 },
     { px:0.88, py:0.24, r:0.50, c:'14,165,233',  a:0.08, vx:-0.000080,vy:0.000095 },
@@ -827,23 +825,33 @@ statObs.observe(document.querySelector('.stats-wrap'));
     { px:0.74, py:0.50, r:0.36, c:'0,175,155',   a:0.05, vx:0.000070, vy:0.000100 }
   ];
 
-  // Planets — big, edge-anchored so they frame content not block it
+  // Edge planets
   var PLANETS = [
-    // Gas giant (Jupiter-style) — left edge ~35% down
     { px:-0.06, py:0.38, r:0, type:'gas',
       c1:'210,140,70', c2:'120,65,25',
       bands:['rgba(185,108,48,0.38)','rgba(230,175,88,0.28)','rgba(165,95,38,0.32)'],
       tilt:0.14, alpha:0.58, vx:0.000013, vy:0.000008 },
-    // Saturn with rings — right edge ~22% down
     { px:1.07, py:0.22, r:0, type:'saturn',
       c1:'225,195,128', c2:'150,115,50',
       ringC:'rgba(208,172,98,', alpha:0.54,
       vx:-0.000010, vy:0.000007 },
-    // Ice giant (Neptune-style) — lower right ~78% down
     { px:0.83, py:0.78, r:0, type:'gas',
       c1:'45,88,215', c2:'12,38,135',
       bands:['rgba(28,65,195,0.30)','rgba(65,115,240,0.22)'],
       tilt:-0.18, alpha:0.42, vx:-0.000009, vy:-0.000011 }
+  ];
+
+  // Centre planet config (radius set in resize)
+  var CP = { r:0 };
+
+  // Animated bands for the centre planet [yFrac, heightFrac, colorRGB, speed]
+  var CBANDS = [
+    [-0.82,0.13,'232,168,82', 0.024], [-0.64,0.11,'148,88,30', -0.019],
+    [-0.48,0.15,'245,188,92', 0.028], [-0.30,0.12,'138,78,24', -0.016],
+    [-0.14,0.16,'238,172,78', 0.022], [ 0.04,0.12,'155,92,32', -0.020],
+    [ 0.19,0.15,'248,195,95', 0.026], [ 0.36,0.11,'142,82,26', -0.018],
+    [ 0.51,0.14,'228,162,75', 0.023], [ 0.68,0.12,'135,75,22', -0.015],
+    [ 0.82,0.13,'240,180,85', 0.021]
   ];
 
   var shoots = [];
@@ -855,6 +863,7 @@ statObs.observe(document.querySelector('.stats-wrap'));
     PLANETS[0].r = base * 0.120;
     PLANETS[1].r = base * 0.088;
     PLANETS[2].r = base * 0.065;
+    CP.r = base * 0.175; // big centre planet
   }
 
   function init() {
@@ -880,16 +889,84 @@ statObs.observe(document.querySelector('.stats-wrap'));
 
   window.addEventListener('scroll', function(){ scrollY = window.pageYOffset; });
 
+  // ── Centre planet: animated rotating-band gas giant ─────────────────
+  function drawCentrePlanet(t) {
+    var px = W * 0.50, py = H * 0.44, r = CP.r;
+    if (r <= 0) return;
+
+    // Clip all band drawing inside the sphere
+    cx.save();
+    cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.clip();
+
+    // Base sphere gradient
+    var bg = cx.createRadialGradient(px-r*0.28, py-r*0.28, r*0.06, px, py, r);
+    bg.addColorStop(0,   'rgba(255,230,170,0.32)');
+    bg.addColorStop(0.20,'rgba(215,148,62,0.30)');
+    bg.addColorStop(0.70,'rgba(155,88,28,0.28)');
+    bg.addColorStop(1,   'rgba(80,38,10,0.26)');
+    cx.fillStyle = bg; cx.fillRect(px-r, py-r, r*2, r*2);
+
+    // Animated wavy bands — each band scrolls at its own speed
+    CBANDS.forEach(function(b) {
+      var byC = py + b[0]*r, bh = b[1]*r, rgb = b[2], spd = b[3];
+      var phase = t * spd * 55;
+      var step = 5;
+      cx.beginPath();
+      var x0 = px - r - step;
+      cx.moveTo(x0, byC - bh*0.5 + Math.sin(x0*0.028 + phase)*r*0.016);
+      for (var bx = x0+step; bx <= px+r+step; bx += step) {
+        cx.lineTo(bx, byC - bh*0.5 + Math.sin(bx*0.028 + phase)*r*0.016);
+      }
+      for (var bx2 = px+r; bx2 >= x0; bx2 -= step) {
+        cx.lineTo(bx2, byC + bh*0.5 + Math.sin(bx2*0.028 + phase + 1.0)*r*0.016);
+      }
+      cx.closePath();
+      cx.fillStyle = 'rgba('+rgb+',0.44)'; cx.fill();
+    });
+
+    // Great Storm Spot — slowly orbits horizontally
+    var sx = px + Math.cos(t*0.055)*r*0.28;
+    var sy = py - r*0.07;
+    var stg = cx.createRadialGradient(sx, sy, 0, sx, sy, r*0.115);
+    stg.addColorStop(0,   'rgba(245,95,55,0.85)');
+    stg.addColorStop(0.45,'rgba(205,65,28,0.65)');
+    stg.addColorStop(1,   'rgba(185,45,15,0)');
+    cx.fillStyle = stg;
+    cx.beginPath(); cx.ellipse(sx, sy, r*0.115, r*0.068, 0.28, 0, TAU); cx.fill();
+
+    // Subtle polar darkening (top/bottom)
+    var pd = cx.createLinearGradient(px, py-r, px, py+r);
+    pd.addColorStop(0,   'rgba(8,12,30,0.38)');
+    pd.addColorStop(0.18,'rgba(8,12,30,0)');
+    pd.addColorStop(0.82,'rgba(8,12,30,0)');
+    pd.addColorStop(1,   'rgba(8,12,30,0.38)');
+    cx.fillStyle = pd; cx.fillRect(px-r, py-r, r*2, r*2);
+
+    cx.restore(); // release sphere clip
+
+    // Limb darkening — drawn on full circle outside clip
+    var ld = cx.createRadialGradient(px, py, r*0.50, px, py, r);
+    ld.addColorStop(0,    'rgba(0,0,0,0)');
+    ld.addColorStop(0.68, 'rgba(0,0,0,0.10)');
+    ld.addColorStop(1,    'rgba(0,0,0,0.72)');
+    cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.fillStyle = ld; cx.fill();
+
+    // Outer atmosphere glow
+    var ag = cx.createRadialGradient(px, py, r*0.94, px, py, r*1.08);
+    ag.addColorStop(0,  'rgba(235,165,70,0.12)');
+    ag.addColorStop(1,  'rgba(235,165,70,0)');
+    cx.beginPath(); cx.arc(px, py, r*1.08, 0, TAU); cx.fillStyle = ag; cx.fill();
+  }
+
+  // ── Edge planet helpers ──────────────────────────────────────────────
   function drawGas(p) {
     var x=p.px*W, y=p.py*H, r=p.r;
-    // Sphere gradient
     var g = cx.createRadialGradient(x-r*.30, y-r*.30, r*.07, x, y, r);
     g.addColorStop(0,   'rgba(255,255,255,0.42)');
     g.addColorStop(0.22,'rgba('+p.c1+',0.96)');
     g.addColorStop(1,   'rgba('+p.c2+',0.90)');
     cx.save(); cx.globalAlpha = p.alpha;
     cx.beginPath(); cx.arc(x, y, r, 0, TAU); cx.fillStyle = g; cx.fill();
-    // Atmospheric bands
     if (p.bands) {
       p.bands.forEach(function(bc, bi) {
         cx.save(); cx.beginPath(); cx.arc(x,y,r,0,TAU); cx.clip();
@@ -898,7 +975,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
         cx.fillStyle = bc; cx.fill(); cx.restore();
       });
     }
-    // Limb darkening
     var ld = cx.createRadialGradient(x,y,r*0.55,x,y,r);
     ld.addColorStop(0,'rgba(0,0,0,0)'); ld.addColorStop(1,'rgba(0,0,0,0.52)');
     cx.beginPath(); cx.arc(x,y,r,0,TAU); cx.fillStyle=ld; cx.fill();
@@ -908,14 +984,12 @@ statObs.observe(document.querySelector('.stats-wrap'));
   function drawSaturn(p) {
     var x=p.px*W, y=p.py*H, r=p.r, tilt=-0.20;
     cx.save(); cx.globalAlpha = p.alpha;
-    // Back ring arcs
     cx.save();
     cx.beginPath(); cx.ellipse(x,y,r*2.45,r*0.53,tilt,Math.PI,TAU);
     cx.strokeStyle=p.ringC+'0.58)'; cx.lineWidth=r*0.36; cx.stroke();
     cx.beginPath(); cx.ellipse(x,y,r*2.90,r*0.63,tilt,Math.PI,TAU);
     cx.strokeStyle=p.ringC+'0.28)'; cx.lineWidth=r*0.16; cx.stroke();
     cx.restore();
-    // Planet body
     var g = cx.createRadialGradient(x-r*.28,y-r*.28,r*.07,x,y,r);
     g.addColorStop(0,'rgba(255,248,215,0.96)');
     g.addColorStop(0.28,'rgba('+p.c1+',0.95)');
@@ -924,7 +998,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
     var ld=cx.createRadialGradient(x,y,r*0.55,x,y,r);
     ld.addColorStop(0,'rgba(0,0,0,0)'); ld.addColorStop(1,'rgba(0,0,0,0.48)');
     cx.beginPath(); cx.arc(x,y,r,0,TAU); cx.fillStyle=ld; cx.fill();
-    // Front ring arcs
     cx.save();
     cx.beginPath(); cx.ellipse(x,y,r*2.45,r*0.53,tilt,0,Math.PI);
     cx.strokeStyle=p.ringC+'0.52)'; cx.lineWidth=r*0.36; cx.stroke();
@@ -934,10 +1007,11 @@ statObs.observe(document.querySelector('.stats-wrap'));
     cx.restore();
   }
 
-  function frame() {
+  function frame(ts) {
+    if (!t0) t0 = ts;
+    var t = (ts - t0) * 0.001;
     cx.clearRect(0, 0, W, H);
 
-    // Nebula clouds
     blobs.forEach(function(b) {
       b.px+=b.vx; b.py+=b.vy;
       if(b.px<-0.25||b.px>1.25) b.vx=-b.vx;
@@ -949,7 +1023,9 @@ statObs.observe(document.querySelector('.stats-wrap'));
       cx.fillStyle=g; cx.fillRect(0,0,W,H);
     });
 
-    // Planets (drift very slowly)
+    // Centre planet (drawn first — behind stars and edge planets)
+    drawCentrePlanet(t);
+
     PLANETS.forEach(function(p) {
       p.px+=p.vx; p.py+=p.vy;
       if(p.px<-0.30||p.px>1.30) p.vx=-p.vx;
@@ -957,7 +1033,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
       if(p.type==='saturn') drawSaturn(p); else drawGas(p);
     });
 
-    // Stars with parallax + twinkle
     stars.forEach(function(layer, li) {
       var spd = LAYERS[li].spd;
       layer.forEach(function(s) {
@@ -966,7 +1041,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
         var sy = ((s.y - scrollY*spd) % H + H) % H;
         cx.beginPath(); cx.arc(s.x, sy, s.r, 0, TAU);
         cx.fillStyle = 'rgba(255,255,255,'+al+')'; cx.fill();
-        // Glow + sparkle for big stars
         if (li >= 2 && s.r > 1.8) {
           var hr = s.r * (li===3 ? 5.5 : 4.0);
           var hg = cx.createRadialGradient(s.x,sy,0,s.x,sy,hr);
@@ -979,8 +1053,7 @@ statObs.observe(document.querySelector('.stats-wrap'));
           cx.beginPath(); cx.moveTo(s.x-cl,sy); cx.lineTo(s.x+cl,sy); cx.stroke();
           cx.beginPath(); cx.moveTo(s.x,sy-cl); cx.lineTo(s.x,sy+cl); cx.stroke();
           if (li===3) {
-            var dl=cl*0.52;
-            cx.lineWidth=0.50;
+            var dl=cl*0.52; cx.lineWidth=0.50;
             cx.strokeStyle='rgba(255,255,255,'+(al*0.28)+')';
             cx.beginPath(); cx.moveTo(s.x-dl,sy-dl); cx.lineTo(s.x+dl,sy+dl); cx.stroke();
             cx.beginPath(); cx.moveTo(s.x+dl,sy-dl); cx.lineTo(s.x-dl,sy+dl); cx.stroke();
@@ -989,7 +1062,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
       });
     });
 
-    // Shooting stars
     for (var i=shoots.length-1; i>=0; i--) {
       var sh=shoots[i];
       sh.x+=sh.vx; sh.y+=sh.vy; sh.life-=sh.decay;
@@ -1008,7 +1080,7 @@ statObs.observe(document.querySelector('.stats-wrap'));
     requestAnimationFrame(frame);
   }
 
-  resize(); init(); frame();
+  resize(); init(); requestAnimationFrame(frame);
   window.addEventListener('resize', function(){ resize(); init(); });
 })();
 
