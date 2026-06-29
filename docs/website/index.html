@@ -146,6 +146,8 @@ h1.name em{font-style:normal;color:var(--ac)}
 .on{background:var(--grn);box-shadow:0 0 7px var(--grn)}
 .svc-n{color:var(--mu);min-width:136px;font-size:12px}
 .svc-s{color:var(--grn);font-size:11px;margin-left:auto}
+a.svc{cursor:pointer;text-decoration:none;transition:border-color .15s,background .15s}
+a.svc:hover{background:rgba(14,165,233,.12);border-color:rgba(14,165,233,.25)}
 .cur{
   display:inline-block;width:8px;height:14px;
   background:var(--acl);vertical-align:text-bottom;
@@ -427,9 +429,9 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
       <div class="tl"><span class="tp">$</span><span class="tc">ping services --all</span></div>
       <div class="tbl-"></div>
       <div class="svcs">
-        <div class="svc"><div class="dot on"></div><span class="svc-n">trading.creationsit.com</span><span class="svc-s">ONLINE</span></div>
-        <div class="svc"><div class="dot on"></div><span class="svc-n">remote.creationsit.com</span><span class="svc-s">ONLINE</span></div>
-        <div class="svc"><div class="dot on"></div><span class="svc-n">creationsit.com</span><span class="svc-s">ONLINE</span></div>
+        <a class="svc" href="https://trading.creationsit.com" target="_blank" rel="noopener"><div class="dot on"></div><span class="svc-n">trading.creationsit.com</span><span class="svc-s">ONLINE ↗</span></a>
+        <a class="svc" href="https://remote.creationsit.com" target="_blank" rel="noopener"><div class="dot on"></div><span class="svc-n">remote.creationsit.com</span><span class="svc-s">ONLINE ↗</span></a>
+        <a class="svc" href="https://creationsit.com" target="_blank" rel="noopener"><div class="dot on"></div><span class="svc-n">creationsit.com</span><span class="svc-s">ONLINE ↗</span></a>
       </div>
       <div class="tbl-"></div>
       <div class="tl"><span class="tp">$</span><span class="cur"></span></div>
