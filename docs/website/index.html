@@ -480,16 +480,30 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
     <div class="pc">
       <div class="pc-top">
         <div class="pi">🖥️</div>
-        <a href="https://remote.creationsit.com" target="_blank" rel="noopener" class="pl">&#8599; Remote Access</a>
+        <a href="https://remote.creationsit.com" target="_blank" rel="noopener" class="pl">&#8599; Open RMM</a>
       </div>
       <div class="pc-b">
-        <h3>creationsit.com &mdash; Self-Managed Infrastructure</h3>
-        <p>End-to-end Windows VM infrastructure built from scratch: IIS reverse proxy, NSSM service orchestration, Cloudflare named-tunnel routing, MeshCentral remote support, and a PowerShell one-click installer that provisions Python, SQL Server Express, Git, ODBC, NSSM, and all four bot services on a fresh VM in under 10 minutes.</p>
+        <h3>MeshCentral &mdash; Self-Hosted RMM Portal</h3>
+        <p>Fully self-hosted remote management and monitoring server running MeshCentral on a personal Windows VM. Provides agent-based remote control, terminal access, file transfer, and device health monitoring — all tunnelled securely to the public internet via Cloudflare at <strong>remote.creationsit.com</strong>. Zero dependency on third-party RMM subscriptions.</p>
         <div class="stack">
-          <s>Windows Server</s><s>IIS</s><s>Cloudflare</s><s>MeshCentral</s><s>PowerShell</s><s>NSSM</s>
+          <s>MeshCentral</s><s>Node.js</s><s>Cloudflare Tunnel</s><s>Windows Server</s><s>IIS</s><s>SSL/TLS</s>
         </div>
       </div>
-      <div class="pc-foot">Running on self-hosted VM</div>
+      <div class="pc-foot">Live on remote.creationsit.com</div>
+    </div>
+
+    <div class="pc">
+      <div class="pc-top">
+        <div class="pi">⚙️</div>
+      </div>
+      <div class="pc-b">
+        <h3>VM Infrastructure &mdash; One-Click Deployment</h3>
+        <p>PowerShell installer that provisions a fully working Windows VM from scratch in under 10 minutes: Python, SQL Server Express, Git, ODBC drivers, NSSM service wrappers, IIS reverse proxy, Cloudflare named-tunnel routing, and all four AngelBot services — fully automated, idempotent, and ready for bare-metal or Azure VM deployments.</p>
+        <div class="stack">
+          <s>PowerShell</s><s>NSSM</s><s>IIS</s><s>Cloudflare</s><s>SQL Server</s><s>Windows Server</s>
+        </div>
+      </div>
+      <div class="pc-foot">install.ps1 — production-ready</div>
     </div>
 
     <div class="pc">
