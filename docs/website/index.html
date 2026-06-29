@@ -1,0 +1,653 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulkit Arora — Senior System Administrator (L3)</title>
+<meta name="description" content="Senior System Administrator (L3) specialising in Microsoft Azure, Windows Server, and IT automation. AZ-104 and MD-102 certified. Based in India, available globally.">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:    #060f18;
+  --bg1:   #0a1a28;
+  --bg2:   #0f2336;
+  --bd:    #1a3348;
+  --bd2:   #253f57;
+  --tx:    #d8ecfc;
+  --tx2:   #9ab8d0;
+  --mu:    #617d94;
+  --ac:    #0ea5e9;
+  --acl:   #38bdf8;
+  --grn:   #34d399;
+  --amb:   #f59e0b;
+  --sans:  -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  --mono:  'Consolas','SF Mono','Fira Code','Courier New',monospace;
+  --r:     5px;
+}
+
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--tx);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.65;
+  background-image:
+    linear-gradient(rgba(14,165,233,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(14,165,233,.025) 1px,transparent 1px);
+  background-size:44px 44px;
+}
+
+a{color:var(--ac);text-decoration:none}
+a:hover{color:var(--acl)}
+a:focus-visible{outline:2px solid var(--ac);outline-offset:3px;border-radius:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ─── Nav ──────────────────────────────────────────────────────────── */
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,15,24,.93);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--bd);
+}
+.nav-i{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:16px;padding:13px 32px;max-width:1140px;margin:0 auto;flex-wrap:wrap;
+}
+.nav-name{font-family:var(--mono);font-size:13px;color:var(--tx);letter-spacing:.04em}
+.nav-name em{font-style:normal;color:var(--ac)}
+.nav-r{display:flex;align-items:center;gap:22px}
+.nav-r a{font-size:13px;color:var(--mu);transition:color .15s}
+.nav-r a:hover{color:var(--tx)}
+.avail{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.07em;
+  color:var(--grn);background:rgba(52,211,153,.08);
+  border:1px solid rgba(52,211,153,.22);border-radius:20px;padding:4px 11px;
+}
+.avail::before{content:'';width:6px;height:6px;background:var(--grn);border-radius:50%;animation:blink2 2s ease-in-out infinite}
+@keyframes blink2{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ─── Hero ─────────────────────────────────────────────────────────── */
+.hero{
+  display:grid;grid-template-columns:1fr 1fr;
+  align-items:center;gap:56px;
+  padding:76px 32px 80px;max-width:1140px;margin:0 auto;
+  min-height:91vh;
+}
+.hero-eye{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ac);
+  margin-bottom:20px;display:flex;align-items:center;gap:11px;
+}
+.hero-eye::before{content:'';display:block;width:30px;height:1px;background:var(--ac)}
+h1.name{
+  font-size:clamp(44px,7.5vw,84px);
+  font-weight:800;letter-spacing:-.025em;line-height:.98;
+  color:var(--tx);text-wrap:balance;margin-bottom:14px;
+}
+h1.name em{font-style:normal;color:var(--ac)}
+.hero-sub{font-size:17px;color:var(--mu);font-weight:400;margin-bottom:26px;line-height:1.45}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:36px}
+.tag{
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;
+  padding:5px 11px;border:1px solid var(--bd);border-radius:var(--r);
+  color:var(--mu);background:var(--bg1);
+}
+.btns{display:flex;gap:11px;flex-wrap:wrap}
+.btn-p{
+  display:inline-flex;align-items:center;gap:7px;
+  background:var(--ac);color:#fff;
+  font-size:14px;font-weight:600;padding:11px 22px;
+  border-radius:var(--r);transition:background .15s,transform .12s;
+}
+.btn-p:hover{background:var(--acl);color:#fff;transform:translateY(-1px)}
+.btn-g{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--bd);color:var(--mu);
+  font-size:14px;padding:11px 22px;
+  border-radius:var(--r);transition:border-color .15s,color .15s;
+}
+.btn-g:hover{border-color:var(--ac);color:var(--tx)}
+
+/* ─── Terminal ─────────────────────────────────────────────────────── */
+.term{
+  background:var(--bg1);border:1px solid var(--bd);border-radius:10px;
+  overflow:hidden;font-family:var(--mono);font-size:13px;
+  box-shadow:0 28px 72px rgba(0,0,0,.55),0 0 0 1px rgba(14,165,233,.07);
+}
+.term-bar{
+  background:var(--bg2);border-bottom:1px solid var(--bd);
+  padding:11px 16px;display:flex;align-items:center;gap:12px;
+}
+.dots{display:flex;gap:6px}
+.dots s{display:block;width:11px;height:11px;border-radius:50%;text-decoration:none}
+.dots s:nth-child(1){background:#ff5f57}
+.dots s:nth-child(2){background:#febc2e}
+.dots s:nth-child(3){background:#28c840}
+.term-ttl{font-size:11px;color:var(--mu);letter-spacing:.05em;flex:1;text-align:center}
+.term-bd{padding:20px 20px 24px;line-height:1.85}
+.tl{display:flex;gap:0}
+.tp{color:var(--grn);margin-right:8px;flex-shrink:0}
+.tc{color:var(--acl)}
+.tbl-{height:9px}
+.tk{color:var(--mu);display:inline-block;min-width:90px}
+.tv{color:var(--tx)}
+.tv.g{color:var(--grn)}
+.tv.a{color:var(--acl)}
+.svcs{display:flex;flex-direction:column;gap:6px;margin:4px 0}
+.svc{
+  display:flex;align-items:center;gap:10px;
+  padding:7px 10px;
+  background:rgba(14,165,233,.055);
+  border:1px solid rgba(14,165,233,.1);border-radius:4px;
+}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.on{background:var(--grn);box-shadow:0 0 7px var(--grn)}
+.svc-n{color:var(--mu);min-width:136px;font-size:12px}
+.svc-s{color:var(--grn);font-size:11px;margin-left:auto}
+.cur{
+  display:inline-block;width:8px;height:14px;
+  background:var(--acl);vertical-align:text-bottom;
+  animation:blink .9s step-end infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* ─── Stats bar ────────────────────────────────────────────────────── */
+.stats-wrap{border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg1)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);max-width:1140px;margin:0 auto;padding:0 32px}
+.stat{padding:28px 24px;border-right:1px solid var(--bd)}
+.stat:last-child{border-right:none}
+.sn{
+  font-family:var(--mono);font-size:38px;font-weight:700;
+  color:var(--tx);letter-spacing:-.025em;line-height:1;
+  margin-bottom:5px;font-variant-numeric:tabular-nums;
+}
+.sn em{font-style:normal;color:var(--ac)}
+.sl{font-size:12px;color:var(--mu);letter-spacing:.04em}
+
+/* ─── Sections ─────────────────────────────────────────────────────── */
+.sec{padding:72px 32px;max-width:1140px;margin:0 auto}
+.sh{display:flex;align-items:center;gap:16px;margin-bottom:38px}
+.sh h2{font-size:21px;font-weight:700;letter-spacing:-.01em;color:var(--tx);white-space:nowrap}
+.shl{flex:1;height:1px;background:var(--bd)}
+
+/* ─── About ────────────────────────────────────────────────────────── */
+.about-p{
+  max-width:680px;font-size:16px;
+  color:#a8c6de;line-height:1.82;
+}
+.about-p strong{color:var(--tx);font-weight:600}
+
+/* ─── Skills ────────────────────────────────────────────────────────── */
+.sk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px}
+.sk-cat h3{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ac);margin-bottom:10px;
+}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font-size:12px;padding:4px 10px;
+  background:var(--bg2);border:1px solid var(--bd);
+  border-radius:4px;color:var(--tx2);
+  transition:border-color .15s;
+}
+.chip:hover{border-color:var(--ac)}
+
+/* ─── Projects ─────────────────────────────────────────────────────── */
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+.pc{
+  background:var(--bg1);border:1px solid var(--bd);border-radius:10px;
+  overflow:hidden;display:flex;flex-direction:column;
+  transition:border-color .2s,transform .2s;
+}
+.pc:hover{border-color:var(--ac);transform:translateY(-2px)}
+.pc-top{padding:20px 20px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pi{
+  width:40px;height:40px;flex-shrink:0;
+  background:rgba(14,165,233,.11);
+  border:1px solid rgba(14,165,233,.2);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+.pl{
+  font-family:var(--mono);font-size:11px;
+  color:var(--ac);border:1px solid var(--bd);
+  padding:5px 10px;border-radius:4px;
+  transition:border-color .15s,background .15s;
+}
+.pl:hover{border-color:var(--ac);background:rgba(14,165,233,.07);color:var(--acl)}
+.pc-b{padding:16px 20px 18px;flex:1}
+.pc-b h3{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:8px}
+.pc-b p{font-size:13px;color:var(--mu);line-height:1.6;margin-bottom:14px}
+.stack{display:flex;flex-wrap:wrap;gap:5px}
+.stack s{
+  text-decoration:none;font-family:var(--mono);font-size:10px;letter-spacing:.04em;
+  padding:3px 8px;
+  background:rgba(14,165,233,.07);
+  border:1px solid rgba(14,165,233,.14);
+  border-radius:3px;color:var(--acl);
+}
+.pc-foot{
+  padding:10px 20px;border-top:1px solid var(--bd);
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:11px;color:var(--grn);
+  background:rgba(52,211,153,.04);
+}
+.pc-foot::before{content:'';width:6px;height:6px;background:var(--grn);border-radius:50%;animation:blink2 2s ease-in-out infinite}
+
+/* ─── Experience ───────────────────────────────────────────────────── */
+.exp-list{display:flex;flex-direction:column}
+.ei{
+  display:grid;grid-template-columns:200px 1fr;
+  gap:32px;padding:28px 0;border-top:1px solid var(--bd);
+}
+.ei:first-child{border-top:none;padding-top:0}
+.em{padding-top:2px}
+.edate{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ac);margin-bottom:5px;
+}
+.eco{font-size:13px;font-weight:600;color:var(--tx);margin-bottom:2px}
+.eloc{font-size:12px;color:var(--mu)}
+.ebody h3{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:10px}
+.ebadge{
+  display:inline-block;
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+  padding:3px 9px;
+  background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.2);
+  border-radius:3px;color:var(--acl);margin-bottom:10px;
+}
+.ebadge.cur{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.25);color:var(--grn)}
+.ebody ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:7px}
+.ebody ul li{
+  display:flex;gap:10px;align-items:flex-start;
+  font-size:13px;color:#8aafc8;line-height:1.55;
+}
+.ebody ul li::before{content:'▸';color:var(--ac);flex-shrink:0;margin-top:1px;font-size:11px}
+
+/* ─── Certs ─────────────────────────────────────────────────────────── */
+.cert-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:13px}
+.cc{
+  background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);
+  padding:17px 18px;display:flex;gap:15px;align-items:flex-start;
+  transition:border-color .2s;
+}
+.cc:hover{border-color:var(--ac)}
+.cbx{
+  width:44px;height:44px;flex-shrink:0;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;font-weight:700;
+}
+.c-az{background:rgba(14,165,233,.14);color:var(--acl);border:1px solid rgba(14,165,233,.22)}
+.c-md{background:rgba(99,102,241,.14);color:#a5b4fc;border:1px solid rgba(99,102,241,.22)}
+.c-hp{background:rgba(245,158,11,.12);color:var(--amb);border:1px solid rgba(245,158,11,.2)}
+.c-ni{background:rgba(52,211,153,.12);color:var(--grn);border:1px solid rgba(52,211,153,.2)}
+.c-ha{background:rgba(249,115,22,.12);color:#fb923c;border:1px solid rgba(249,115,22,.2)}
+.c-ai{background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.2)}
+.ci h4{font-size:14px;font-weight:700;color:var(--tx);margin-bottom:3px;line-height:1.3}
+.ci p{font-size:12px;color:var(--mu);line-height:1.45}
+.cv{font-family:var(--mono);font-size:11px;color:var(--grn);margin-top:5px}
+.ci-prog{font-family:var(--mono);font-size:10px;color:var(--mu);margin-top:5px}
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+footer{border-top:1px solid var(--bd);background:var(--bg1)}
+.fi{
+  max-width:1140px;margin:0 auto;padding:52px 32px;
+  display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center;
+}
+.fc h2{font-size:30px;font-weight:800;color:var(--tx);margin-bottom:7px;letter-spacing:-.015em}
+.fc p{font-size:14px;color:var(--mu);margin-bottom:22px}
+.flinks{display:flex;gap:11px;flex-wrap:wrap}
+.fl{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:13px;padding:9px 16px;
+  border:1px solid var(--bd);border-radius:var(--r);
+  color:var(--mu);transition:border-color .15s,color .15s;
+}
+.fl:hover{border-color:var(--ac);color:var(--tx)}
+.fm{font-family:var(--mono);font-size:12px;color:var(--mu);text-align:right;line-height:2.1}
+.fm em{font-style:normal;color:var(--ac)}
+.fcopy{
+  max-width:1140px;margin:0 auto;
+  padding:18px 32px;border-top:1px solid var(--bd);
+  font-family:var(--mono);font-size:11px;
+  color:var(--bd2);letter-spacing:.05em;
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+}
+
+/* ─── Fade-in ────────────────────────────────────────────────────────── */
+.fi-anim{opacity:0;transform:translateY(16px);transition:opacity .5s ease,transform .5s ease}
+.fi-anim.vis{opacity:1;transform:none}
+
+/* ─── Responsive ──────────────────────────────────────────────────────── */
+@media(max-width:860px){
+  .hero{grid-template-columns:1fr;min-height:auto;padding:56px 20px 60px;gap:44px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(2){border-right:none}
+  .ei{grid-template-columns:1fr;gap:8px}
+  .fi{grid-template-columns:1fr}
+  .fm{text-align:left}
+  .sec{padding:56px 20px}
+  .nav-i{padding:13px 20px}
+  h1.name{font-size:clamp(38px,10vw,56px)}
+}
+@media(max-width:480px){
+  .stats{grid-template-columns:1fr 1fr;padding:0 16px}
+  .sn{font-size:30px}
+}
+</style>
+
+<!-- ─── Nav ─────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-i">
+    <div class="nav-name mono"><em>~</em>/pulkit-arora</div>
+    <div class="nav-r">
+      <a href="#about">About</a>
+      <a href="#projects">Projects</a>
+      <a href="#experience">Experience</a>
+      <a href="#certs">Certs</a>
+      <span class="avail">AVAILABLE</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Hero ────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div>
+    <div class="hero-eye">Senior System Administrator &mdash; L3</div>
+    <h1 class="name">Pulkit<br><em>Arora</em></h1>
+    <p class="hero-sub">Azure &amp; Endpoint Specialist &mdash; securing<br>and automating enterprise IT at scale.</p>
+    <div class="tags">
+      <span class="tag">AZ-104 Certified</span>
+      <span class="tag">MD-102 Certified</span>
+      <span class="tag">PowerShell &amp; Python</span>
+      <span class="tag">Hyper-V &middot; VMware</span>
+      <span class="tag">NinjaOne &middot; HaloPSA</span>
+    </div>
+    <div class="btns">
+      <a href="mailto:pulkitarora.782@gmail.com" class="btn-p">&#8599; Get in touch</a>
+      <a href="https://linkedin.com/in/pulkit-arora-51612a156" target="_blank" rel="noopener" class="btn-g">LinkedIn Profile</a>
+    </div>
+  </div>
+
+  <!-- Terminal panel -->
+  <div class="term">
+    <div class="term-bar">
+      <div class="dots"><s></s><s></s><s></s></div>
+      <div class="term-ttl">system.status &mdash; pulkit@creationsit</div>
+    </div>
+    <div class="term-bd">
+      <div class="tl"><span class="tp">$</span><span class="tc">whoami --detail</span></div>
+      <div class="tbl-"></div>
+      <div class="tl"><span class="tk">ROLE</span><span class="tv">Senior SysAdmin L3 / Escalation Eng.</span></div>
+      <div class="tl"><span class="tk">EMPLOYER</span><span class="tv">Alaric Ventures (MSP)</span></div>
+      <div class="tl"><span class="tk">STATUS</span><span class="tv g">ACTIVE &middot; Current role</span></div>
+      <div class="tl"><span class="tk">BASE</span><span class="tv">Zirakpur, Punjab, India</span></div>
+      <div class="tl"><span class="tk">PASSPORT</span><span class="tv g">READY &middot; SG &middot; AE &middot; NL ✓</span></div>
+      <div class="tbl-"></div>
+      <div class="tl"><span class="tp">$</span><span class="tc">ping services --all</span></div>
+      <div class="tbl-"></div>
+      <div class="svcs">
+        <div class="svc"><div class="dot on"></div><span class="svc-n">trading.creationsit.com</span><span class="svc-s">ONLINE</span></div>
+        <div class="svc"><div class="dot on"></div><span class="svc-n">remote.creationsit.com</span><span class="svc-s">ONLINE</span></div>
+        <div class="svc"><div class="dot on"></div><span class="svc-n">creationsit.com</span><span class="svc-s">ONLINE</span></div>
+      </div>
+      <div class="tbl-"></div>
+      <div class="tl"><span class="tp">$</span><span class="cur"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Stats ────────────────────────────────────────────────────────── -->
+<div class="stats-wrap">
+  <div class="stats">
+    <div class="stat"><div class="sn">5<em>+</em></div><div class="sl">Years Experience</div></div>
+    <div class="stat"><div class="sn">92<em>%</em></div><div class="sl">KPI Scorecard</div></div>
+    <div class="stat"><div class="sn">0</div><div class="sl">Client Escalations</div></div>
+    <div class="stat"><div class="sn">3</div><div class="sl">Countries On-Site</div></div>
+  </div>
+</div>
+
+<!-- ─── About ────────────────────────────────────────────────────────── -->
+<section class="sec fi-anim" id="about">
+  <div class="sh"><h2>About</h2><div class="shl"></div></div>
+  <p class="about-p">Senior System Administrator with <strong>5+ years</strong> securing and supporting <strong>Windows and Microsoft Azure</strong> environments for international clients across MSP and enterprise settings. Deep hands-on expertise spanning Windows Server, Active Directory, Hyper-V, Azure, Microsoft 365, networking, endpoint security, and backup/DR &mdash; backed by RMM/PSA tooling (<strong>NinjaOne, HaloPSA, ConnectWise</strong>) and automation in <strong>PowerShell and Python</strong>. Dual Microsoft Certified &mdash; <strong>Azure Administrator (AZ-104)</strong> and <strong>Microsoft 365 Endpoint Administrator (MD-102)</strong> &mdash; with international on-site delivery in Singapore, Dubai, and the Netherlands.</p>
+</section>
+
+<!-- ─── Skills ───────────────────────────────────────────────────────── -->
+<section class="sec fi-anim" id="skills" style="padding-top:0">
+  <div class="sh"><h2>Skills</h2><div class="shl"></div></div>
+  <div class="sk-grid">
+    <div class="sk-cat">
+      <h3>Cloud &amp; Infrastructure</h3>
+      <div class="chips">
+        <span class="chip">Microsoft Azure</span><span class="chip">Entra ID</span><span class="chip">Azure AD Connect</span><span class="chip">AVD</span><span class="chip">Windows Server</span><span class="chip">Active Directory</span><span class="chip">Hyper-V</span><span class="chip">VMware</span>
+      </div>
+    </div>
+    <div class="sk-cat">
+      <h3>Microsoft 365</h3>
+      <div class="chips">
+        <span class="chip">Exchange Online</span><span class="chip">Intune</span><span class="chip">SharePoint</span><span class="chip">Entra ID</span><span class="chip">Rippling MDM</span><span class="chip">Apple Business Mgr</span>
+      </div>
+    </div>
+    <div class="sk-cat">
+      <h3>Security &amp; Backup</h3>
+      <div class="chips">
+        <span class="chip">SentinelOne</span><span class="chip">FortiGate</span><span class="chip">DNSFilter</span><span class="chip">Inky</span><span class="chip">Veeam B&amp;R</span><span class="chip">Azure Backup</span><span class="chip">Datto</span>
+      </div>
+    </div>
+    <div class="sk-cat">
+      <h3>Automation &amp; Dev</h3>
+      <div class="chips">
+        <span class="chip">PowerShell</span><span class="chip">Python</span><span class="chip">n8n</span><span class="chip">REST APIs</span><span class="chip">Git</span><span class="chip">SQL Server</span>
+      </div>
+    </div>
+    <div class="sk-cat">
+      <h3>RMM / PSA / ITSM</h3>
+      <div class="chips">
+        <span class="chip">NinjaOne</span><span class="chip">HaloPSA</span><span class="chip">ConnectWise</span><span class="chip">ServiceNow</span><span class="chip">JIRA</span><span class="chip">Datto RMM</span>
+      </div>
+    </div>
+    <div class="sk-cat">
+      <h3>Hosting &amp; DNS</h3>
+      <div class="chips">
+        <span class="chip">Cloudflare</span><span class="chip">IIS</span><span class="chip">cPanel / Plesk</span><span class="chip">SPF / DKIM / DMARC</span><span class="chip">SSL / TLS</span><span class="chip">Azure App Services</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Projects ─────────────────────────────────────────────────────── -->
+<section class="sec fi-anim" id="projects">
+  <div class="sh"><h2>Personal Projects</h2><div class="shl"></div></div>
+  <div class="proj-grid">
+
+    <div class="pc">
+      <div class="pc-top">
+        <div class="pi">📈</div>
+        <a href="https://trading.creationsit.com" target="_blank" rel="noopener" class="pl">&#8599; Live Portal</a>
+      </div>
+      <div class="pc-b">
+        <h3>AngelBot &mdash; Algorithmic Trading System</h3>
+        <p>Multi-market paper trading bot covering India NSE (Angel One), US equities (Alpaca), and Crypto (Binance). Full signal pipeline, risk controls, stop-loss, profit/loss timers, and a real-time web portal with log streaming and API key management. Deployed as 4 Windows services via NSSM with SQL Server persistence.</p>
+        <div class="stack">
+          <s>Python</s><s>FastAPI</s><s>SQL Server</s><s>NSSM</s><s>IIS</s><s>Cloudflare</s><s>PowerShell</s>
+        </div>
+      </div>
+      <div class="pc-foot">Live on trading.creationsit.com</div>
+    </div>
+
+    <div class="pc">
+      <div class="pc-top">
+        <div class="pi">🖥️</div>
+        <a href="https://remote.creationsit.com" target="_blank" rel="noopener" class="pl">&#8599; Remote Access</a>
+      </div>
+      <div class="pc-b">
+        <h3>creationsit.com &mdash; Self-Managed Infrastructure</h3>
+        <p>End-to-end Windows VM infrastructure built from scratch: IIS reverse proxy, NSSM service orchestration, Cloudflare named-tunnel routing, MeshCentral remote support, and a PowerShell one-click installer that provisions Python, SQL Server Express, Git, ODBC, NSSM, and all four bot services on a fresh VM in under 10 minutes.</p>
+        <div class="stack">
+          <s>Windows Server</s><s>IIS</s><s>Cloudflare</s><s>MeshCentral</s><s>PowerShell</s><s>NSSM</s>
+        </div>
+      </div>
+      <div class="pc-foot">Running on self-hosted VM</div>
+    </div>
+
+    <div class="pc">
+      <div class="pc-top">
+        <div class="pi">🤖</div>
+      </div>
+      <div class="pc-b">
+        <h3>AI-Assisted MSP Automation</h3>
+        <p>Built AI-driven workflows at Alaric Ventures using Claude and the Anthropic API &mdash; automating L1 ticket triage, generating client documentation, and scripting repetitive endpoint tasks. Integrated with HaloPSA and NinjaOne via REST APIs, orchestrated through n8n.</p>
+        <div class="stack">
+          <s>Claude API</s><s>Anthropic SDK</s><s>n8n</s><s>Python</s><s>HaloPSA API</s><s>NinjaOne API</s>
+        </div>
+      </div>
+      <div class="pc-foot">Active at Alaric Ventures</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─── Experience ────────────────────────────────────────────────────── -->
+<section class="sec fi-anim" id="experience">
+  <div class="sh"><h2>Experience</h2><div class="shl"></div></div>
+  <div class="exp-list">
+
+    <div class="ei">
+      <div class="em">
+        <div class="edate">Nov 2025 &mdash; Present</div>
+        <div class="eco">Alaric Ventures Pvt. Ltd.</div>
+        <div class="eloc">Mohali, India &middot; MSP</div>
+      </div>
+      <div class="ebody">
+        <div class="ebadge cur">Current Role</div>
+        <h3>Senior System Administrator (L3) / Escalation Engineer</h3>
+        <ul>
+          <li>Lead L2/L3 escalations across multi-client MSP environments &mdash; Windows Server, AD, Hyper-V, Azure, M365, networking, and endpoint security.</li>
+          <li>Deploy and administer Veeam B&amp;R (VCSP/Pulse), Azure VMs, AVD, VPN gateways, storage, and Azure Backup.</li>
+          <li>Secure client networks with FortiGate, SentinelOne, DNSFilter and Inky; manage patching via NinjaOne and ConnectWise RMM.</li>
+          <li>Zero reported escalations; mentor L1/L2 engineers, own service delivery through HaloPSA and ConnectWise PSA.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="ei">
+      <div class="em">
+        <div class="edate">Mar 2025 &mdash; Sep 2025</div>
+        <div class="eco">Vertex Infosoft Solutions</div>
+        <div class="eloc">Mohali, India</div>
+      </div>
+      <div class="ebody">
+        <div class="ebadge">Resolution Analyst</div>
+        <h3>Resolution Analyst &mdash; Maritime IT Systems</h3>
+        <ul>
+          <li>Led incident management and root-cause analysis for global maritime IT systems, sustaining high uptime.</li>
+          <li>Drove preventive-maintenance strategies; monitoring via Splunk, ServiceNow and Grafana; documented SOPs.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="ei">
+      <div class="em">
+        <div class="edate">Dec 2023 &mdash; Mar 2025</div>
+        <div class="eco">Vertex Infosoft Solutions</div>
+        <div class="eloc">Mohali, India</div>
+      </div>
+      <div class="ebody">
+        <div class="ebadge">Team Lead</div>
+        <h3>Team Lead &mdash; Technical Engineer</h3>
+        <ul>
+          <li>Led cross-functional support team &mdash; performance management, training, delegation, and escalation handling.</li>
+          <li>Oversaw upgrades and product integrations (ERP, PMS, SHEQ, Procurement) via Java and Swagger APIs.</li>
+          <li>Ran client requirement-gathering; defined user stories, acceptance criteria, and risk-based test scope.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="ei">
+      <div class="em">
+        <div class="edate">Jul 2021 &mdash; Dec 2023</div>
+        <div class="eco">Vertex Infosoft Solutions</div>
+        <div class="eloc">Mohali · SG &middot; AE &middot; NL</div>
+      </div>
+      <div class="ebody">
+        <div class="ebadge">Sr. Tech Engineer &rarr; Assoc.</div>
+        <h3>Technical &amp; System Administration</h3>
+        <ul>
+          <li>Built and maintained Windows Server 2012&ndash;2022 estates; administered AD, Group Policy, DNS, DHCP, and Exchange migrations.</li>
+          <li>Azure and Entra ID administration with Azure AD Connect; led on-prem to Azure migrations (VMs, VNets, VPN, NSGs, storage).</li>
+          <li>On-site deployments and training in Singapore, Dubai, and the Netherlands for global maritime clients.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─── Certs ──────────────────────────────────────────────────────────── -->
+<section class="sec fi-anim" id="certs">
+  <div class="sh"><h2>Certifications</h2><div class="shl"></div></div>
+  <div class="cert-grid">
+    <div class="cc">
+      <div class="cbx c-az">AZ-104</div>
+      <div class="ci"><h4>Azure Administrator Associate</h4><p>Microsoft</p><div class="cv">Valid May 2026 &ndash; May 2027</div></div>
+    </div>
+    <div class="cc">
+      <div class="cbx c-md">MD-102</div>
+      <div class="ci"><h4>Endpoint Administrator Associate</h4><p>Microsoft 365</p><div class="cv">Valid Jun 2026 &ndash; Jun 2027</div></div>
+    </div>
+    <div class="cc">
+      <div class="cbx c-hp">HPE</div>
+      <div class="ci"><h4>Networking Concepts with Security</h4><p>Hewlett Packard Enterprise</p></div>
+    </div>
+    <div class="cc">
+      <div class="cbx c-ni">NCT</div>
+      <div class="ci"><h4>NinjaOne Certified Technician</h4><p>Automation Specialist &middot; MSP</p></div>
+    </div>
+    <div class="cc">
+      <div class="cbx c-ha">HALO</div>
+      <div class="ci"><h4>HaloPSA Foundations P1 &amp; P2</h4><p>HaloPSA</p></div>
+    </div>
+    <div class="cc">
+      <div class="cbx c-ai">AI</div>
+      <div class="ci">
+        <h4>Claude 101 &middot; AI Fluency &middot; Claude Code</h4>
+        <p>Anthropic</p>
+        <div class="ci-prog">In progress: AZ-500 &middot; AZ-305 &middot; Sentinel</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="fi">
+    <div class="fc">
+      <h2>Let&rsquo;s work together.</h2>
+      <p>Available for senior roles, MSP engagements, and infrastructure projects &mdash; India or overseas.</p>
+      <div class="flinks">
+        <a href="mailto:pulkitarora.782@gmail.com" class="fl">&#9993; pulkitarora.782@gmail.com</a>
+        <a href="tel:+917888464822" class="fl">&#128222; +91 78884 64822</a>
+        <a href="https://linkedin.com/in/pulkit-arora-51612a156" target="_blank" rel="noopener" class="fl">in&nbsp; LinkedIn</a>
+      </div>
+    </div>
+    <div class="fm">
+      <div>pulkit@creationsit:~$ <em>_</em></div>
+      <div>Zirakpur, Punjab &ndash; 140603</div>
+      <div>Passport ready &middot; Open to relocation</div>
+    </div>
+  </div>
+  <div class="fcopy">
+    <span>&copy; 2026 Pulkit Arora</span>
+    <span>creationsit.com &middot; Built &amp; hosted end-to-end</span>
+  </div>
+</footer>
+
+<script>
+const obs = new IntersectionObserver(
+  entries => entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); obs.unobserve(e.target); } }),
+  { threshold: 0.07 }
+);
+document.querySelectorAll('.fi-anim').forEach(el => obs.observe(el));
+</script>
