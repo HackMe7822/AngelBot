@@ -938,139 +938,77 @@ statObs.observe(document.querySelector('.stats-wrap'));
   window.addEventListener('resize', function() { resize(); init(); });
 })();
 
-/* ── WebGL 3D Moon — NASA LRO texture ──────────────────────────────── */
+/* ── Moon — astrophotography canvas ────────────────────────────────── */
 (function(){
   var mc = document.getElementById('moon-c');
-  var gl = mc.getContext('webgl') || mc.getContext('experimental-webgl');
-  if (!gl) { mc.style.display='none'; return; }
+  var mx = mc.getContext('2d');
+  if (!mx) { mc.style.display='none'; return; }
   var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var W = 0;
 
   function resize(){
     var sz = parseFloat(getComputedStyle(mc).width);
     mc.width = mc.height = Math.round(sz * dpr);
-    gl.viewport(0,0,mc.width,mc.height);
+    mx.scale(dpr, dpr);
+    W = sz;
   }
 
-  var VS = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+  var moonImg = new Image();
+  moonImg.onload = function(){ resize(); requestAnimationFrame(render); };
+  moonImg.onerror = function(){ mc.style.display='none'; };
+  moonImg.src = 'images/moon-photo.jpg';
 
-  /* Shader uses the real NASA LRO equirectangular color map as albedo.
-     Luminance gradient of the texture drives bump normals so craters
-     and highland edges actually catch/shadow light. */
-  var FS = [
-'precision highp float;',
-'uniform float uT;uniform vec2 uR;uniform sampler2D uTex;',
-'#define PI 3.14159265',
+  var t0 = null, TAU = Math.PI * 2;
 
-'void main(){',
-'  vec2 uv=(gl_FragCoord.xy/uR)*2.-1.;',
-'  float r2=dot(uv,uv);if(r2>1.){gl_FragColor=vec4(0.);return;}',
-'  float r=sqrt(r2);',
-'  vec3 N=vec3(uv,sqrt(1.-r2));',
-
-// Rotate around Y axis — period ~157 s
-'  float sp=uT*.040+1.80;',
-'  float cs=cos(sp),sn=sin(sp);',
-'  vec3 rN=vec3(cs*N.x-sn*N.z,N.y,sn*N.x+cs*N.z);',
-
-// Equirectangular UV: lon [0,1] wraps, lat [0,1] clamps at poles
-'  float lon=atan(rN.x,rN.z)/(2.*PI)+.5;',
-'  float lat=asin(clamp(rN.y,-1.,1.))/PI+.5;',
-'  vec2 tUv=vec2(lon,1.-lat);',
-
-// Sample texture + 4 neighbours to derive bump normals from luminance gradient
-'  float e=.004;',
-'  vec3 cC=texture2D(uTex,tUv).rgb;',
-'  vec3 lW=vec3(.299,.587,.114);',
-'  float lXn=dot(texture2D(uTex,vec2(tUv.x-e,tUv.y)).rgb,lW);',
-'  float lXp=dot(texture2D(uTex,vec2(tUv.x+e,tUv.y)).rgb,lW);',
-'  float lYn=dot(texture2D(uTex,vec2(tUv.x,tUv.y-e)).rgb,lW);',
-'  float lYp=dot(texture2D(uTex,vec2(tUv.x,tUv.y+e)).rgb,lW);',
-
-// Bump normal from texture luminance gradient, blended into sphere normal
-'  vec3 bN=normalize(vec3((lXn-lXp)*3.5,(lYn-lYp)*3.5,.10));',
-'  vec3 fN=normalize(N+vec3(bN.xy*.50,0.));',
-
-// Minnaert photometric function (k=0.72) — real moon limb darkening
-'  vec3 L=normalize(vec3(-.48,.32,.82));',
-'  float cosL=max(dot(fN,L),0.);',
-'  float cosV=max(dot(fN,vec3(0.,0.,1.)),0.);',
-'  float minn=pow(max(cosL*cosV,.0),.72);',
-'  float term=smoothstep(-.20,.26,dot(N,L));',
-
-// Specular (rock surface: very subtle)
-'  vec3 H2=normalize(L+vec3(0.,0.,1.));',
-'  float spec=pow(max(dot(fN,H2),0.),70.)*.07;',
-
-// Compose: texture albedo + Minnaert + specular
-'  vec3 lit=cC*(.045+minn*term*1.30)+spec*term;',
-
-// Thin blue atmospheric rim
-'  lit+=vec3(.36,.54,1.)*pow(1.-r,.50)*.08;',
-
-'  float alpha=smoothstep(1.,.87,r)*.97;',
-'  gl_FragColor=vec4(lit,alpha);',
-'}'
-  ].join('\n');
-
-  function mkSh(type,src){
-    var s=gl.createShader(type);
-    gl.shaderSource(s,src);gl.compileShader(s);return s;
-  }
-  var prog=gl.createProgram();
-  gl.attachShader(prog,mkSh(gl.VERTEX_SHADER,VS));
-  gl.attachShader(prog,mkSh(gl.FRAGMENT_SHADER,FS));
-  gl.linkProgram(prog);gl.useProgram(prog);
-
-  var buf=gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
-  var aP=gl.getAttribLocation(prog,'p');
-  gl.enableVertexAttribArray(aP);
-  gl.vertexAttribPointer(aP,2,gl.FLOAT,false,0,0);
-
-  var uLoc={T:gl.getUniformLocation(prog,'uT'),R:gl.getUniformLocation(prog,'uR'),Tex:gl.getUniformLocation(prog,'uTex')};
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
-
-  // Load NASA LRO 1K color map — same texture NASA uses on their 3D model
-  var tex=gl.createTexture();
-  var img=new Image();
-  img.onload=function(){
-    gl.bindTexture(gl.TEXTURE_2D,tex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,img);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-    gl.generateMipmap(gl.TEXTURE_2D);
-    resize();
-    requestAnimationFrame(render);
-  };
-  img.onerror=function(){
-    // Texture failed — still show a plain grey sphere so the page isn't broken
-    gl.bindTexture(gl.TEXTURE_2D,tex);
-    var px=new Uint8Array([160,165,180]);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,1,1,0,gl.RGB,gl.UNSIGNED_BYTE,px);
-    resize();
-    requestAnimationFrame(render);
-  };
-  img.src='images/moon-texture.jpg';
-
-  var t0=null;
   function render(ts){
-    if(!t0)t0=ts;
-    var t=(ts-t0)*.001;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D,tex);
-    gl.uniform1i(uLoc.Tex,0);
-    gl.uniform1f(uLoc.T,t);
-    gl.uniform2f(uLoc.R,mc.width,mc.height);
-    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.drawArrays(gl.TRIANGLES,0,3);
+    if(!t0) t0 = ts;
+    var t = (ts - t0) * 0.001;
+    mx.clearRect(0, 0, W, W);
+
+    var cx = W * 0.5, cy = W * 0.5;
+    // Glow pulse: slow 16-second breathe
+    var pulse = 0.78 + 0.22 * Math.sin(t * 0.38);
+    // Radius breathe: ±0.8% scale over 25 s
+    var r = W * 0.455 * (1 + 0.008 * Math.sin(t * 0.25));
+
+    // Layer 1 — wide diffuse atmospheric halo
+    mx.save();
+    mx.shadowColor = 'rgba(200,215,255,' + (0.22 * pulse) + ')';
+    mx.shadowBlur = W * 0.30;
+    mx.beginPath(); mx.arc(cx, cy, r, 0, TAU);
+    mx.fillStyle = 'rgba(255,255,255,0.005)'; mx.fill();
+    mx.restore();
+
+    // Layer 2 — mid glow ring
+    mx.save();
+    mx.shadowColor = 'rgba(228,238,255,' + (0.44 * pulse) + ')';
+    mx.shadowBlur = W * 0.10;
+    mx.beginPath(); mx.arc(cx, cy, r, 0, TAU);
+    mx.fillStyle = 'rgba(255,255,255,0.005)'; mx.fill();
+    mx.restore();
+
+    // Layer 3 — tight bright rim (matches the white halo in the photo)
+    mx.save();
+    mx.shadowColor = 'rgba(255,255,255,' + (0.65 * pulse) + ')';
+    mx.shadowBlur = W * 0.036;
+    mx.beginPath(); mx.arc(cx, cy, r, 0, TAU);
+    mx.fillStyle = 'rgba(255,255,255,0.005)'; mx.fill();
+    mx.restore();
+
+    // Moon photo — clipped to circle, cover-scaled so moon disc fills it
+    mx.save();
+    mx.beginPath(); mx.arc(cx, cy, r, 0, TAU); mx.clip();
+    var ss = Math.min(moonImg.naturalWidth, moonImg.naturalHeight);
+    // ×2.5 accounts for the dark star-field border around the moon disc in the photo
+    var sc = (r * 2.5) / ss;
+    var iw = moonImg.naturalWidth * sc, ih = moonImg.naturalHeight * sc;
+    mx.drawImage(moonImg, cx - iw * 0.5, cy - ih * 0.5, iw, ih);
+    mx.restore();
+
     requestAnimationFrame(render);
   }
-  window.addEventListener('resize',function(){setTimeout(resize,100);});
+
+  window.addEventListener('resize', function(){ setTimeout(function(){ resize(); }, 100); });
 })();
 
 /* ── Stagger scroll animations ─────────────────────────────────────── */
