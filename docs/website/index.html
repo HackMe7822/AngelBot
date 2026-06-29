@@ -957,66 +957,85 @@ statObs.observe(document.querySelector('.stats-wrap'));
 'precision highp float;',
 'uniform float uT;uniform vec2 uR;',
 
-'float h(vec2 p){p=fract(p*vec2(127.1,311.7));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
-'float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);',
-'  return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1)),f.x),f.y);}',
-'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n(p);p*=2.;a*=.5;}return v;}',
+// Hash + value noise
+'float hh(vec2 p){p=fract(p*vec2(127.1,311.7));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
+'float nn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);',
+'  return mix(mix(hh(i),hh(i+vec2(1,0)),f.x),mix(hh(i+vec2(0,1)),hh(i+vec2(1,1)),f.x),f.y);}',
+'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*nn(p);p*=2.05;a*=.48;}return v;}',
 
-'float crater(vec2 uv,vec2 c,float r){',
-'  float d=length(uv-c);',
-'  return smoothstep(r*.6,r*.85,d)*smoothstep(r*1.5,r,d)*.55',
-'        -smoothstep(r*.6,0.,d)*.38;}',
+// Crater: concave bowl + raised rim + ejecta scatter
+'float crH(vec2 uv,vec2 c,float r){',
+'  float d=length(uv-c)/r;',
+'  if(d>2.2)return 0.;',
+'  float bowl=-smoothstep(1.,.0,d)*(1.-d*d*.75)*.44;',
+'  float rim=exp(-pow((d-1.06)*5.8,2.))*.30;',
+'  float ej=smoothstep(2.2,1.1,d)*nn(uv*60.)*.04;',
+'  return bowl+rim+ej;}',
+
+// Combined height map used for both albedo and normal computation
+'float hmap(vec2 uv){',
+'  float h=0.;',
+'  h+=crH(uv,vec2(.22,.46),.092);',
+'  h+=crH(uv,vec2(.71,.26),.074);',
+'  h+=crH(uv,vec2(.44,.75),.084);',
+'  h+=crH(uv,vec2(.82,.62),.064);',
+'  h+=crH(uv,vec2(.13,.63),.070);',
+'  h+=crH(uv,vec2(.55,.18),.046)*.72;',
+'  h+=crH(uv,vec2(.88,.34),.041)*.72;',
+'  h+=crH(uv,vec2(.35,.24),.039)*.72;',
+'  h+=crH(uv,vec2(.63,.52),.041)*.72;',
+'  h+=crH(uv,vec2(.19,.34),.045)*.72;',
+'  h+=crH(uv,vec2(.48,.87),.038)*.60;',
+'  h+=crH(uv,vec2(.76,.40),.036)*.60;',
+'  h+=fbm(uv*5.5)*.14;',
+'  return h;}',
 
 'void main(){',
 '  vec2 uv=(gl_FragCoord.xy/uR)*2.-1.;',
-'  float r2=dot(uv,uv);',
-'  if(r2>1.){gl_FragColor=vec4(0.);return;}',
+'  float r2=dot(uv,uv);if(r2>1.){gl_FragColor=vec4(0.);return;}',
 '  float r=sqrt(r2);',
 '  vec3 N=vec3(uv,sqrt(1.-r2));',
 
-  // Rotate around Y axis slowly
-'  float sp=uT*.05;float cs=cos(sp),sn=sin(sp);',
+// Y-axis rotation
+'  float sp=uT*.045;float cs=cos(sp),sn=sin(sp);',
 '  vec3 rN=vec3(cs*N.x-sn*N.z,N.y,sn*N.x+cs*N.z);',
 '  vec2 sUv=rN.xz*.5+.5;',
 
-  // Surface: FBM highlands + darker maria
-'  float base=fbm(sUv*4.5);',
-'  float detail=fbm(sUv*10.+vec2(5.1,2.8));',
-'  float maria=smoothstep(.42,.72,fbm(sUv*2.8+vec2(1.3,4.1)));',
-'  float alb=mix(.35,.80,base)*mix(.75,1.,detail)*(1.-.28*maria);',
+// Compute surface normals from height map gradient (central differences)
+'  float e=.0045;',
+'  float hC=hmap(sUv);',
+'  float gx=(hmap(sUv-vec2(e,0.))-hmap(sUv+vec2(e,0.)))/(2.*e);',
+'  float gy=(hmap(sUv-vec2(0.,e))-hmap(sUv+vec2(0.,e)))/(2.*e);',
+'  vec3 bN=normalize(vec3(gx,gy,.08));',
+// Perturb the sphere normal — makes craters/bumps actually cast light+shadow
+'  vec3 fN=normalize(N+bN*.90);',
 
-  // Craters
-'  float c=0.;',
-'  c+=crater(sUv,vec2(.24,.46),.075);',
-'  c+=crater(sUv,vec2(.70,.28),.060);',
-'  c+=crater(sUv,vec2(.44,.74),.068);',
-'  c+=crater(sUv,vec2(.80,.62),.050);',
-'  c+=crater(sUv,vec2(.14,.66),.056);',
-'  c+=crater(sUv,vec2(.57,.17),.048);',
-'  c+=crater(sUv,vec2(.88,.36),.042);',
-'  c+=crater(sUv,vec2(.35,.24),.038);',
-'  c+=crater(sUv,vec2(.62,.52),.032);',
-'  c+=crater(sUv,vec2(.18,.32),.044);',
-'  alb=clamp(alb+c*.55,0.,1.);',
+// Albedo: FBM highlands + maria dark patches
+'  float t1=fbm(sUv*4.8);',
+'  float t2=fbm(sUv*12.+vec2(3.7,2.1));',
+'  float maria=smoothstep(.40,.72,fbm(sUv*2.6+vec2(1.3,4.1)));',
+'  float alb=mix(.35,.78,t1)*mix(.74,1.,t2)*(1.-.32*maria);',
+'  alb=clamp(alb+hC*.52,0.,1.);',
 
-  // Color: cold blue-grey highlands to warmer grey maria
-'  vec3 col=mix(vec3(.40,.44,.52),vec3(.82,.84,.90),alb);',
-'  col=mix(col,vec3(.46,.50,.60),maria*.18);',
+// Realistic moon color: light grey highlands, darker blue-grey maria
+'  vec3 col=mix(vec3(.34,.37,.46),vec3(.80,.83,.90),alb);',
+'  col=mix(col,vec3(.24,.28,.38),maria*.26);',
 
-  // Phong shading — light from upper-left
-'  vec3 L=normalize(vec3(-.52,.38,.78));',
-'  float diff=max(dot(N,L),0.);',
-'  float term=smoothstep(-.18,.22,dot(N,L));',
-'  vec3 H=normalize(L+vec3(0.,0.,1.));',
-'  float spec=pow(max(dot(N,H),0.),64.)*.20;',
-'  vec3 lit=col*(.05+diff*term)+spec*term*vec3(1.,.97,.90);',
+// Minnaert photometric model (k=0.72) — accurate moon limb darkening
+'  vec3 L=normalize(vec3(-.50,.36,.80));',
+'  float cosL=max(dot(fN,L),0.);',
+'  float cosV=max(dot(fN,vec3(0.,0.,1.)),0.);',
+'  float minn=pow(max(cosL*cosV,0.),.72);',
+'  float term=smoothstep(-.18,.24,dot(N,L));',
+// Subtle specular highlight
+'  vec3 H2=normalize(L+vec3(0.,0.,1.));',
+'  float spec=pow(max(dot(fN,H2),0.),90.)*.11;',
+'  vec3 lit=col*(.04+minn*term*1.18)+spec*term;',
 
-  // Atmospheric limb brightening (blue-white glow at edge)
-'  float limb=pow(1.-r,.45)*.10;',
-'  lit+=vec3(.50,.68,1.)*limb;',
+// Thin blue atmospheric limb glow
+'  lit+=vec3(.40,.58,1.)*pow(1.-r,.48)*.09;',
 
-  // Soft edge fade
-'  float alpha=smoothstep(1.,.86,r)*.96;',
+'  float alpha=smoothstep(1.,.87,r)*.96;',
 '  gl_FragColor=vec4(lit,alpha);',
 '}'
   ].join('\n');
