@@ -897,16 +897,14 @@ statObs.observe(document.querySelector('.stats-wrap'));
     cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.clip();
 
     if (cpImg.complete && cpImg.naturalWidth > 0) {
-      // Slow axial rotation — full turn every ~14 minutes
-      cx.translate(px, py);
-      cx.rotate(t * 0.0075);
-      cx.translate(-px, -py);
-
-      // Scale image to fill circle with 15% extra so rotation never exposes edges
       var iw = cpImg.naturalWidth, ih = cpImg.naturalHeight;
-      var scale = (r * 2.3) / Math.min(iw, ih);
+      // Scale so image height fills circle diameter (with breathing room)
+      var scale = (r * 2.25) / ih;
       var dw = iw * scale, dh = ih * scale;
-      cx.drawImage(cpImg, px - dw*0.5, py - dh*0.5, dw, dh);
+      // Horizontal scroll — bands drift left like real Jovian atmospheric rotation
+      var offset = (t * 28) % dw;
+      cx.drawImage(cpImg, px - dw*0.5 - offset,      py - dh*0.5, dw, dh);
+      cx.drawImage(cpImg, px - dw*0.5 - offset + dw, py - dh*0.5, dw, dh);
     } else {
       // Fallback warm sphere while image loads
       var bg = cx.createRadialGradient(px-r*0.25, py-r*0.25, r*0.05, px, py, r);
