@@ -362,7 +362,7 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 #moon-c{
   position:fixed;left:50%;top:44%;
   transform:translate(-50%,-50%);
-  width:min(68vh,68vw);height:min(68vh,68vw);
+  width:min(62vh,62vw);height:min(62vh,62vw);
   z-index:0;pointer-events:none;
 }
 .hero,.stats-wrap,.sec,footer{position:relative;z-index:1}
@@ -969,36 +969,36 @@ statObs.observe(document.querySelector('.stats-wrap'));
     var pulse = 0.78 + 0.22 * Math.sin(t * 0.38);   // 16-second glow breathe
     var r = W * 0.455 * (1 + 0.008 * Math.sin(t * 0.25)); // ±0.8% radius breathe
 
-    // Step 1 — draw moon photo clipped to circle
+    // Step 1 — draw moon photo clipped to circle, slightly dimmed
     mx.save();
     mx.beginPath(); mx.arc(cx, cy, r, 0, TAU); mx.clip();
     var ss = Math.min(moonImg.naturalWidth, moonImg.naturalHeight);
-    var sc = (r * 2.5) / ss;   // ×2.5: accounts for dark star-field border in photo
+    var sc = (r * 2.5) / ss;
     var iw = moonImg.naturalWidth * sc, ih = moonImg.naturalHeight * sc;
+    mx.filter = 'brightness(0.78) contrast(1.10)';
     mx.drawImage(moonImg, cx - iw * 0.5, cy - ih * 0.5, iw, ih);
+    mx.filter = 'none';
     mx.restore();
 
-    // Step 2 — erase outer ring to transparent so page background bleeds through
-    // (eliminates the hard pasted-circle look)
+    // Step 2 — erase only the outer 14% of the disc to transparent
+    // Keeps the moon crisp; just smooths the boundary edge
     mx.save();
     mx.globalCompositeOperation = 'destination-out';
-    var mask = mx.createRadialGradient(cx, cy, r * 0.74, cx, cy, r * 1.01);
-    mask.addColorStop(0,    'rgba(0,0,0,0)');    // keep full photo
-    mask.addColorStop(0.50, 'rgba(0,0,0,0.06)'); // very gentle start
-    mask.addColorStop(1,    'rgba(0,0,0,1)');    // fully transparent at edge
+    var mask = mx.createRadialGradient(cx, cy, r * 0.86, cx, cy, r * 1.01);
+    mask.addColorStop(0,    'rgba(0,0,0,0)');
+    mask.addColorStop(0.35, 'rgba(0,0,0,0.04)');
+    mask.addColorStop(1,    'rgba(0,0,0,1)');
     mx.fillStyle = mask;
     mx.fillRect(0, 0, W, W);
     mx.restore();
 
-    // Step 3 — atmospheric glow ring, drawn on top so it overlays the faded edge
-    // Outer diffuse halo
-    var halo = mx.createRadialGradient(cx, cy, r * 0.90, cx, cy, r * 1.48);
-    halo.addColorStop(0,    'rgba(245,250,255,' + (0.52 * pulse) + ')');
-    halo.addColorStop(0.20, 'rgba(225,238,255,' + (0.30 * pulse) + ')');
-    halo.addColorStop(0.55, 'rgba(210,228,255,' + (0.11 * pulse) + ')');
-    halo.addColorStop(1,    'rgba(200,220,255,0)');
+    // Step 3 — tight atmospheric rim glow only (no wide fog)
+    var halo = mx.createRadialGradient(cx, cy, r * 0.96, cx, cy, r * 1.20);
+    halo.addColorStop(0,    'rgba(255,255,255,' + (0.28 * pulse) + ')');
+    halo.addColorStop(0.35, 'rgba(235,245,255,' + (0.12 * pulse) + ')');
+    halo.addColorStop(1,    'rgba(215,232,255,0)');
     mx.fillStyle = halo;
-    mx.beginPath(); mx.arc(cx, cy, r * 1.48, 0, TAU); mx.fill();
+    mx.beginPath(); mx.arc(cx, cy, r * 1.20, 0, TAU); mx.fill();
 
     requestAnimationFrame(render);
   }
