@@ -359,6 +359,12 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 
 /* ─── Canvas background ──────────────────────────────────────────────── */
 #bgc{position:fixed;inset:0;z-index:0;pointer-events:none}
+#moon-c{
+  position:fixed;left:50%;top:44%;
+  transform:translate(-50%,-50%);
+  width:min(58vh,58vw);height:min(58vh,58vw);
+  z-index:0;pointer-events:none;
+}
 .hero,.stats-wrap,.sec,footer{position:relative;z-index:1}
 
 /* ─── Clickable hero tags ────────────────────────────────────────────── */
@@ -417,6 +423,7 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 </style>
 
 <canvas id="bgc"></canvas>
+<canvas id="moon-c"></canvas>
 
 <!-- ─── Nav ─────────────────────────────────────────────────────────── -->
 <nav>
@@ -866,71 +873,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
 
   window.addEventListener('scroll', function() { scrollY = window.pageYOffset; });
 
-  function drawMoon() {
-    var mx = W * 0.50, my = H * 0.44;
-    var mr = Math.min(W, H) * 0.24;
-
-    // Wide atmospheric corona
-    var corona = cx.createRadialGradient(mx, my, mr * 0.7, mx, my, mr * 4.0);
-    corona.addColorStop(0,   'rgba(160,200,255,0.10)');
-    corona.addColorStop(0.4, 'rgba(120,170,240,0.05)');
-    corona.addColorStop(1,   'rgba(80,130,210,0)');
-    cx.fillStyle = corona; cx.fillRect(0, 0, W, H);
-
-    // Moon surface base gradient (lit from upper-left)
-    var surf = cx.createRadialGradient(
-      mx - mr * 0.28, my - mr * 0.22, mr * 0.04,
-      mx, my, mr
-    );
-    surf.addColorStop(0,    'rgba(240,248,255,0.32)');
-    surf.addColorStop(0.25, 'rgba(215,232,255,0.26)');
-    surf.addColorStop(0.55, 'rgba(170,200,240,0.18)');
-    surf.addColorStop(0.80, 'rgba(110,150,210,0.11)');
-    surf.addColorStop(1,    'rgba(60,90,170,0.04)');
-    cx.beginPath(); cx.arc(mx, my, mr, 0, 6.2832);
-    cx.fillStyle = surf; cx.fill();
-
-    // Craters — soft dark spots with radial gradients
-    var craters = [
-      { ox:-0.28, oy:-0.18, r:0.17, a:0.10 },
-      { ox: 0.18, oy: 0.28, r:0.13, a:0.08 },
-      { ox:-0.08, oy: 0.42, r:0.14, a:0.09 },
-      { ox: 0.38, oy:-0.12, r:0.10, a:0.07 },
-      { ox: 0.42, oy: 0.33, r:0.09, a:0.07 },
-      { ox:-0.44, oy: 0.20, r:0.10, a:0.06 },
-      { ox: 0.08, oy:-0.42, r:0.11, a:0.07 },
-      { ox:-0.18, oy:-0.48, r:0.08, a:0.05 },
-      { ox: 0.25, oy:-0.35, r:0.07, a:0.06 },
-      { ox:-0.38, oy:-0.35, r:0.09, a:0.05 }
-    ];
-    craters.forEach(function(cr) {
-      var cx_ = mx + cr.ox * mr, cy_ = my + cr.oy * mr, cr_ = cr.r * mr;
-      var cg = cx.createRadialGradient(cx_, cy_, 0, cx_, cy_, cr_);
-      cg.addColorStop(0,   'rgba(20,35,90,' + cr.a + ')');
-      cg.addColorStop(0.6, 'rgba(20,35,90,' + (cr.a * .4) + ')');
-      cg.addColorStop(1,   'rgba(20,35,90,0)');
-      cx.beginPath(); cx.arc(cx_, cy_, cr_, 0, 6.2832);
-      cx.fillStyle = cg; cx.fill();
-    });
-
-    // Dark-side crescent shadow (clipped to moon disc)
-    cx.save();
-    cx.beginPath(); cx.arc(mx, my, mr, 0, 6.2832); cx.clip();
-    var shad = cx.createRadialGradient(mx + mr * .42, my, mr * .15, mx + mr * .42, my, mr * 1.05);
-    shad.addColorStop(0,   'rgba(3,6,22,0.72)');
-    shad.addColorStop(0.5, 'rgba(3,6,22,0.45)');
-    shad.addColorStop(1,   'rgba(3,6,22,0)');
-    cx.fillStyle = shad; cx.fillRect(0, 0, W, H);
-    cx.restore();
-
-    // Lit-edge rim highlight
-    var rim = cx.createRadialGradient(mx - mr*.9, my, mr*.05, mx, my, mr);
-    rim.addColorStop(0.82, 'rgba(255,255,255,0)');
-    rim.addColorStop(0.92, 'rgba(220,235,255,0.16)');
-    rim.addColorStop(1,    'rgba(200,220,255,0)');
-    cx.beginPath(); cx.arc(mx, my, mr, 0, 6.2832);
-    cx.fillStyle = rim; cx.fill();
-  }
 
   function frame() {
     cx.clearRect(0, 0, W, H);
@@ -946,8 +888,6 @@ statObs.observe(document.querySelector('.stats-wrap'));
       g.addColorStop(1, 'rgba('+b.c+',0)');
       cx.fillStyle = g; cx.fillRect(0, 0, W, H);
     });
-
-    drawMoon();
 
     // Star layers with scroll parallax
     stars.forEach(function(layer, li) {
@@ -996,6 +936,124 @@ statObs.observe(document.querySelector('.stats-wrap'));
 
   resize(); init(); frame();
   window.addEventListener('resize', function() { resize(); init(); });
+})();
+
+/* ── WebGL 3D Moon ─────────────────────────────────────────────────── */
+(function(){
+  var mc = document.getElementById('moon-c');
+  var gl = mc.getContext('webgl') || mc.getContext('experimental-webgl');
+  if (!gl) { mc.style.display='none'; return; }
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+
+  function resize(){
+    var sz = parseFloat(getComputedStyle(mc).width);
+    mc.width = mc.height = Math.round(sz * dpr);
+    gl.viewport(0,0,mc.width,mc.height);
+  }
+
+  var VS = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+
+  var FS = [
+'precision highp float;',
+'uniform float uT;uniform vec2 uR;',
+
+'float h(vec2 p){p=fract(p*vec2(127.1,311.7));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
+'float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);',
+'  return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1)),f.x),f.y);}',
+'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n(p);p*=2.;a*=.5;}return v;}',
+
+'float crater(vec2 uv,vec2 c,float r){',
+'  float d=length(uv-c);',
+'  return smoothstep(r*.6,r*.85,d)*smoothstep(r*1.5,r,d)*.55',
+'        -smoothstep(r*.6,0.,d)*.38;}',
+
+'void main(){',
+'  vec2 uv=(gl_FragCoord.xy/uR)*2.-1.;',
+'  float r2=dot(uv,uv);',
+'  if(r2>1.){gl_FragColor=vec4(0.);return;}',
+'  float r=sqrt(r2);',
+'  vec3 N=vec3(uv,sqrt(1.-r2));',
+
+  // Rotate around Y axis slowly
+'  float sp=uT*.05;float cs=cos(sp),sn=sin(sp);',
+'  vec3 rN=vec3(cs*N.x-sn*N.z,N.y,sn*N.x+cs*N.z);',
+'  vec2 sUv=rN.xz*.5+.5;',
+
+  // Surface: FBM highlands + darker maria
+'  float base=fbm(sUv*4.5);',
+'  float detail=fbm(sUv*10.+vec2(5.1,2.8));',
+'  float maria=smoothstep(.42,.72,fbm(sUv*2.8+vec2(1.3,4.1)));',
+'  float alb=mix(.35,.80,base)*mix(.75,1.,detail)*(1.-.28*maria);',
+
+  // Craters
+'  float c=0.;',
+'  c+=crater(sUv,vec2(.24,.46),.075);',
+'  c+=crater(sUv,vec2(.70,.28),.060);',
+'  c+=crater(sUv,vec2(.44,.74),.068);',
+'  c+=crater(sUv,vec2(.80,.62),.050);',
+'  c+=crater(sUv,vec2(.14,.66),.056);',
+'  c+=crater(sUv,vec2(.57,.17),.048);',
+'  c+=crater(sUv,vec2(.88,.36),.042);',
+'  c+=crater(sUv,vec2(.35,.24),.038);',
+'  c+=crater(sUv,vec2(.62,.52),.032);',
+'  c+=crater(sUv,vec2(.18,.32),.044);',
+'  alb=clamp(alb+c*.55,0.,1.);',
+
+  // Color: cold blue-grey highlands to warmer grey maria
+'  vec3 col=mix(vec3(.40,.44,.52),vec3(.82,.84,.90),alb);',
+'  col=mix(col,vec3(.46,.50,.60),maria*.18);',
+
+  // Phong shading — light from upper-left
+'  vec3 L=normalize(vec3(-.52,.38,.78));',
+'  float diff=max(dot(N,L),0.);',
+'  float term=smoothstep(-.18,.22,dot(N,L));',
+'  vec3 H=normalize(L+vec3(0.,0.,1.));',
+'  float spec=pow(max(dot(N,H),0.),64.)*.20;',
+'  vec3 lit=col*(.05+diff*term)+spec*term*vec3(1.,.97,.90);',
+
+  // Atmospheric limb brightening (blue-white glow at edge)
+'  float limb=pow(1.-r,.45)*.10;',
+'  lit+=vec3(.50,.68,1.)*limb;',
+
+  // Soft edge fade
+'  float alpha=smoothstep(1.,.86,r)*.96;',
+'  gl_FragColor=vec4(lit,alpha);',
+'}'
+  ].join('\n');
+
+  function sh(type,src){
+    var s=gl.createShader(type);
+    gl.shaderSource(s,src);gl.compileShader(s);return s;
+  }
+  var prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+  gl.linkProgram(prog);gl.useProgram(prog);
+
+  var buf=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  var aP=gl.getAttribLocation(prog,'p');
+  gl.enableVertexAttribArray(aP);
+  gl.vertexAttribPointer(aP,2,gl.FLOAT,false,0,0);
+
+  var uT=gl.getUniformLocation(prog,'uT');
+  var uR=gl.getUniformLocation(prog,'uR');
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+
+  var t0=null;
+  function render(ts){
+    if(!t0)t0=ts;
+    var t=(ts-t0)*.001;
+    gl.uniform1f(uT,t);
+    gl.uniform2f(uR,mc.width,mc.height);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    requestAnimationFrame(render);
+  }
+  resize();requestAnimationFrame(render);
+  window.addEventListener('resize',function(){setTimeout(resize,100);});
 })();
 
 /* ── Stagger scroll animations ─────────────────────────────────────── */
