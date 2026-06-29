@@ -374,6 +374,29 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 @keyframes statPop{0%{opacity:0;transform:scale(.85)}60%{transform:scale(1.06)}100%{opacity:1;transform:scale(1)}}
 .sn.counting{animation:statPop .5s cubic-bezier(.22,1,.36,1) both}
 
+/* ─── Stagger scroll animations ──────────────────────────────────────── */
+#skills .sk-cat,#skills .chip{opacity:0;transform:translateY(10px);transition:opacity .38s ease,transform .38s ease}
+#skills .sk-cat.sv,#skills .chip.sv{opacity:1;transform:none}
+#projects .pc{opacity:0;transform:translateY(20px);transition:opacity .42s ease,transform .42s ease,border-color .2s}
+#projects .pc.sv{opacity:1;transform:none}
+#certs .cc{opacity:0;transform:scale(.95);transition:opacity .38s ease,transform .38s ease,border-color .2s}
+#certs .cc.sv{opacity:1;transform:scale(1)}
+#experience .ei{opacity:0;transform:translateX(-22px);transition:opacity .45s ease,transform .45s ease}
+#experience .ei.sv{opacity:1;transform:none}
+
+/* ─── Section heading slide-in ───────────────────────────────────────── */
+.sh{opacity:0;transform:translateX(-16px);transition:opacity .5s ease,transform .5s ease}
+.sh.sv{opacity:1;transform:none}
+
+/* ─── About text reveal ──────────────────────────────────────────────── */
+.about-p{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s ease}
+.about-p.sv{opacity:1;transform:none}
+
+/* ─── Footer reveal ──────────────────────────────────────────────────── */
+.fc,.fm{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+.fc.sv{opacity:1;transform:none}
+.fm.sv{opacity:1;transform:none}
+
 /* ─── Responsive ──────────────────────────────────────────────────────── */
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;min-height:auto;padding:56px 20px 60px;gap:44px}
@@ -779,44 +802,63 @@ var statObs = new IntersectionObserver(function(entries) {
 }, { threshold: 0.6 });
 statObs.observe(document.querySelector('.stats-wrap'));
 
-/* ── Particle network background ───────────────────────────────────── */
+/* ── Particle network + mouse + pulses ─────────────────────────────── */
 (function() {
   var C = document.getElementById('bgc');
   var cx = C.getContext('2d');
-  var pts = [], W = 0, H = 0;
-  var N = 60, DIST = 155, RGB = '14,165,233';
+  var pts = [], pulses = [], W = 0, H = 0;
+  var N = 65, DIST = 160, RGB = '14,165,233';
+  var mouse = { x: -999, y: -999 };
 
-  function resize() {
-    W = C.width  = window.innerWidth;
-    H = C.height = window.innerHeight;
-  }
+  function resize() { W = C.width = window.innerWidth; H = C.height = window.innerHeight; }
   function init() {
     pts = [];
-    for (var i = 0; i < N; i++) {
-      pts.push({ x: W * Math.random(), y: H * Math.random(), vx: (Math.random()-.5)*.38, vy: (Math.random()-.5)*.38 });
-    }
+    for (var i = 0; i < N; i++)
+      pts.push({ x: W*Math.random(), y: H*Math.random(), vx:(Math.random()-.5)*.4, vy:(Math.random()-.5)*.4 });
   }
+
+  window.addEventListener('mousemove', function(e){ mouse.x=e.clientX; mouse.y=e.clientY; });
+
+  // Pulse wave from random node every 2.8s
+  setInterval(function(){
+    if (!pts.length) return;
+    var p = pts[Math.floor(Math.random()*N)];
+    pulses.push({ x:p.x, y:p.y, r:0, max:65+Math.random()*55 });
+  }, 2800);
+
   function frame() {
     cx.clearRect(0, 0, W, H);
+
+    // Draw pulse rings
+    for (var i = pulses.length-1; i >= 0; i--) {
+      var pu = pulses[i]; pu.r += 1.2;
+      var lf = 1 - pu.r/pu.max;
+      if (lf <= 0) { pulses.splice(i,1); continue; }
+      cx.beginPath(); cx.arc(pu.x, pu.y, pu.r, 0, 6.2832);
+      cx.strokeStyle = 'rgba('+RGB+','+(lf*.2)+')';
+      cx.lineWidth = 1.1; cx.stroke();
+    }
+
+    // Update + draw particles
     for (var i = 0; i < N; i++) {
       var p = pts[i];
+      // Gentle mouse pull within 200px
+      var mdx = mouse.x-p.x, mdy = mouse.y-p.y, md = Math.sqrt(mdx*mdx+mdy*mdy);
+      if (md < 200 && md > 0) { p.vx += mdx/md*.007; p.vy += mdy/md*.007; }
+      // Speed cap
+      var spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+      if (spd > 1.2) { p.vx = p.vx/spd*1.2; p.vy = p.vy/spd*1.2; }
       p.x += p.vx; p.y += p.vy;
-      if (p.x < 0 || p.x > W) p.vx = -p.vx;
-      if (p.y < 0 || p.y > H) p.vy = -p.vy;
-      cx.beginPath();
-      cx.arc(p.x, p.y, 1.6, 0, 6.2832);
-      cx.fillStyle = 'rgba('+RGB+',.28)';
-      cx.fill();
+      if (p.x<0||p.x>W) p.vx=-p.vx;
+      if (p.y<0||p.y>H) p.vy=-p.vy;
+      cx.beginPath(); cx.arc(p.x, p.y, 1.7, 0, 6.2832);
+      cx.fillStyle = 'rgba('+RGB+',.3)'; cx.fill();
       for (var j = i+1; j < N; j++) {
-        var q = pts[j], dx = p.x-q.x, dy = p.y-q.y;
-        var d = Math.sqrt(dx*dx+dy*dy);
+        var q = pts[j], dx = p.x-q.x, dy = p.y-q.y, d = Math.sqrt(dx*dx+dy*dy);
         if (d < DIST) {
-          cx.beginPath();
-          cx.moveTo(p.x, p.y);
-          cx.lineTo(q.x, q.y);
-          cx.strokeStyle = 'rgba('+RGB+','+((1-d/DIST)*.11)+')';
-          cx.lineWidth = .8;
-          cx.stroke();
+          cx.beginPath(); cx.moveTo(p.x,p.y); cx.lineTo(q.x,q.y);
+          cx.strokeStyle = 'rgba('+RGB+','+((1-d/DIST)*.12)+')';
+          cx.lineWidth = .85; cx.stroke();
         }
       }
     }
@@ -824,5 +866,56 @@ statObs.observe(document.querySelector('.stats-wrap'));
   }
   resize(); init(); frame();
   window.addEventListener('resize', function(){ resize(); init(); });
+})();
+
+/* ── Stagger scroll animations ─────────────────────────────────────── */
+(function(){
+  function staggerIn(section, selectors, delay) {
+    var items = section.querySelectorAll(selectors);
+    setTimeout(function(){
+      items.forEach(function(el, i){ setTimeout(function(){ el.classList.add('sv'); }, i*55); });
+    }, delay || 120);
+  }
+
+  // Section headings
+  var shObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('sv'); shObs.unobserve(e.target); } });
+  }, { threshold:0.3 });
+  document.querySelectorAll('.sh').forEach(function(el){ shObs.observe(el); });
+
+  // About text
+  var aboutObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('sv'); aboutObs.unobserve(e.target); } });
+  }, { threshold:0.3 });
+  var ap = document.querySelector('.about-p');
+  if(ap) aboutObs.observe(ap);
+
+  // Section children
+  var secObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      secObs.unobserve(e.target);
+      var id = e.target.id;
+      if(id==='skills')     staggerIn(e.target, '.sk-cat,.chip', 140);
+      if(id==='projects')   staggerIn(e.target, '.pc', 140);
+      if(id==='certs')      staggerIn(e.target, '.cc', 140);
+      if(id==='experience') staggerIn(e.target, '.ei', 140);
+    });
+  }, { threshold:0.05 });
+  ['skills','projects','certs','experience'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) secObs.observe(el);
+  });
+
+  // Footer
+  var ftObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return; ftObs.unobserve(e.target);
+      setTimeout(function(){ e.target.querySelector('.fc').classList.add('sv'); }, 100);
+      setTimeout(function(){ e.target.querySelector('.fm').classList.add('sv'); }, 220);
+    });
+  }, { threshold:0.2 });
+  var ft = document.querySelector('footer');
+  if(ft) ftObs.observe(ft);
 })();
 </script>
