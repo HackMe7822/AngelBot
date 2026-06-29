@@ -31,10 +31,6 @@ body{
   font-family:var(--sans);
   font-size:15px;
   line-height:1.65;
-  background-image:
-    linear-gradient(rgba(14,165,233,.025) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(14,165,233,.025) 1px,transparent 1px);
-  background-size:44px 44px;
 }
 
 a{color:var(--ac);text-decoration:none}
@@ -360,6 +356,24 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 .fi-anim{opacity:0;transform:translateY(16px);transition:opacity .5s ease,transform .5s ease}
 .fi-anim.vis{opacity:1;transform:none}
 
+/* ─── Canvas background ──────────────────────────────────────────────── */
+#bgc{position:fixed;inset:0;z-index:0;pointer-events:none}
+.hero,.stats-wrap,.sec,footer{position:relative;z-index:1}
+
+/* ─── Clickable hero tags ────────────────────────────────────────────── */
+.tag.ct{cursor:pointer}
+.tag.ct:hover{border-color:var(--ac);color:var(--tx);background:rgba(14,165,233,.08)}
+
+/* ─── Hero entry animations ──────────────────────────────────────────── */
+@keyframes slideUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+@keyframes slideIn{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+.hero>div:first-child{animation:slideUp .75s cubic-bezier(.22,1,.36,1) both}
+.hero .term{animation:slideIn .75s .18s cubic-bezier(.22,1,.36,1) both}
+
+/* ─── Stat glow on count ─────────────────────────────────────────────── */
+@keyframes statPop{0%{opacity:0;transform:scale(.85)}60%{transform:scale(1.06)}100%{opacity:1;transform:scale(1)}}
+.sn.counting{animation:statPop .5s cubic-bezier(.22,1,.36,1) both}
+
 /* ─── Responsive ──────────────────────────────────────────────────────── */
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;min-height:auto;padding:56px 20px 60px;gap:44px}
@@ -377,6 +391,8 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
   .sn{font-size:30px}
 }
 </style>
+
+<canvas id="bgc"></canvas>
 
 <!-- ─── Nav ─────────────────────────────────────────────────────────── -->
 <nav>
@@ -399,8 +415,8 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
     <h1 class="name">Pulkit<br><em>Arora</em></h1>
     <p class="hero-sub">Azure &amp; Endpoint Specialist &mdash; securing<br>and automating enterprise IT at scale.</p>
     <div class="tags">
-      <span class="tag">AZ-104 Certified</span>
-      <span class="tag">MD-102 Certified</span>
+      <span class="tag ct" onclick="openCert('az104')">AZ-104 Certified</span>
+      <span class="tag ct" onclick="openCert('md102')">MD-102 Certified</span>
       <span class="tag">PowerShell &amp; Python</span>
       <span class="tag">Hyper-V &middot; VMware</span>
       <span class="tag">NinjaOne &middot; HaloPSA</span>
@@ -709,7 +725,8 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
 </div>
 
 <script>
-const CERTS = {
+/* ── Cert lightbox ─────────────────────────────────────────────────── */
+var CERTS = {
   az104:    { img:'images/cert-az104.jpg',    verify:'https://learn.microsoft.com/en-us/users/pulkitarora-8771/credentials/certification/azure-administrator?tab=credentials-tab' },
   md102:    { img:'images/cert-md102.jpg',    verify:'https://learn.microsoft.com/en-us/users/pulkitarora-8771/credentials/certification/modern-desktop?tab=credentials-tab' },
   ninja:    { img:'images/cert-ninja.jpg' },
@@ -717,26 +734,95 @@ const CERTS = {
   halopsa2: { img:'images/cert-halopsa2.jpg' },
   claude101:{ img:'images/cert-claude101.png' }
 };
-
 function openCert(key) {
   var c = CERTS[key];
   document.getElementById('lb-img').src = c.img;
   var v = document.getElementById('lb-verify');
-  if (c.verify) { v.href = c.verify; v.classList.add('show'); }
-  else { v.classList.remove('show'); }
+  if (c.verify) { v.href = c.verify; v.classList.add('show'); } else { v.classList.remove('show'); }
   document.getElementById('lb').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
-function closeLb() {
-  document.getElementById('lb').classList.remove('open');
-  document.body.style.overflow = '';
-}
+function closeLb() { document.getElementById('lb').classList.remove('open'); document.body.style.overflow = ''; }
 function lbBgClick(e) { if (e.target === document.getElementById('lb')) closeLb(); }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLb(); });
 
-const obs = new IntersectionObserver(
+/* ── Scroll fade-in ────────────────────────────────────────────────── */
+var obs = new IntersectionObserver(
   function(entries){ entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('vis'); obs.unobserve(e.target); } }); },
   { threshold: 0.07 }
 );
 document.querySelectorAll('.fi-anim').forEach(function(el){ obs.observe(el); });
+
+/* ── Stat counter animation ────────────────────────────────────────── */
+var statData = [
+  { to:5,  sfx:'<em>+</em>' },
+  { to:92, sfx:'<em>%</em>' },
+  { to:0,  sfx:'' },
+  { to:3,  sfx:'' }
+];
+var statEls = document.querySelectorAll('.sn');
+var statDone = false;
+var statObs = new IntersectionObserver(function(entries) {
+  if (!entries[0].isIntersecting || statDone) return;
+  statDone = true;
+  statEls.forEach(function(el, i) {
+    var d = statData[i]; if (!d || d.to === 0) return;
+    el.classList.add('counting');
+    var start = performance.now(), dur = 1300;
+    (function tick(now) {
+      var t = Math.min((now - start) / dur, 1);
+      var ease = 1 - Math.pow(1 - t, 3);
+      el.innerHTML = Math.round(ease * d.to) + d.sfx;
+      if (t < 1) requestAnimationFrame(tick);
+    })(performance.now());
+  });
+}, { threshold: 0.6 });
+statObs.observe(document.querySelector('.stats-wrap'));
+
+/* ── Particle network background ───────────────────────────────────── */
+(function() {
+  var C = document.getElementById('bgc');
+  var cx = C.getContext('2d');
+  var pts = [], W = 0, H = 0;
+  var N = 60, DIST = 155, RGB = '14,165,233';
+
+  function resize() {
+    W = C.width  = window.innerWidth;
+    H = C.height = window.innerHeight;
+  }
+  function init() {
+    pts = [];
+    for (var i = 0; i < N; i++) {
+      pts.push({ x: W * Math.random(), y: H * Math.random(), vx: (Math.random()-.5)*.38, vy: (Math.random()-.5)*.38 });
+    }
+  }
+  function frame() {
+    cx.clearRect(0, 0, W, H);
+    for (var i = 0; i < N; i++) {
+      var p = pts[i];
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx = -p.vx;
+      if (p.y < 0 || p.y > H) p.vy = -p.vy;
+      cx.beginPath();
+      cx.arc(p.x, p.y, 1.6, 0, 6.2832);
+      cx.fillStyle = 'rgba('+RGB+',.28)';
+      cx.fill();
+      for (var j = i+1; j < N; j++) {
+        var q = pts[j], dx = p.x-q.x, dy = p.y-q.y;
+        var d = Math.sqrt(dx*dx+dy*dy);
+        if (d < DIST) {
+          cx.beginPath();
+          cx.moveTo(p.x, p.y);
+          cx.lineTo(q.x, q.y);
+          cx.strokeStyle = 'rgba('+RGB+','+((1-d/DIST)*.11)+')';
+          cx.lineWidth = .8;
+          cx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  resize(); init(); frame();
+  window.addEventListener('resize', function(){ resize(); init(); });
+})();
 </script>
