@@ -867,23 +867,69 @@ statObs.observe(document.querySelector('.stats-wrap'));
   window.addEventListener('scroll', function() { scrollY = window.pageYOffset; });
 
   function drawMoon() {
-    var mx = W * 0.87, my = H * 0.11;
-    var mr = Math.min(W, H) * 0.055;
-    // Outer atmospheric glow
-    var g1 = cx.createRadialGradient(mx, my, mr * 0.4, mx, my, mr * 3.2);
-    g1.addColorStop(0, 'rgba(180,210,255,0.10)');
-    g1.addColorStop(1, 'rgba(180,210,255,0)');
-    cx.fillStyle = g1; cx.fillRect(mx - mr*4, my - mr*4, mr*8, mr*8);
-    // Moon disc
-    var g2 = cx.createRadialGradient(mx - mr*.25, my - mr*.2, mr*.05, mx, my, mr);
-    g2.addColorStop(0, 'rgba(225,238,255,0.22)');
-    g2.addColorStop(0.55, 'rgba(170,198,240,0.14)');
-    g2.addColorStop(1, 'rgba(80,110,180,0.04)');
+    var mx = W * 0.50, my = H * 0.44;
+    var mr = Math.min(W, H) * 0.24;
+
+    // Wide atmospheric corona
+    var corona = cx.createRadialGradient(mx, my, mr * 0.7, mx, my, mr * 4.0);
+    corona.addColorStop(0,   'rgba(160,200,255,0.10)');
+    corona.addColorStop(0.4, 'rgba(120,170,240,0.05)');
+    corona.addColorStop(1,   'rgba(80,130,210,0)');
+    cx.fillStyle = corona; cx.fillRect(0, 0, W, H);
+
+    // Moon surface base gradient (lit from upper-left)
+    var surf = cx.createRadialGradient(
+      mx - mr * 0.28, my - mr * 0.22, mr * 0.04,
+      mx, my, mr
+    );
+    surf.addColorStop(0,    'rgba(240,248,255,0.32)');
+    surf.addColorStop(0.25, 'rgba(215,232,255,0.26)');
+    surf.addColorStop(0.55, 'rgba(170,200,240,0.18)');
+    surf.addColorStop(0.80, 'rgba(110,150,210,0.11)');
+    surf.addColorStop(1,    'rgba(60,90,170,0.04)');
     cx.beginPath(); cx.arc(mx, my, mr, 0, 6.2832);
-    cx.fillStyle = g2; cx.fill();
-    // Crescent shadow
-    cx.beginPath(); cx.arc(mx + mr * .32, my - mr * .08, mr * .8, 0, 6.2832);
-    cx.fillStyle = 'rgba(3,7,26,0.30)'; cx.fill();
+    cx.fillStyle = surf; cx.fill();
+
+    // Craters — soft dark spots with radial gradients
+    var craters = [
+      { ox:-0.28, oy:-0.18, r:0.17, a:0.10 },
+      { ox: 0.18, oy: 0.28, r:0.13, a:0.08 },
+      { ox:-0.08, oy: 0.42, r:0.14, a:0.09 },
+      { ox: 0.38, oy:-0.12, r:0.10, a:0.07 },
+      { ox: 0.42, oy: 0.33, r:0.09, a:0.07 },
+      { ox:-0.44, oy: 0.20, r:0.10, a:0.06 },
+      { ox: 0.08, oy:-0.42, r:0.11, a:0.07 },
+      { ox:-0.18, oy:-0.48, r:0.08, a:0.05 },
+      { ox: 0.25, oy:-0.35, r:0.07, a:0.06 },
+      { ox:-0.38, oy:-0.35, r:0.09, a:0.05 }
+    ];
+    craters.forEach(function(cr) {
+      var cx_ = mx + cr.ox * mr, cy_ = my + cr.oy * mr, cr_ = cr.r * mr;
+      var cg = cx.createRadialGradient(cx_, cy_, 0, cx_, cy_, cr_);
+      cg.addColorStop(0,   'rgba(20,35,90,' + cr.a + ')');
+      cg.addColorStop(0.6, 'rgba(20,35,90,' + (cr.a * .4) + ')');
+      cg.addColorStop(1,   'rgba(20,35,90,0)');
+      cx.beginPath(); cx.arc(cx_, cy_, cr_, 0, 6.2832);
+      cx.fillStyle = cg; cx.fill();
+    });
+
+    // Dark-side crescent shadow (clipped to moon disc)
+    cx.save();
+    cx.beginPath(); cx.arc(mx, my, mr, 0, 6.2832); cx.clip();
+    var shad = cx.createRadialGradient(mx + mr * .42, my, mr * .15, mx + mr * .42, my, mr * 1.05);
+    shad.addColorStop(0,   'rgba(3,6,22,0.72)');
+    shad.addColorStop(0.5, 'rgba(3,6,22,0.45)');
+    shad.addColorStop(1,   'rgba(3,6,22,0)');
+    cx.fillStyle = shad; cx.fillRect(0, 0, W, H);
+    cx.restore();
+
+    // Lit-edge rim highlight
+    var rim = cx.createRadialGradient(mx - mr*.9, my, mr*.05, mx, my, mr);
+    rim.addColorStop(0.82, 'rgba(255,255,255,0)');
+    rim.addColorStop(0.92, 'rgba(220,235,255,0.16)');
+    rim.addColorStop(1,    'rgba(200,220,255,0)');
+    cx.beginPath(); cx.arc(mx, my, mr, 0, 6.2832);
+    cx.fillStyle = rim; cx.fill();
   }
 
   function frame() {
