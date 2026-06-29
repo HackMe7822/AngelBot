@@ -843,16 +843,7 @@ statObs.observe(document.querySelector('.stats-wrap'));
 
   // Centre planet config (radius set in resize)
   var CP = { r:0 };
-
-  // Animated bands for the centre planet [yFrac, heightFrac, colorRGB, speed]
-  var CBANDS = [
-    [-0.82,0.13,'232,168,82', 0.024], [-0.64,0.11,'148,88,30', -0.019],
-    [-0.48,0.15,'245,188,92', 0.028], [-0.30,0.12,'138,78,24', -0.016],
-    [-0.14,0.16,'238,172,78', 0.022], [ 0.04,0.12,'155,92,32', -0.020],
-    [ 0.19,0.15,'248,195,95', 0.026], [ 0.36,0.11,'142,82,26', -0.018],
-    [ 0.51,0.14,'228,162,75', 0.023], [ 0.68,0.12,'135,75,22', -0.015],
-    [ 0.82,0.13,'240,180,85', 0.021]
-  ];
+  var cpImg = new Image(); cpImg.src = 'images/planet-jupiter.jpg';
 
   var shoots = [];
 
@@ -889,73 +880,51 @@ statObs.observe(document.querySelector('.stats-wrap'));
 
   window.addEventListener('scroll', function(){ scrollY = window.pageYOffset; });
 
-  // ── Centre planet: animated rotating-band gas giant ─────────────────
+  // ── Centre planet: real Jupiter photo with slow rotation ────────────
   function drawCentrePlanet(t) {
     var px = W * 0.50, py = H * 0.44, r = CP.r;
     if (r <= 0) return;
 
-    // Clip all band drawing inside the sphere
+    // Outer amber atmosphere glow behind the planet
+    var ag = cx.createRadialGradient(px, py, r*0.88, px, py, r*1.14);
+    ag.addColorStop(0,  'rgba(235,160,60,0.18)');
+    ag.addColorStop(0.6,'rgba(235,140,40,0.06)');
+    ag.addColorStop(1,  'rgba(235,140,40,0)');
+    cx.beginPath(); cx.arc(px, py, r*1.14, 0, TAU); cx.fillStyle = ag; cx.fill();
+
     cx.save();
+    // Clip drawing to sphere boundary
     cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.clip();
 
-    // Base sphere gradient
-    var bg = cx.createRadialGradient(px-r*0.28, py-r*0.28, r*0.06, px, py, r);
-    bg.addColorStop(0,   'rgba(255,230,170,0.32)');
-    bg.addColorStop(0.20,'rgba(215,148,62,0.30)');
-    bg.addColorStop(0.70,'rgba(155,88,28,0.28)');
-    bg.addColorStop(1,   'rgba(80,38,10,0.26)');
-    cx.fillStyle = bg; cx.fillRect(px-r, py-r, r*2, r*2);
+    if (cpImg.complete && cpImg.naturalWidth > 0) {
+      // Slow axial rotation — full turn every ~14 minutes
+      cx.translate(px, py);
+      cx.rotate(t * 0.0075);
+      cx.translate(-px, -py);
 
-    // Animated wavy bands — each band scrolls at its own speed
-    CBANDS.forEach(function(b) {
-      var byC = py + b[0]*r, bh = b[1]*r, rgb = b[2], spd = b[3];
-      var phase = t * spd * 55;
-      var step = 5;
-      cx.beginPath();
-      var x0 = px - r - step;
-      cx.moveTo(x0, byC - bh*0.5 + Math.sin(x0*0.028 + phase)*r*0.016);
-      for (var bx = x0+step; bx <= px+r+step; bx += step) {
-        cx.lineTo(bx, byC - bh*0.5 + Math.sin(bx*0.028 + phase)*r*0.016);
-      }
-      for (var bx2 = px+r; bx2 >= x0; bx2 -= step) {
-        cx.lineTo(bx2, byC + bh*0.5 + Math.sin(bx2*0.028 + phase + 1.0)*r*0.016);
-      }
-      cx.closePath();
-      cx.fillStyle = 'rgba('+rgb+',0.44)'; cx.fill();
-    });
-
-    // Great Storm Spot — slowly orbits horizontally
-    var sx = px + Math.cos(t*0.055)*r*0.28;
-    var sy = py - r*0.07;
-    var stg = cx.createRadialGradient(sx, sy, 0, sx, sy, r*0.115);
-    stg.addColorStop(0,   'rgba(245,95,55,0.85)');
-    stg.addColorStop(0.45,'rgba(205,65,28,0.65)');
-    stg.addColorStop(1,   'rgba(185,45,15,0)');
-    cx.fillStyle = stg;
-    cx.beginPath(); cx.ellipse(sx, sy, r*0.115, r*0.068, 0.28, 0, TAU); cx.fill();
-
-    // Subtle polar darkening (top/bottom)
-    var pd = cx.createLinearGradient(px, py-r, px, py+r);
-    pd.addColorStop(0,   'rgba(8,12,30,0.38)');
-    pd.addColorStop(0.18,'rgba(8,12,30,0)');
-    pd.addColorStop(0.82,'rgba(8,12,30,0)');
-    pd.addColorStop(1,   'rgba(8,12,30,0.38)');
-    cx.fillStyle = pd; cx.fillRect(px-r, py-r, r*2, r*2);
+      // Scale image to fill circle with 15% extra so rotation never exposes edges
+      var iw = cpImg.naturalWidth, ih = cpImg.naturalHeight;
+      var scale = (r * 2.3) / Math.min(iw, ih);
+      var dw = iw * scale, dh = ih * scale;
+      cx.drawImage(cpImg, px - dw*0.5, py - dh*0.5, dw, dh);
+    } else {
+      // Fallback warm sphere while image loads
+      var bg = cx.createRadialGradient(px-r*0.25, py-r*0.25, r*0.05, px, py, r);
+      bg.addColorStop(0,   'rgba(255,230,170,0.60)');
+      bg.addColorStop(0.45,'rgba(210,140,55,0.80)');
+      bg.addColorStop(1,   'rgba(90,42,12,0.90)');
+      cx.fillStyle = bg; cx.fillRect(px-r, py-r, r*2, r*2);
+    }
 
     cx.restore(); // release sphere clip
 
-    // Limb darkening — drawn on full circle outside clip
-    var ld = cx.createRadialGradient(px, py, r*0.50, px, py, r);
+    // Limb darkening overlay — deepens edges to give 3-D sphere depth
+    var ld = cx.createRadialGradient(px, py, r*0.45, px, py, r);
     ld.addColorStop(0,    'rgba(0,0,0,0)');
-    ld.addColorStop(0.68, 'rgba(0,0,0,0.10)');
-    ld.addColorStop(1,    'rgba(0,0,0,0.72)');
+    ld.addColorStop(0.62, 'rgba(0,0,0,0.06)');
+    ld.addColorStop(0.88, 'rgba(0,0,0,0.40)');
+    ld.addColorStop(1,    'rgba(0,0,0,0.82)');
     cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.fillStyle = ld; cx.fill();
-
-    // Outer atmosphere glow
-    var ag = cx.createRadialGradient(px, py, r*0.94, px, py, r*1.08);
-    ag.addColorStop(0,  'rgba(235,165,70,0.12)');
-    ag.addColorStop(1,  'rgba(235,165,70,0)');
-    cx.beginPath(); cx.arc(px, py, r*1.08, 0, TAU); cx.fillStyle = ag; cx.fill();
   }
 
   // ── Edge planet helpers ──────────────────────────────────────────────
