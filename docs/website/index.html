@@ -409,10 +409,32 @@ footer{border-top:1px solid var(--bd);background:var(--bg1)}
   .sec{padding:56px 20px}
   .nav-i{padding:13px 20px}
   h1.name{font-size:clamp(38px,10vw,56px)}
+  /* grid columns: prevent overflow on tablet */
+  .proj-grid{grid-template-columns:1fr}
+  .cert-grid{grid-template-columns:repeat(2,1fr)}
+  /* terminal wraps on small screens */
+  .tl{flex-wrap:wrap;row-gap:1px}
+  .tk{min-width:70px}
+  .svc-n{min-width:0;flex:1}
+  /* nav link row wraps gracefully */
+  .nav-r{gap:14px;flex-wrap:wrap}
 }
 @media(max-width:480px){
   .stats{grid-template-columns:1fr 1fr;padding:0 16px}
   .sn{font-size:30px}
+  .cert-grid{grid-template-columns:1fr}
+  .proj-grid{grid-template-columns:1fr}
+  .hero-sub{font-size:15px}
+  /* smaller nav so it fits on one row */
+  .nav-r a{font-size:12px}
+  .nav-r{gap:10px}
+  .avail{font-size:10px;padding:3px 8px}
+  /* terminal smaller font on phone */
+  .term-bd{padding:14px 14px 18px;font-size:12px}
+  .svc-n{font-size:11px}
+  .tk{min-width:58px;font-size:12px}
+  /* skill chips wrap smaller */
+  .sk-grid{grid-template-columns:1fr}
 }
 </style>
 
@@ -773,7 +795,7 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLb()
 /* ── Scroll fade-in ────────────────────────────────────────────────── */
 var obs = new IntersectionObserver(
   function(entries){ entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('vis'); obs.unobserve(e.target); } }); },
-  { threshold: 0.07 }
+  { threshold: 0.01 }
 );
 document.querySelectorAll('.fi-anim').forEach(function(el){ obs.observe(el); });
 
@@ -841,20 +863,16 @@ statObs.observe(document.querySelector('.stats-wrap'));
       tilt:-0.18, alpha:0.42, vx:-0.000009, vy:-0.000011 }
   ];
 
-  // Centre planet config (radius set in resize)
-  var CP = { r:0 };
-  var cpImg = new Image(); cpImg.src = 'images/planet-jupiter.jpg';
-
+  var mwStars = [];
   var shoots = [];
 
   function resize() {
     W = C.width = window.innerWidth;
     H = C.height = window.innerHeight;
     var base = Math.min(W, H);
-    PLANETS[0].r = base * 0.120;
-    PLANETS[1].r = base * 0.088;
-    PLANETS[2].r = base * 0.065;
-    CP.r = base * 0.175; // big centre planet
+    PLANETS[0].r = base * 0.145;
+    PLANETS[1].r = base * 0.105;
+    PLANETS[2].r = base * 0.082;
   }
 
   function init() {
@@ -867,6 +885,28 @@ statObs.observe(document.querySelector('.stats-wrap'));
           tw:Math.random()*TAU, ts:0.008+Math.random()*0.022 });
       }
     });
+    initMWStars();
+  }
+
+  function initMWStars() {
+    mwStars = [];
+    var ang = -0.35, cosA = Math.cos(ang), sinA = Math.sin(ang);
+    var diagLen = Math.sqrt(W*W + H*H);
+    var cx0 = W * 0.5, cy0 = H * 0.52;
+    for (var i = 0; i < 620; i++) {
+      var along = (Math.random() - 0.5) * diagLen * 1.5;
+      var u1 = Math.max(Math.random(), 0.001);
+      var gauss = Math.sqrt(-2 * Math.log(u1)) * Math.cos(TAU * Math.random());
+      var across = gauss * H * 0.095;
+      mwStars.push({
+        x: cx0 + along * cosA - across * sinA,
+        y: cy0 + along * sinA + across * cosA,
+        r: 0.15 + Math.random() * 0.68,
+        a: 0.10 + Math.random() * 0.46,
+        tw: Math.random() * TAU,
+        ts: 0.004 + Math.random() * 0.009
+      });
+    }
   }
 
   (function schedShoot() {
@@ -880,49 +920,45 @@ statObs.observe(document.querySelector('.stats-wrap'));
 
   window.addEventListener('scroll', function(){ scrollY = window.pageYOffset; });
 
-  // ── Centre planet: real Jupiter photo with slow rotation ────────────
-  function drawCentrePlanet(t) {
-    var px = W * 0.50, py = H * 0.44, r = CP.r;
-    if (r <= 0) return;
-
-    // Outer amber atmosphere glow behind the planet
-    var ag = cx.createRadialGradient(px, py, r*0.88, px, py, r*1.14);
-    ag.addColorStop(0,  'rgba(235,160,60,0.18)');
-    ag.addColorStop(0.6,'rgba(235,140,40,0.06)');
-    ag.addColorStop(1,  'rgba(235,140,40,0)');
-    cx.beginPath(); cx.arc(px, py, r*1.14, 0, TAU); cx.fillStyle = ag; cx.fill();
-
+  // ── Milky Way haze band ──────────────────────────────────────────────
+  function drawMilkyWay() {
     cx.save();
-    // Clip drawing to sphere boundary
-    cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.clip();
+    cx.translate(W * 0.5, H * 0.52);
+    cx.rotate(-0.35);
+    var D = Math.sqrt(W * W + H * H);
 
-    if (cpImg.complete && cpImg.naturalWidth > 0) {
-      var iw = cpImg.naturalWidth, ih = cpImg.naturalHeight;
-      // Scale so image height fills circle diameter (with breathing room)
-      var scale = (r * 2.25) / ih;
-      var dw = iw * scale, dh = ih * scale;
-      // Horizontal scroll — bands drift left like real Jovian atmospheric rotation
-      var offset = (t * 28) % dw;
-      cx.drawImage(cpImg, px - dw*0.5 - offset,      py - dh*0.5, dw, dh);
-      cx.drawImage(cpImg, px - dw*0.5 - offset + dw, py - dh*0.5, dw, dh);
-    } else {
-      // Fallback warm sphere while image loads
-      var bg = cx.createRadialGradient(px-r*0.25, py-r*0.25, r*0.05, px, py, r);
-      bg.addColorStop(0,   'rgba(255,230,170,0.60)');
-      bg.addColorStop(0.45,'rgba(210,140,55,0.80)');
-      bg.addColorStop(1,   'rgba(90,42,12,0.90)');
-      cx.fillStyle = bg; cx.fillRect(px-r, py-r, r*2, r*2);
-    }
+    // Wide outer haze — cool blue-white galactic dust
+    var band = cx.createLinearGradient(0, -H * 0.50, 0, H * 0.50);
+    band.addColorStop(0,    'rgba(0,0,0,0)');
+    band.addColorStop(0.26, 'rgba(75,100,168,0.04)');
+    band.addColorStop(0.42, 'rgba(115,140,200,0.09)');
+    band.addColorStop(0.50, 'rgba(148,165,218,0.14)');
+    band.addColorStop(0.58, 'rgba(115,140,200,0.09)');
+    band.addColorStop(0.74, 'rgba(75,100,168,0.04)');
+    band.addColorStop(1,    'rgba(0,0,0,0)');
+    cx.fillStyle = band;
+    cx.fillRect(-D, -H * 0.50, D * 2, H);
 
-    cx.restore(); // release sphere clip
+    // Galactic core — warm amber glow offset toward one end
+    var core = cx.createRadialGradient(D * 0.12, H * 0.04, 0, D * 0.12, H * 0.04, H * 0.40);
+    core.addColorStop(0,    'rgba(255,235,155,0.22)');
+    core.addColorStop(0.22, 'rgba(220,190,120,0.14)');
+    core.addColorStop(0.55, 'rgba(165,130,82,0.06)');
+    core.addColorStop(1,    'rgba(0,0,0,0)');
+    cx.fillStyle = core;
+    cx.fillRect(-D, -H * 0.50, D * 2, H);
 
-    // Limb darkening overlay — deepens edges to give 3-D sphere depth
-    var ld = cx.createRadialGradient(px, py, r*0.45, px, py, r);
-    ld.addColorStop(0,    'rgba(0,0,0,0)');
-    ld.addColorStop(0.62, 'rgba(0,0,0,0.06)');
-    ld.addColorStop(0.88, 'rgba(0,0,0,0.40)');
-    ld.addColorStop(1,    'rgba(0,0,0,0.82)');
-    cx.beginPath(); cx.arc(px, py, r, 0, TAU); cx.fillStyle = ld; cx.fill();
+    // Narrow bright spine running through center
+    var spine = cx.createLinearGradient(0, -H * 0.06, 0, H * 0.06);
+    spine.addColorStop(0,   'rgba(0,0,0,0)');
+    spine.addColorStop(0.42,'rgba(190,200,230,0.06)');
+    spine.addColorStop(0.50,'rgba(210,215,240,0.11)');
+    spine.addColorStop(0.58,'rgba(190,200,230,0.06)');
+    spine.addColorStop(1,   'rgba(0,0,0,0)');
+    cx.fillStyle = spine;
+    cx.fillRect(-D, -H * 0.06, D * 2, H * 0.12);
+
+    cx.restore();
   }
 
   // ── Edge planet helpers ──────────────────────────────────────────────
@@ -990,8 +1026,14 @@ statObs.observe(document.querySelector('.stats-wrap'));
       cx.fillStyle=g; cx.fillRect(0,0,W,H);
     });
 
-    // Centre planet (drawn first — behind stars and edge planets)
-    drawCentrePlanet(t);
+    // Milky Way haze + dense dim stars along the band
+    drawMilkyWay();
+    mwStars.forEach(function(s) {
+      s.tw += s.ts;
+      var al = s.a * (0.48 + 0.52 * Math.sin(s.tw));
+      cx.beginPath(); cx.arc(s.x, s.y, s.r, 0, TAU);
+      cx.fillStyle = 'rgba(205,215,245,' + al + ')'; cx.fill();
+    });
 
     PLANETS.forEach(function(p) {
       p.px+=p.vx; p.py+=p.vy;
@@ -1063,13 +1105,13 @@ statObs.observe(document.querySelector('.stats-wrap'));
   // Section headings
   var shObs = new IntersectionObserver(function(entries){
     entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('sv'); shObs.unobserve(e.target); } });
-  }, { threshold:0.3 });
+  }, { threshold:0.05 });
   document.querySelectorAll('.sh').forEach(function(el){ shObs.observe(el); });
 
   // About text
   var aboutObs = new IntersectionObserver(function(entries){
     entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('sv'); aboutObs.unobserve(e.target); } });
-  }, { threshold:0.3 });
+  }, { threshold:0.05 });
   var ap = document.querySelector('.about-p');
   if(ap) aboutObs.observe(ap);
 
