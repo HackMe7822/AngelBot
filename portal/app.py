@@ -267,13 +267,15 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
         )
         trades, day_pnl, wins = c.fetchone()
 
-        # All-time totals (always, regardless of filter)
+        # All-time totals (always, regardless of filter) — include profit/loss split
         c.execute(
             f"SELECT COALESCE(SUM(pnl),0), COUNT(*), "
-            f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) FROM trades "
+            f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0), "
+            f"COALESCE(SUM(CASE WHEN pnl>0 THEN pnl ELSE 0 END),0), "
+            f"COALESCE(SUM(CASE WHEN pnl<0 THEN pnl ELSE 0 END),0) FROM trades "
             f"WHERE status='closed' AND {source_clause}"
         )
-        total_pnl, total_trades, total_wins = c.fetchone()
+        total_pnl, total_trades, total_wins, total_profit, total_loss = c.fetchone()
 
         c.execute(f"SELECT COUNT(*) FROM trades WHERE status='open' AND {source_clause}")
         open_pos = c.fetchone()[0]
@@ -284,6 +286,8 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
             "today_wins": wins or 0, "today_losses": (trades or 0) - (wins or 0),
             "open_positions": open_pos, "total_pnl": round(total_pnl or 0, dec),
             "total_trades": total_trades or 0, "total_wins": total_wins or 0,
+            "total_profit": round(total_profit or 0, dec),
+            "total_loss":   round(total_loss   or 0, dec),
             "deployed": round(deployed, dec),
             "currency": cur_sym,
         }

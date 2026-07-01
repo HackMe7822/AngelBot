@@ -2558,7 +2558,9 @@ function _buildPositionsTable(positions) {
   updateSortIcons('pos');
 }
 
-function _refreshPositionPrices(positions) {
+var _lastDashData = null;
+
+function _refreshPositionPrices(positions, dashData) {
   fetchLivePrices(positions, function(prices, normed) {
     var totalUpnl = 0, totalCapital = 0, priced = 0;
     (normed || d.positions).forEach(function(p) {
@@ -2609,19 +2611,50 @@ function _refreshPositionPrices(positions) {
         (upnl >= 0 ? '▲ +' : '▼ ') + cur + Math.abs(upnl).toFixed(2) +
         ' <span style="opacity:.75">(' + (upnlPct >= 0 ? '+' : '') + upnlPct.toFixed(1) + '%)</span></span>';
     });
-    // Update summary bar
+    // ── P&L summary bar ──────────────────────────────────────────────────
     var sumEl = document.getElementById('pos-summary');
-    if (sumEl && priced > 0) {
-      var pnlCls  = totalUpnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-      var pnlSign = totalUpnl >= 0 ? '+' : '';
-      var pnlPct  = totalCapital > 0 ? (totalUpnl / totalCapital * 100) : 0;
+    if (sumEl) {
+      var market  = (document.getElementById('pos-market-filter') || {}).value || '';
+      var cur     = (market === 'us' || market === 'crypto') ? '$' : '&#8377;';
+      var dp      = market === 'crypto' ? 4 : 2;
+
+      // Realized profit / loss from cached dashboard data
+      var totalProfit = 0, totalLoss = 0;
+      var dd = dashData || _lastDashData;
+      if (dd) {
+        var mkts = market ? [market] : ['india', 'us', 'crypto'];
+        mkts.forEach(function(m) {
+          if (dd[m]) { totalProfit += dd[m].total_profit || 0; totalLoss += dd[m].total_loss || 0; }
+        });
+      }
+
+      var upnlCls  = totalUpnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      var upnlSign = totalUpnl >= 0 ? '+' : '';
+      var upnlPct  = totalCapital > 0 ? (totalUpnl / totalCapital * 100) : 0;
+      var netPnl   = totalProfit + totalLoss + totalUpnl;
+      var netCls   = netPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      var netSign  = netPnl >= 0 ? '+' : '';
+
+      function metricBox(label, valueHtml, borderRight) {
+        return '<div style="flex:1;min-width:130px;padding:6px 16px;' + (borderRight ? 'border-right:1px solid var(--border);' : '') + '">' +
+          '<div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">' + label + '</div>' +
+          '<div style="font-size:17px;font-weight:700;line-height:1.2">' + valueHtml + '</div>' +
+          '</div>';
+      }
+
       sumEl.innerHTML =
-        '<div class="card" style="padding:10px 16px; display:flex; gap:24px; flex-wrap:wrap; align-items:center; flex:1;">' +
-        '<span style="color:var(--muted);font-size:12px">Open Positions: <strong style="color:var(--text)">' + positions.length + '</strong></span>' +
-        '<span style="color:var(--muted);font-size:12px">Capital Deployed: <strong style="color:var(--text)">&#8377;' + totalCapital.toFixed(2) + '</strong></span>' +
-        '<span style="font-size:13px;font-weight:600">P&amp;L Total: <span class="' + pnlCls + '">' +
-          pnlSign + '&#8377;' + Math.abs(totalUpnl).toFixed(2) + ' (' + pnlSign + pnlPct.toFixed(2) + '%)</span></span>' +
-        '<span style="color:var(--muted);font-size:11px">(' + priced + '/' + positions.length + ' priced)</span>' +
+        '<div class="card" style="padding:10px 0;display:flex;flex-wrap:wrap;align-items:stretch;width:100%;overflow:hidden;">' +
+        metricBox('Total Profit',
+          '<span class="pnl-pos">+' + cur + totalProfit.toFixed(dp) + '</span>', true) +
+        metricBox('Total Loss',
+          '<span class="pnl-neg">' + cur + totalLoss.toFixed(dp) + '</span>', true) +
+        metricBox('Unrealised P&amp;L',
+          '<span class="' + upnlCls + '">' + upnlSign + cur + Math.abs(totalUpnl).toFixed(dp) +
+          ' <span style="font-size:12px;opacity:.75">(' + upnlSign + upnlPct.toFixed(1) + '%)</span></span>', true) +
+        metricBox('Net P&amp;L',
+          '<span class="' + netCls + '">' + netSign + cur + Math.abs(netPnl).toFixed(dp) + '</span>', false) +
+        '<div style="padding:6px 14px;display:flex;align-items:flex-end;flex-shrink:0;">' +
+        '<span style="color:var(--muted);font-size:10px">' + positions.length + ' open &middot; ' + priced + ' priced</span></div>' +
         '</div>';
     }
   });
@@ -2663,7 +2696,11 @@ async function loadPositions() {
     // Positions unchanged — update our cached copy in case prices changed (no table rebuild)
     _posCache.positions = d.positions;
   }
-  _refreshPositionPrices(_posCache.positions);
+  // Fetch dashboard once for realized P&L — fire in background, don't block table render
+  apiFetch('/api/dashboard').then(function(r) {
+    if (r) r.json().then(function(d) { _lastDashData = d; });
+  });
+  _refreshPositionPrices(_posCache.positions, _lastDashData);
 }
 
 async function forceSell(id, symbol) {
