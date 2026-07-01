@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+_inst_dir = os.getenv('ANGELBOT_INSTANCE_DIR', '')
+if _inst_dir:
+    load_dotenv(os.path.join(_inst_dir, '.env'), override=True)
+else:
+    load_dotenv()
 
 ANGEL_API_KEY     = os.getenv("ANGEL_API_KEY")
 ANGEL_SECRET      = os.getenv("ANGEL_SECRET")

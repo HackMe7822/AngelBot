@@ -155,7 +155,7 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # ── HTML UI — serve index.html for root and all SPA page routes ──────────────
 _SPA_PAGES = {
     'dashboard', 'positions', 'trades', 'leaderboard',
-    'settings', 'apikeys', 'users', 'logs', 'monitor', 'symbols', 'help',
+    'settings', 'apikeys', 'users', 'logs', 'monitor', 'symbols', 'help', 'portals',
 }
 
 @app.get("/", response_class=HTMLResponse)
@@ -1029,7 +1029,134 @@ def change_password(body: PasswordChange, user: str = Depends(require_auth)):
     return {"ok": True, "message": "Credentials updated. Re-login with your new password."}
 
 
+# ── Portal instance management ────────────────────────────────────────────────
+@app.get("/api/instances/next-port")
+def get_next_port(user: str = Depends(require_auth)):
+    _require_admin(user)
+    return {"port": _next_available_port()}
+
+
+@app.get("/api/instances")
+def list_instances(user: str = Depends(require_auth)):
+    _require_admin(user)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT id,name,db_name,port,instance_dir,status,created_at FROM portal_instances ORDER BY id")
+    cols = ['id','name','db_name','port','instance_dir','status','created_at']
+    rows = [dict(zip(cols, r)) for r in c.fetchall()]
+    conn.close()
+    for row in rows:
+        n = row['name']
+        svcs = [f'AngelBot-India-{n}', f'AngelBot-US-{n}',
+                f'AngelBot-Crypto-{n}', f'AngelBot-Portal-{n}']
+        statuses = [_sc_status(s) for s in svcs]
+        row['services'] = dict(zip(['india','us','crypto','portal'], statuses))
+        row['running']  = statuses.count('running')
+    return {"instances": rows}
+
+
+@app.post("/api/instances")
+def create_instance(body: NewInstance, user: str = Depends(require_auth)):
+    _require_admin(user)
+    safe = _re.sub(r'[^A-Za-z0-9_-]', '', body.name.strip().lower())[:30]
+    if not safe:
+        raise HTTPException(400, "Invalid instance name — use letters/numbers only.")
+    if len(body.admin_password) < 8:
+        raise HTTPException(400, "Admin password must be at least 8 characters.")
+    if not (1024 <= body.port <= 65535):
+        raise HTTPException(400, "Port must be 1024–65535.")
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT 1 FROM portal_instances WHERE name=? OR port=?", (safe, body.port))
+    if c.fetchone():
+        conn.close()
+        raise HTTPException(400, "Instance name or port already in use.")
+    conn.close()
+    try:
+        inst_dir = _provision_instance(safe, body.port, body.admin_password,
+                                       body.capital_india, body.capital_us, body.capital_crypto)
+    except Exception as e:
+        raise HTTPException(500, f"Provisioning failed: {e}")
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute(
+        "INSERT INTO portal_instances (name,db_name,port,instance_dir,status,created_at) "
+        "VALUES (?,?,?,?,?,?)",
+        (safe, f"angelbot_{safe}", body.port, str(inst_dir), 'stopped',
+         datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "name": safe, "port": body.port,
+            "message": f"Portal '{safe}' created on port {body.port}. Click Start to launch it."}
+
+
+@app.post("/api/instances/{name}/start")
+def start_instance(name: str, user: str = Depends(require_auth)):
+    _require_admin(user)
+    safe = _re.sub(r'[^A-Za-z0-9_-]', '', name)[:30]
+    results = {}
+    for label, svc in [('india',  f'AngelBot-India-{safe}'),
+                       ('us',     f'AngelBot-US-{safe}'),
+                       ('crypto', f'AngelBot-Crypto-{safe}'),
+                       ('portal', f'AngelBot-Portal-{safe}')]:
+        try:
+            r = subprocess.run([_NSSM, 'start', svc], capture_output=True, timeout=30)
+            results[label] = 'started' if r.returncode in (0, 1) else 'error'
+        except Exception:
+            results[label] = 'error'
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("UPDATE portal_instances SET status='running' WHERE name=?", (safe,))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "services": results}
+
+
+@app.post("/api/instances/{name}/stop")
+def stop_instance(name: str, user: str = Depends(require_auth)):
+    _require_admin(user)
+    safe = _re.sub(r'[^A-Za-z0-9_-]', '', name)[:30]
+    for svc in [f'AngelBot-India-{safe}', f'AngelBot-US-{safe}',
+                f'AngelBot-Crypto-{safe}', f'AngelBot-Portal-{safe}']:
+        try:
+            subprocess.run([_NSSM, 'stop', svc], capture_output=True, timeout=20)
+        except Exception:
+            pass
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("UPDATE portal_instances SET status='stopped' WHERE name=?", (safe,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/instances/{name}")
+def delete_instance(name: str, user: str = Depends(require_auth)):
+    _require_admin(user)
+    safe = _re.sub(r'[^A-Za-z0-9_-]', '', name)[:30]
+    try:
+        _remove_instance(safe)
+    except Exception:
+        pass
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("DELETE FROM portal_instances WHERE name=?", (safe,))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "message": f"Instance '{safe}' removed."}
+
+
 # ── User management ───────────────────────────────────────────────────────────
+class NewInstance(BaseModel):
+    name: str
+    port: int
+    admin_password: str
+    capital_india: float = 100000
+    capital_us: float = 5000
+    capital_crypto: float = 1000
+
+
 class NewUser(BaseModel):
     username: str
     password: str
@@ -1425,6 +1552,103 @@ def _set_user_paused(uid: int, paused: bool):
             flag.touch()
         elif flag.exists():
             flag.unlink()
+
+
+_INSTANCES_DIR = _BOT_DIR / 'instances'
+
+
+def _next_available_port() -> int:
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT port FROM portal_instances")
+    used = {row[0] for row in c.fetchall()}
+    conn.close()
+    port = 8081
+    while port in used or port == 8080:
+        port += 1
+    return port
+
+
+def _provision_instance(name: str, port: int, admin_password: str,
+                        capital_india: float, capital_us: float, capital_crypto: float) -> Path:
+    import shutil
+    inst_dir = _INSTANCES_DIR / name
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / 'logs').mkdir(exist_ok=True)
+    (inst_dir / 'data').mkdir(exist_ok=True)
+
+    db_name  = f"angelbot_{name}"
+    sql_pass = os.getenv("SQL_SA_PASS", "")
+
+    env_text = (
+        f"ANGELBOT_DB={db_name}\n"
+        f"SQL_SA_PASS={sql_pass}\n"
+        f"PORTAL_PORT={port}\n"
+        f"PORTAL_PASS={admin_password}\n"
+        f"PAPER_MODE=true\n"
+        f"ALPACA_PAPER=true\n"
+        f"BINANCE_PAPER=true\n"
+        f"INDIA_CAPITAL={capital_india}\n"
+        f"US_CAPITAL={capital_us}\n"
+        f"CRYPTO_CAPITAL={capital_crypto}\n"
+    )
+    (inst_dir / '.env').write_text(env_text, encoding='utf-8')
+
+    env_for_init = {**os.environ,
+                    'ANGELBOT_INSTANCE_DIR': str(inst_dir),
+                    'ANGELBOT_DB': db_name}
+    subprocess.run([sys.executable, '-m', 'data.database'],
+                   cwd=str(_BOT_DIR), env=env_for_init,
+                   capture_output=True, timeout=60)
+
+    nssm_env = f'ANGELBOT_INSTANCE_DIR={inst_dir}\nANGELBOT_DB={db_name}'
+    for svc_name, script in [
+        (f'AngelBot-India-{name}',  'india_worker.py'),
+        (f'AngelBot-US-{name}',     'us_worker.py'),
+        (f'AngelBot-Crypto-{name}', 'crypto_worker.py'),
+    ]:
+        try:
+            subprocess.run([_NSSM, 'install', svc_name, _BOT_PYTHON, str(_BOT_DIR / script)],
+                           capture_output=True, timeout=30)
+            subprocess.run([_NSSM, 'set', svc_name, 'AppDirectory', str(_BOT_DIR)],
+                           capture_output=True, timeout=15)
+            subprocess.run([_NSSM, 'set', svc_name, 'AppEnvironmentExtra', nssm_env],
+                           capture_output=True, timeout=15)
+            subprocess.run(['sc', 'config', svc_name, 'start=', 'demand'],
+                           capture_output=True, timeout=15)
+        except Exception:
+            pass
+
+    portal_svc = f'AngelBot-Portal-{name}'
+    portal_args = ['-m', 'uvicorn', 'portal.app:app', '--host', '0.0.0.0', '--port', str(port)]
+    try:
+        subprocess.run([_NSSM, 'install', portal_svc, _BOT_PYTHON] + portal_args,
+                       capture_output=True, timeout=30)
+        subprocess.run([_NSSM, 'set', portal_svc, 'AppDirectory', str(_BOT_DIR)],
+                       capture_output=True, timeout=15)
+        subprocess.run([_NSSM, 'set', portal_svc, 'AppEnvironmentExtra', nssm_env],
+                       capture_output=True, timeout=15)
+        subprocess.run(['sc', 'config', portal_svc, 'start=', 'demand'],
+                       capture_output=True, timeout=15)
+    except Exception:
+        pass
+
+    return inst_dir
+
+
+def _remove_instance(name: str):
+    import shutil
+    for svc in [f'AngelBot-India-{name}', f'AngelBot-US-{name}',
+                f'AngelBot-Crypto-{name}', f'AngelBot-Portal-{name}']:
+        try:
+            subprocess.run([_NSSM, 'stop',   svc],            capture_output=True, timeout=20)
+            subprocess.run([_NSSM, 'remove', svc, 'confirm'], capture_output=True, timeout=20)
+        except Exception:
+            pass
+    try:
+        shutil.rmtree(_INSTANCES_DIR / name, ignore_errors=True)
+    except Exception:
+        pass
 
 
 @app.post("/api/services/{name}/start")

@@ -11,7 +11,7 @@ def get_conn():
     conn_str = (
         "DRIVER={ODBC Driver 17 for SQL Server};"
         "SERVER=.\\ANGELBOT;"
-        "DATABASE=angelbot;"
+        f"DATABASE={os.getenv('ANGELBOT_DB','angelbot')};"
         "UID=sa;"
         f"PWD={pw};"
         "TrustServerCertificate=yes;"
@@ -31,7 +31,8 @@ def _ensure_db():
     )
     conn = pyodbc.connect(master_str, autocommit=True)
     c = conn.cursor()
-    c.execute("IF NOT EXISTS (SELECT name FROM sys.databases WHERE name='angelbot') CREATE DATABASE angelbot")
+    db_name = os.getenv('ANGELBOT_DB', 'angelbot')
+    c.execute(f"IF NOT EXISTS (SELECT name FROM sys.databases WHERE name='{db_name}') CREATE DATABASE [{db_name}]")
     conn.close()
 
 def _exec(c, sql):
@@ -251,6 +252,27 @@ def init_db():
             INSERT INTO user_services (user_id,service_name,market,worker_script,status)
             VALUES (1,'{svc}','{market}','{script}','running')
         """)
+
+    # ── portal_instances ──────────────────────────────────────────────────────
+    _exec(c, """
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='portal_instances')
+        CREATE TABLE portal_instances (
+            id           INT IDENTITY(1,1) PRIMARY KEY,
+            name         NVARCHAR(100) NOT NULL,
+            db_name      NVARCHAR(100) NOT NULL,
+            port         INT NOT NULL,
+            instance_dir NVARCHAR(500),
+            status       NVARCHAR(50) DEFAULT 'stopped',
+            created_at   NVARCHAR(50)
+        )
+    """)
+    _exec(c, """
+        IF NOT EXISTS (
+            SELECT * FROM sys.indexes
+            WHERE name='idx_portal_instances_name' AND object_id=OBJECT_ID('portal_instances')
+        )
+        CREATE UNIQUE INDEX idx_portal_instances_name ON portal_instances(name)
+    """)
 
     # ── Migrate trades: add user_id column (existing rows → admin = 1) ────────
     _exec(c, """

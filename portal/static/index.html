@@ -462,6 +462,7 @@
     <a href="javascript:void(0)" onclick="showPage('apikeys')" id="nav-apikeys">🔑 API Keys</a>
     <a href="javascript:void(0)" onclick="showPage('symbols')" id="nav-symbols">&#128279; Symbols</a>
     <a href="javascript:void(0)" onclick="showPage('users')" id="nav-users" style="display:none;">👥 Users</a>
+    <a href="javascript:void(0)" onclick="showPage('portals')" id="nav-portals" style="display:none;">🌐 Portals</a>
     <a href="javascript:void(0)" onclick="showPage('logs')" id="nav-logs">📄 Logs</a>
     <a href="javascript:void(0)" onclick="showPage('help')" id="nav-help">❓ Help &amp; FAQ</a>
     <a href="javascript:void(0)" onclick="showPage('monitor')" id="nav-monitor">🖥️ Live Monitor</a>
@@ -1715,7 +1716,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
       <div>
         <h2 style="margin-bottom:4px;">User Management</h2>
-        <p style="color:var(--muted); font-size:13px; margin:0;">Each user gets their own isolated paper trading account — separate capital, separate trades, separate bot services. New users start <strong>Paused</strong> until you activate them.</p>
+        <p style="color:var(--muted); font-size:13px; margin:0;">Add users to this portal — they share the same database and see only their own trades. To create a completely separate independent portal, go to <a href='#' onclick='showPage("portals");return false;' style='color:var(--blue);'>Portals</a>.</p>
       </div>
       <button class="btn primary" onclick="openAddUserModal()">+ Add User</button>
     </div>
@@ -1784,6 +1785,72 @@
         <div style="display:flex; gap:10px; margin-top:4px;">
           <button class="btn" onclick="closeModal()" style="flex:1; justify-content:center;">Cancel</button>
           <button class="btn primary" id="modal-save-btn" onclick="saveUserModal()" style="flex:1; justify-content:center;">Create User</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PORTALS -->
+  <div id="page-portals" class="page">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h2 style="margin-bottom:4px;">Portal Instances</h2>
+        <p style="color:var(--muted); font-size:13px; margin:0;">Each instance is a fully independent AngelBot deployment — its own database, port, and bot services. Users on separate instances are completely isolated from each other.</p>
+      </div>
+      <button class="btn primary" onclick="openCreatePortalModal()">+ New Portal</button>
+    </div>
+
+    <div style="display:flex; gap:12px; margin-bottom:24px; padding:14px 16px; background:rgba(9,105,218,.07); border-radius:8px; border:1px solid rgba(9,105,218,.2); align-items:flex-start; gap:12px;">
+      <div style="font-size:18px; flex-shrink:0; margin-top:1px;">ℹ️</div>
+      <div style="font-size:13px; color:var(--muted); line-height:1.6;">
+        <strong style="color:var(--text);">This Portal (port 8080)</strong> — your main instance. Users added here share this database.<br>
+        <strong style="color:var(--text);">New Portal</strong> — creates a fresh independent instance on a new port. Each gets its own database, its own bot workers, its own admin login.
+      </div>
+    </div>
+
+    <div id="portals-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px;">
+      <div style="color:var(--muted); padding:24px; text-align:center; grid-column:1/-1;">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Create Portal Modal -->
+  <div id="modal-portal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:460px; max-width:95vw; padding:28px; position:relative; box-shadow:0 8px 32px rgba(0,0,0,.2); max-height:90vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h3 style="font-size:17px; font-weight:600; margin:0;">Create New Portal</h3>
+        <button onclick="closePortalModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); line-height:1;">&#x2715;</button>
+      </div>
+      <div style="display:grid; gap:14px;">
+        <div>
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;">Instance Name <span style="font-weight:400;">(letters/numbers only, e.g. "alice" or "client2")</span></label>
+          <input type="text" id="pi-name" placeholder="e.g. alice" style="width:100%;" oninput="this.value=this.value.replace(/[^a-z0-9_-]/gi,'').toLowerCase()">
+        </div>
+        <div>
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;">Port <span style="font-weight:400;">(auto-suggested, must be unused)</span></label>
+          <input type="number" id="pi-port" style="width:100%;" min="1024" max="65535">
+        </div>
+        <div>
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;">Admin Password for New Portal</label>
+          <input type="password" id="pi-pass" placeholder="Min 8 characters" style="width:100%;">
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">India Capital (₹)</label>
+            <input type="number" id="pi-cap-india" value="100000" style="width:100%;" min="1000">
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">US Capital ($)</label>
+            <input type="number" id="pi-cap-us" value="5000" style="width:100%;" min="100">
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Crypto ($)</label>
+            <input type="number" id="pi-cap-crypto" value="1000" style="width:100%;" min="50">
+          </div>
+        </div>
+        <div id="pi-err" style="color:var(--red); font-size:12px; display:none; padding:8px 12px; background:rgba(248,81,73,.08); border-radius:4px; border-left:3px solid var(--red);"></div>
+        <div style="display:flex; gap:10px; margin-top:4px;">
+          <button class="btn" onclick="closePortalModal()" style="flex:1; justify-content:center;">Cancel</button>
+          <button class="btn primary" id="pi-save-btn" onclick="createPortal()" style="flex:1; justify-content:center;">Create Portal</button>
         </div>
       </div>
     </div>
@@ -2140,13 +2207,13 @@ var _lbMarket = '';
 var _URL_TO_PAGE = {
   'dashboard':'dashboard','positions':'positions','trades':'trades',
   'leaderboard':'leaderboard','settings':'config','apikeys':'apikeys',
-  'users':'users','logs':'logs','monitor':'monitor','symbols':'symbols','help':'help'
+  'users':'users','portals':'portals','logs':'logs','monitor':'monitor','symbols':'symbols','help':'help'
 };
 // Internal page-id → URL slug  (for pushState when navigating)
 var _PAGE_TO_URL = {
   'dashboard':'dashboard','positions':'positions','trades':'trades',
   'leaderboard':'leaderboard','config':'settings','apikeys':'apikeys',
-  'users':'users','logs':'logs','monitor':'monitor','symbols':'symbols','help':'help'
+  'users':'users','portals':'portals','logs':'logs','monitor':'monitor','symbols':'symbols','help':'help'
 };
 
 function showPage(name, pushState) {
@@ -2167,6 +2234,7 @@ function showPage(name, pushState) {
   if (name === 'config') { loadConfig(); var t = (function(){ try { return sessionStorage.getItem('cfg_tab'); } catch(e){ return null; } })(); if (t) showSettingsTab(t); }
   if (name === 'apikeys')     loadCredentials();
   if (name === 'users')       { loadUserConfig(); loadUsers(); }
+  if (name === 'portals')     loadPortals();
   if (name === 'logs')        { applyDefault('logs'); loadLogDates(); }
   if (name === 'symbols')     loadSymbols();
   if (name === 'monitor')     { startMonitor(); }
@@ -4941,11 +5009,144 @@ async function saveSymbols(msg) {
   else toast('Error: ' + (d.detail || 'Unknown'), 4000);
 }
 
+// ── Portal instance management ─────────────────────────────────────────────
+async function loadPortals() {
+  const r = await apiFetch('/api/instances');
+  if (!r) return;
+  if (r.status === 403) {
+    document.getElementById('portals-grid').innerHTML =
+      '<p style="color:var(--muted);padding:24px;grid-column:1/-1;">Admin access required.</p>';
+    return;
+  }
+  const d = await r.json();
+  const grid = document.getElementById('portals-grid');
+  if (!d.instances || d.instances.length === 0) {
+    grid.innerHTML = '<div style="color:var(--muted);padding:40px;text-align:center;grid-column:1/-1;">No portal instances yet. Click "+ New Portal" to create one.</div>';
+    return;
+  }
+  grid.innerHTML = d.instances.map(function(inst) {
+    var svcBadge = function(label, st) {
+      var col = st==='running' ? 'var(--green)' : st==='stopped' ? 'var(--muted)' : 'var(--red)';
+      return '<span style="font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(100,100,100,.12);color:'+col+'">'+label+'</span>';
+    };
+    var s = inst.services || {};
+    var isRunning = inst.running > 0;
+    return '<div class="card" style="padding:18px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">'
+      + '<div>'
+      + '<div style="font-weight:600;font-size:15px;">'+inst.name+'</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-top:2px;">Port '+inst.port+' &nbsp;&middot;&nbsp; DB: '+inst.db_name+'</div>'
+      + '</div>'
+      + (isRunning
+          ? '<span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:600;background:rgba(52,211,153,.12);color:var(--green);">&#9654; Running</span>'
+          : '<span style="padding:3px 9px;border-radius:10px;font-size:11px;font-weight:600;background:rgba(101,109,118,.12);color:var(--muted);">&#9646; Stopped</span>')
+      + '</div>'
+      + '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;">'
+      + svcBadge('India', s.india) + svcBadge('US', s.us) + svcBadge('Crypto', s.crypto) + svcBadge('Portal', s.portal)
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">URL: <a href="http://'+window.location.hostname+':'+inst.port+'" target="_blank" style="color:var(--blue);">http://'+window.location.hostname+':'+inst.port+'</a></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + (isRunning
+          ? '<button class="btn sm" onclick="stopInstance(\''+inst.name+'\')">&#9646; Stop</button>'
+          : '<button class="btn sm success" onclick="startInstance(\''+inst.name+'\')">&#9654; Start</button>')
+      + '<button class="btn sm danger" onclick="deleteInstance(\''+inst.name+'\')">Delete</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+async function openCreatePortalModal() {
+  document.getElementById('pi-name').value = '';
+  document.getElementById('pi-pass').value = '';
+  document.getElementById('pi-cap-india').value = '100000';
+  document.getElementById('pi-cap-us').value = '5000';
+  document.getElementById('pi-cap-crypto').value = '1000';
+  document.getElementById('pi-err').style.display = 'none';
+  document.getElementById('pi-save-btn').textContent = 'Create Portal';
+  // Auto-fetch next available port
+  const r = await apiFetch('/api/instances/next-port');
+  if (r && r.ok) {
+    const d = await r.json();
+    document.getElementById('pi-port').value = d.port || 8081;
+  } else {
+    document.getElementById('pi-port').value = 8081;
+  }
+  document.getElementById('modal-portal-overlay').style.display = 'flex';
+}
+
+function closePortalModal() {
+  document.getElementById('modal-portal-overlay').style.display = 'none';
+}
+
+async function createPortal() {
+  var name  = document.getElementById('pi-name').value.trim();
+  var port  = parseInt(document.getElementById('pi-port').value);
+  var pass  = document.getElementById('pi-pass').value;
+  var india = parseFloat(document.getElementById('pi-cap-india').value) || 100000;
+  var us    = parseFloat(document.getElementById('pi-cap-us').value) || 5000;
+  var crypto = parseFloat(document.getElementById('pi-cap-crypto').value) || 1000;
+  var errEl = document.getElementById('pi-err');
+
+  if (!name) { errEl.textContent='Instance name is required.'; errEl.style.display='block'; return; }
+  if (!port || port < 1024) { errEl.textContent='Valid port required (1024+).'; errEl.style.display='block'; return; }
+  if (!pass || pass.length < 8) { errEl.textContent='Password must be at least 8 characters.'; errEl.style.display='block'; return; }
+
+  errEl.style.display = 'none';
+  document.getElementById('pi-save-btn').textContent = 'Creating... (this may take 30s)';
+  document.getElementById('pi-save-btn').disabled = true;
+
+  const r = await apiFetch('/api/instances', {method:'POST', body: JSON.stringify({
+    name, port, admin_password: pass,
+    capital_india: india, capital_us: us, capital_crypto: crypto
+  })});
+  document.getElementById('pi-save-btn').textContent = 'Create Portal';
+  document.getElementById('pi-save-btn').disabled = false;
+
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) {
+    toast('✅ ' + d.message);
+    closePortalModal();
+    loadPortals();
+  } else {
+    errEl.textContent = d.detail || 'Error creating portal.';
+    errEl.style.display = 'block';
+  }
+}
+
+async function startInstance(name) {
+  toast('Starting services...');
+  const r = await apiFetch('/api/instances/'+name+'/start', {method:'POST'});
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) { toast('▶ Instance started.'); setTimeout(loadPortals, 1500); }
+  else toast('❌ ' + (d.detail||'Error'), 4000);
+}
+
+async function stopInstance(name) {
+  if (!await showConfirm('Stop Instance', 'Stop all services for "'+name+'"?', 'Stop')) return;
+  const r = await apiFetch('/api/instances/'+name+'/stop', {method:'POST'});
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) { toast('⏹ Instance stopped.'); setTimeout(loadPortals, 1000); }
+  else toast('❌ ' + (d.detail||'Error'), 4000);
+}
+
+async function deleteInstance(name) {
+  if (!await showConfirm('Delete Instance', 'Delete "'+name+'"? This stops services, removes all data and the database. Cannot be undone.', 'Delete')) return;
+  const r = await apiFetch('/api/instances/'+name, {method:'DELETE'});
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) { toast('✅ ' + d.message); loadPortals(); }
+  else toast('❌ ' + (d.detail||'Error'), 4000);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function _checkAdminAccess() {
   const r = await apiFetch('/api/users');
   if (r && r.status === 200) {
     document.getElementById('nav-users').style.display = 'flex';
+    document.getElementById('nav-portals').style.display = 'flex';
     _isAdmin = true;
   }
 }
