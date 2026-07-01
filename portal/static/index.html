@@ -1644,6 +1644,74 @@
 
   <!-- USERS -->
   <div id="page-users" class="page">
+
+    <!-- ── My Paper Account (all users) ─────────────────────────────────────── -->
+    <div style="margin-bottom:32px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="margin-bottom:4px;">My Paper Account</h2>
+          <p style="color:var(--muted); font-size:13px; margin:0;">Your isolated paper trading capital and risk settings. Changes apply on next bot restart.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div id="ucfg-paused-badge" style="display:none; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:600;"></div>
+          <button id="ucfg-pause-btn" class="btn" onclick="toggleUserPause()" style="font-size:12px;">⏸ Pause Bot</button>
+          <button class="btn primary" onclick="saveUserConfig()" style="font-size:12px;">💾 Save Settings</button>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-bottom:16px;">
+        <div class="card" style="padding:18px;">
+          <div style="font-size:11px; color:var(--muted); font-weight:500; letter-spacing:.06em; text-transform:uppercase; margin-bottom:12px;">Capital Allocation</div>
+          <div style="display:grid; gap:10px;">
+            <div>
+              <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">India Capital (₹)</label>
+              <input type="number" id="ucfg-capital-india" style="width:100%;" min="1000" step="1000">
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">US Capital ($)</label>
+              <input type="number" id="ucfg-capital-us" style="width:100%;" min="100" step="100">
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Crypto Capital ($)</label>
+              <input type="number" id="ucfg-capital-crypto" style="width:100%;" min="50" step="50">
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:18px;">
+          <div style="font-size:11px; color:var(--muted); font-weight:500; letter-spacing:.06em; text-transform:uppercase; margin-bottom:12px;">Risk Settings</div>
+          <div style="display:grid; gap:10px;">
+            <div>
+              <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Max Positions</label>
+              <input type="number" id="ucfg-max-positions" style="width:100%;" min="1" max="50" step="1">
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Stop Loss %</label>
+              <input type="number" id="ucfg-sl-pct" style="width:100%;" min="0.5" max="20" step="0.1">
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Target Multiplier</label>
+              <input type="number" id="ucfg-target-mult" style="width:100%;" min="1" max="10" step="0.1">
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:18px;">
+          <div style="font-size:11px; color:var(--muted); font-weight:500; letter-spacing:.06em; text-transform:uppercase; margin-bottom:12px;">Market Toggles</div>
+          <div style="display:grid; gap:12px;">
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px;">
+              <input type="checkbox" id="ucfg-enable-india"> India (NSE)
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px;">
+              <input type="checkbox" id="ucfg-enable-us"> US (Alpaca)
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px;">
+              <input type="checkbox" id="ucfg-enable-crypto"> Crypto (Binance)
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Admin: User Management ──────────────────────────────────────────── -->
+    <div id="admin-users-section">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
       <div>
         <h2 style="margin-bottom:4px;">User Management</h2>
@@ -1685,6 +1753,7 @@
         <p style="color:var(--muted); font-size:12px; margin:0;">Read-only access — can view dashboard, trades, positions, and logs. Cannot change settings.</p>
       </div>
     </div>
+    </div><!-- /admin-users-section -->
   </div>
 
   <!-- Add User Modal -->
@@ -2096,7 +2165,7 @@ function showPage(name, pushState) {
   if (name === 'leaderboard') { applyDefault('lb');     loadLeaderboard(_lbMarket); _pageTimer = setInterval(function(){ loadLeaderboard(_lbMarket); }, _refreshMs.lb); }
   if (name === 'config') { loadConfig(); var t = (function(){ try { return sessionStorage.getItem('cfg_tab'); } catch(e){ return null; } })(); if (t) showSettingsTab(t); }
   if (name === 'apikeys')     loadCredentials();
-  if (name === 'users')       loadUsers();
+  if (name === 'users')       { loadUserConfig(); loadUsers(); }
   if (name === 'logs')        { applyDefault('logs'); loadLogDates(); }
   if (name === 'symbols')     loadSymbols();
   if (name === 'monitor')     { startMonitor(); }
@@ -4599,7 +4668,11 @@ function _roleHTML(role) {
 async function loadUsers() {
   const r = await apiFetch('/api/users');
   if (!r) return;
-  if (r.status === 403) { document.getElementById('page-users').innerHTML = '<p style="color:var(--muted); padding:24px;">Admin access required.</p>'; return; }
+  if (r.status === 403) {
+    var sec = document.getElementById('admin-users-section');
+    if (sec) sec.style.display = 'none';
+    return;
+  }
   const d = await r.json();
   const tbody = document.getElementById('users-tbody');
   if (!d.users || d.users.length === 0) {
@@ -4716,6 +4789,77 @@ async function confirmDeleteUser(username) {
   const d = await r.json();
   if (d.ok) { toast('✅ User deleted.'); loadUsers(); }
   else toast('❌ ' + (d.detail || 'Error'), 4000);
+}
+
+// ── User config (per-user paper account settings) ─────────────────────────
+async function loadUserConfig() {
+  const r = await apiFetch('/api/config/user');
+  if (!r || !r.ok) return;
+  const d = await r.json();
+  var set = function(id, v){ var el = document.getElementById(id); if(el) el.value = v; };
+  var chk = function(id, v){ var el = document.getElementById(id); if(el) el.checked = !!v; };
+  set('ucfg-capital-india',  d.capital_india);
+  set('ucfg-capital-us',     d.capital_us);
+  set('ucfg-capital-crypto', d.capital_crypto);
+  set('ucfg-max-positions',  d.max_positions);
+  set('ucfg-sl-pct',         d.sl_pct);
+  set('ucfg-target-mult',    d.target_mult);
+  chk('ucfg-enable-india',  d.enable_india);
+  chk('ucfg-enable-us',     d.enable_us);
+  chk('ucfg-enable-crypto', d.enable_crypto);
+  // Pause badge + button
+  var badge = document.getElementById('ucfg-paused-badge');
+  var btn   = document.getElementById('ucfg-pause-btn');
+  if (badge && btn) {
+    badge.style.display = 'inline-block';
+    if (d.paused) {
+      badge.textContent = '⏸ PAUSED';
+      badge.style.background = 'rgba(248,81,73,.12)';
+      badge.style.color = 'var(--red)';
+      btn.textContent = '▶ Resume Bot';
+    } else {
+      badge.textContent = '▶ RUNNING';
+      badge.style.background = 'rgba(52,211,153,.12)';
+      badge.style.color = 'var(--green)';
+      btn.textContent = '⏸ Pause Bot';
+    }
+  }
+}
+
+async function saveUserConfig() {
+  var g = function(id){ var el = document.getElementById(id); return el ? parseFloat(el.value) : null; };
+  var gc = function(id){ var el = document.getElementById(id); return el ? (el.checked ? true : false) : null; };
+  var body = {
+    capital_india:  g('ucfg-capital-india'),
+    capital_us:     g('ucfg-capital-us'),
+    capital_crypto: g('ucfg-capital-crypto'),
+    max_positions:  parseInt(document.getElementById('ucfg-max-positions').value) || null,
+    sl_pct:         g('ucfg-sl-pct'),
+    target_mult:    g('ucfg-target-mult'),
+    enable_india:   gc('ucfg-enable-india'),
+    enable_us:      gc('ucfg-enable-us'),
+    enable_crypto:  gc('ucfg-enable-crypto'),
+  };
+  // Remove nulls
+  Object.keys(body).forEach(function(k){ if(body[k] === null || isNaN(body[k])) delete body[k]; });
+  const r = await apiFetch('/api/config/user', { method:'PUT', body: JSON.stringify(body) });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) toast('✅ Account settings saved. Restart workers to apply.');
+  else toast('❌ ' + (d.detail || 'Save failed'), 4000);
+}
+
+async function toggleUserPause() {
+  var btn = document.getElementById('ucfg-pause-btn');
+  var isPaused = btn && btn.textContent.indexOf('Resume') >= 0;
+  var endpoint = isPaused ? '/api/bot/resume' : '/api/bot/pause';
+  const r = await apiFetch(endpoint, { method:'POST' });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok !== undefined) {
+    toast(d.paused ? '⏸ Bot paused.' : '▶ Bot resumed.');
+    loadUserConfig();
+  }
 }
 
 // ── Symbol watchlist management ────────────────────────────────────────────

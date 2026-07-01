@@ -99,9 +99,22 @@ def _next_india_open():
         return candidate.strftime('%a %I:%M %p IST'), f"in {days}d {rh}h"
     return candidate.strftime('%I:%M %p IST'), f"in {h}h {m}m"
 
-# ── Shared pause flag (file-based so all processes see it) ───────────────────
+# ── Per-user identity (ANGELBOT_USER_ID set by NSSM for non-admin users) ─────
+_USER_ID   = int(os.getenv('ANGELBOT_USER_ID', '1'))
+
+# ── Pause check — file flag for admin (uid=1); DB for all other users ─────────
 _PAUSE_FLAG = os.path.join(_ROOT, 'paused.flag')
-def is_paused(): return os.path.exists(_PAUSE_FLAG)
+def is_paused():
+    if _USER_ID == 1:
+        return os.path.exists(_PAUSE_FLAG)
+    try:
+        from data.database import get_conn as _gc
+        _c = _gc(); _cur = _c.cursor()
+        _cur.execute("SELECT paused FROM user_config WHERE user_id=?", (_USER_ID,))
+        _r = _cur.fetchone(); _c.close()
+        return bool(_r[0]) if _r else False
+    except Exception:
+        return os.path.exists(_PAUSE_FLAG)
 
 # ── Single-instance lock ──────────────────────────────────────────────────────
 import socket as _sock
@@ -426,7 +439,7 @@ def main():
     cprint("╚══════════════════════════════════════════════════════════╝", CY)
     sp()
 
-    trader    = PaperTrader()
+    trader    = PaperTrader(user_id=_USER_ID)
     live_feed = LiveFeed()
     live_feed.start()
     monitor   = start_monitor(trader, _on_exit, live_feed, market='india')

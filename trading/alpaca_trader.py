@@ -11,6 +11,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import US_CAPITAL, US_MAX_POSITIONS, US_MAX_POSITION_PCT, SLIPPAGE_PCT, ALPACA_PAPER
 from data.database import get_conn
 
+def _load_user_us_capital(user_id: int) -> float:
+    try:
+        conn = get_conn()
+        c    = conn.cursor()
+        c.execute("SELECT capital_us FROM user_config WHERE user_id=?", (user_id,))
+        row  = c.fetchone()
+        conn.close()
+        if row and row[0]:
+            return float(row[0])
+    except Exception:
+        pass
+    return US_CAPITAL
+
 _A  = lambda n: f"\033[{n}m"
 _R  = _A("0");  _BL = _A("1;94");  _G = _A("1;92");  _RD = _A("1;91");  _CY = _A("1;96")
 
@@ -37,7 +50,9 @@ class AlpacaTrader:
 
     SOURCE = 'us_paper'
 
-    def __init__(self):
+    def __init__(self, user_id: int = 1):
+        self.user_id        = user_id
+        self._capital       = _load_user_us_capital(user_id)
         self._lock          = threading.Lock()
         self.balance        = self._get_balance()
         self.open_positions = self._load_open_positions()
@@ -48,22 +63,22 @@ class AlpacaTrader:
     def _get_balance(self):
         conn = get_conn()
         c    = conn.cursor()
-        c.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE status='closed' AND source=?", (self.SOURCE,))
+        c.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE status='closed' AND source=? AND user_id=?", (self.SOURCE, self.user_id))
         realized = c.fetchone()[0] or 0.0
-        c.execute("SELECT COALESCE(SUM(capital_used), 0) FROM trades WHERE status='open' AND source=?", (self.SOURCE,))
+        c.execute("SELECT COALESCE(SUM(capital_used), 0) FROM trades WHERE status='open' AND source=? AND user_id=?", (self.SOURCE, self.user_id))
         open_capital = c.fetchone()[0] or 0.0
         conn.close()
-        return round(US_CAPITAL + realized - open_capital, 2)
+        return round(self._capital + realized - open_capital, 2)
 
     def _load_open_positions(self):
         conn = get_conn()
         c    = conn.cursor()
-        c.execute("SELECT * FROM trades WHERE status='open' AND source=?", (self.SOURCE,))
+        c.execute("SELECT * FROM trades WHERE status='open' AND source=? AND user_id=?", (self.SOURCE, self.user_id))
         rows = c.fetchall()
         conn.close()
         cols = ['id','symbol','entry_time','exit_time','entry_price','exit_price',
                 'quantity','capital_used','pnl','pnl_pct','stop_loss','target',
-                'exit_reason','signals','status','source']
+                'exit_reason','signals','status','source','user_id']
         return [dict(zip(cols, r)) for r in rows]
 
     # ── Buy / Sell ────────────────────────────────────────────────────────────
@@ -109,13 +124,13 @@ class AlpacaTrader:
         c    = conn.cursor()
         c.execute('''
             INSERT INTO trades (symbol, entry_time, entry_price, quantity, capital_used,
-                stop_loss, target, signals, status, source)
+                stop_loss, target, signals, status, source, user_id)
             OUTPUT INSERTED.id
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         ''', (symbol, now, price, quantity, capital_used,
               stop_loss, target,
               json.dumps({'reasons': reason, 'confidence': confidence, 'signals': signals}),
-              'open', self.SOURCE))
+              'open', self.SOURCE, self.user_id))
         trade_id = c.fetchone()[0]
         conn.commit()
         conn.close()

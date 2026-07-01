@@ -189,6 +189,78 @@ def init_db():
         VALUES ('admin', '{pass_hash}', 'admin', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     """)
 
+    # ── user_config ───────────────────────────────────────────────────────────
+    # Per-user capital, risk settings and market toggles. New users start paused.
+    _exec(c, """
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='user_config')
+        CREATE TABLE user_config (
+            id              INT IDENTITY(1,1) PRIMARY KEY,
+            user_id         INT NOT NULL,
+            capital_india   FLOAT DEFAULT 100000,
+            capital_us      FLOAT DEFAULT 5000,
+            capital_crypto  FLOAT DEFAULT 1000,
+            risk_pct        FLOAT DEFAULT 2.0,
+            max_positions   INT   DEFAULT 5,
+            sl_pct          FLOAT DEFAULT 2.0,
+            target_mult     FLOAT DEFAULT 2.0,
+            enable_india    BIT   DEFAULT 1,
+            enable_us       BIT   DEFAULT 1,
+            enable_crypto   BIT   DEFAULT 1,
+            paused          BIT   DEFAULT 1,
+            created_at      NVARCHAR(50),
+            updated_at      NVARCHAR(50)
+        )
+    """)
+    _exec(c, """
+        IF NOT EXISTS (
+            SELECT * FROM sys.indexes
+            WHERE name='idx_user_config_user_id' AND object_id=OBJECT_ID('user_config')
+        )
+        CREATE UNIQUE INDEX idx_user_config_user_id ON user_config(user_id)
+    """)
+    # Seed admin config row (user_id=1) — uses env-var capitals if set
+    _exec(c, f"""
+        IF NOT EXISTS (SELECT 1 FROM user_config WHERE user_id=1)
+        INSERT INTO user_config
+            (user_id,capital_india,capital_us,capital_crypto,risk_pct,max_positions,
+             sl_pct,target_mult,enable_india,enable_us,enable_crypto,paused,created_at)
+        VALUES (1,100000,5000,1000,2.0,5,2.0,2.0,1,1,1,0,'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    """)
+
+    # ── user_services ─────────────────────────────────────────────────────────
+    # Tracks which NSSM services belong to which user.
+    _exec(c, """
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='user_services')
+        CREATE TABLE user_services (
+            id            INT IDENTITY(1,1) PRIMARY KEY,
+            user_id       INT NOT NULL,
+            service_name  NVARCHAR(200) NOT NULL,
+            market        NVARCHAR(50),
+            worker_script NVARCHAR(200),
+            status        NVARCHAR(50) DEFAULT 'stopped'
+        )
+    """)
+    # Seed admin's existing services so they appear in the UI
+    for market, script, svc in [
+        ('india',  'india_worker.py',  'AngelBot-India'),
+        ('us',     'us_worker.py',     'AngelBot-US'),
+        ('crypto', 'crypto_worker.py', 'AngelBot-Crypto'),
+    ]:
+        _exec(c, f"""
+            IF NOT EXISTS (SELECT 1 FROM user_services WHERE service_name='{svc}')
+            INSERT INTO user_services (user_id,service_name,market,worker_script,status)
+            VALUES (1,'{svc}','{market}','{script}','running')
+        """)
+
+    # ── Migrate trades: add user_id column (existing rows → admin = 1) ────────
+    _exec(c, """
+        IF NOT EXISTS (
+            SELECT * FROM sys.columns
+            WHERE object_id=OBJECT_ID('trades') AND name='user_id'
+        )
+        ALTER TABLE trades ADD user_id INT NOT NULL DEFAULT 1
+    """)
+
     # ── One-time: normalize US trade timestamps ET → IST ─────────────────────
     # Before June 2026 fix, alpaca_trader stored entry/exit_time in ET (UTC-4).
     # US market hours in ET are 09:30–16:00, so any us_paper trade with time

@@ -15,8 +15,24 @@ from config import (CAPITAL, MAX_POSITIONS, MAX_POSITION_PCT,
 from data.database import get_conn
 from data.nifty_stocks import is_mutual_fund
 
+def _load_user_capital(user_id: int) -> float:
+    """Load capital_india from user_config; fall back to global CAPITAL."""
+    try:
+        conn = get_conn()
+        c    = conn.cursor()
+        c.execute("SELECT capital_india FROM user_config WHERE user_id=?", (user_id,))
+        row  = c.fetchone()
+        conn.close()
+        if row and row[0]:
+            return float(row[0])
+    except Exception:
+        pass
+    return CAPITAL
+
 class PaperTrader:
-    def __init__(self):
+    def __init__(self, user_id: int = 1):
+        self.user_id          = user_id
+        self._capital         = _load_user_capital(user_id)
         self._lock            = threading.Lock()   # prevents monitor + scan double-exit
         self.balance          = self._get_balance()
         self.open_positions   = self._load_open_positions()
@@ -33,23 +49,23 @@ class PaperTrader:
     def _get_balance(self):
         conn = get_conn()
         c = conn.cursor()
-        c.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE status='closed' AND (source='paper' OR source IS NULL)")
+        c.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE status='closed' AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
         realized = c.fetchone()[0] or 0.0
-        c.execute("SELECT COALESCE(SUM(capital_used), 0) FROM trades WHERE status='open' AND (source='paper' OR source IS NULL)")
+        c.execute("SELECT COALESCE(SUM(capital_used), 0) FROM trades WHERE status='open' AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
         open_capital = c.fetchone()[0] or 0.0
         conn.close()
         total_reloaded = self._get_total_reloaded()
-        return round(CAPITAL + total_reloaded + realized - open_capital, 2)
+        return round(self._capital + total_reloaded + realized - open_capital, 2)
 
     def _load_open_positions(self):
         conn = get_conn()
         c = conn.cursor()
-        c.execute("SELECT * FROM trades WHERE status='open' AND (source='paper' OR source IS NULL)")
+        c.execute("SELECT * FROM trades WHERE status='open' AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
         rows = c.fetchall()
         conn.close()
         cols = ['id','symbol','entry_time','exit_time','entry_price','exit_price',
                 'quantity','capital_used','pnl','pnl_pct','stop_loss','target',
-                'exit_reason','signals','status','source']
+                'exit_reason','signals','status','source','user_id']
         return [dict(zip(cols, r)) for r in rows]
 
     def can_buy(self):
@@ -108,11 +124,11 @@ class PaperTrader:
         c = conn.cursor()
         c.execute('''
             INSERT INTO trades (symbol, entry_time, entry_price, quantity, capital_used,
-                stop_loss, target, signals, status)
+                stop_loss, target, signals, status, user_id)
             OUTPUT INSERTED.id
-            VALUES (?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
         ''', (symbol, now, price, quantity, capital_used,
-              stop_loss, target, json.dumps({'reasons': reason, 'confidence': confidence, 'signals': signals}), 'open'))
+              stop_loss, target, json.dumps({'reasons': reason, 'confidence': confidence, 'signals': signals}), 'open', self.user_id))
         trade_id = c.fetchone()[0]
         conn.commit()
         conn.close()

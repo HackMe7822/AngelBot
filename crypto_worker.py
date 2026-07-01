@@ -75,9 +75,22 @@ def sp():
 def sep(color=GY):
     cprint('─' * 60, color)
 
-# ── Pause flag ────────────────────────────────────────────────────────────────
+# ── Per-user identity ─────────────────────────────────────────────────────────
+_USER_ID   = int(os.getenv('ANGELBOT_USER_ID', '1'))
+
+# ── Pause check ───────────────────────────────────────────────────────────────
 _PAUSE_FLAG = os.path.join(_ROOT, 'paused.flag')
-def is_paused(): return os.path.exists(_PAUSE_FLAG)
+def is_paused():
+    if _USER_ID == 1:
+        return os.path.exists(_PAUSE_FLAG)
+    try:
+        from data.database import get_conn as _gc
+        _c = _gc(); _cur = _c.cursor()
+        _cur.execute("SELECT paused FROM user_config WHERE user_id=?", (_USER_ID,))
+        _r = _cur.fetchone(); _c.close()
+        return bool(_r[0]) if _r else False
+    except Exception:
+        return os.path.exists(_PAUSE_FLAG)
 
 # ── Single-instance lock ──────────────────────────────────────────────────────
 import socket as _sock
@@ -320,7 +333,7 @@ def main():
         cprint("ERROR: BINANCE_KEY not set in .env — Crypto session disabled.", RD)
         sys.exit(1)
 
-    crypto_trader = CryptoTrader()
+    crypto_trader = CryptoTrader(user_id=_USER_ID)
 
     # test_connection() imports binance.client in main thread first —
     # prevents Python 3.14 import deadlock when CryptoFeed thread starts

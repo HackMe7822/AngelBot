@@ -136,6 +136,15 @@ def _require_admin(username: str):
     if not row or row[0] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required.")
 
+def _get_user_id(username: str) -> int:
+    """Return the integer user_id for a username (admin always = 1)."""
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT id FROM portal_users WHERE username=?", (username,))
+    row  = c.fetchone()
+    conn.close()
+    return row[0] if row else 1
+
 _IST = timezone(timedelta(hours=5, minutes=30))
 
 # ── Static files ──────────────────────────────────────────────────────────────
@@ -250,6 +259,7 @@ def save_symbols(req: SymbolsUpdate, user: str = Depends(require_auth)):
 def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_auth)):
     conn = get_conn()
     c    = conn.cursor()
+    uid  = _get_user_id(user)
     today_ist = datetime.now(_IST).strftime("%Y-%m-%d")
 
     # India/Crypto: filter closed trades by exit_time using IST calendar day
@@ -262,8 +272,8 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
         c.execute(
             f"SELECT COUNT(*), COALESCE(SUM(pnl),0), "
             f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) FROM trades "
-            f"WHERE status='closed' AND {source_clause} {period_sql}",
-            period_params
+            f"WHERE status='closed' AND {source_clause} AND user_id=? {period_sql}",
+            [uid] + period_params
         )
         trades, day_pnl, wins = c.fetchone()
 
@@ -273,13 +283,14 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
             f"COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0), "
             f"COALESCE(SUM(CASE WHEN pnl>0 THEN pnl ELSE 0 END),0), "
             f"COALESCE(SUM(CASE WHEN pnl<0 THEN pnl ELSE 0 END),0) FROM trades "
-            f"WHERE status='closed' AND {source_clause}"
+            f"WHERE status='closed' AND {source_clause} AND user_id=?",
+            [uid]
         )
         total_pnl, total_trades, total_wins, total_profit, total_loss = c.fetchone()
 
-        c.execute(f"SELECT COUNT(*) FROM trades WHERE status='open' AND {source_clause}")
+        c.execute(f"SELECT COUNT(*) FROM trades WHERE status='open' AND {source_clause} AND user_id=?", (uid,))
         open_pos = c.fetchone()[0]
-        c.execute(f"SELECT COALESCE(SUM(capital_used),0) FROM trades WHERE status='open' AND {source_clause}")
+        c.execute(f"SELECT COALESCE(SUM(capital_used),0) FROM trades WHERE status='open' AND {source_clause} AND user_id=?", (uid,))
         deployed = c.fetchone()[0] or 0.0
         return {
             "today_trades": trades or 0, "today_pnl": round(day_pnl or 0, dec),
@@ -292,21 +303,33 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
             "currency": cur_sym,
         }
 
-    import config as _cfg
+    # Load per-user capital settings
+    c.execute(
+        "SELECT capital_india, capital_us, capital_crypto, paused "
+        "FROM user_config WHERE user_id=?", (uid,)
+    )
+    cfg_row = c.fetchone()
+    if cfg_row:
+        cap_india, cap_us, cap_crypto, user_paused = cfg_row
+    else:
+        import config as _cfg
+        cap_india, cap_us, cap_crypto = _cfg.CAPITAL, _cfg.US_CAPITAL, _cfg.CRYPTO_CAPITAL
+        user_paused = 0
+
     india  = _market_summary("(source='paper' OR source IS NULL)", "₹", 2, ist_closed_sql, ist_closed_params)
-    india["capital"]   = _cfg.CAPITAL
-    india["balance"]   = round(_cfg.CAPITAL + india["total_pnl"] - india["deployed"], 2)
+    india["capital"]   = cap_india
+    india["balance"]   = round(cap_india + india["total_pnl"] - india["deployed"], 2)
 
     us     = _market_summary("source='us_paper'", "$", 2, us_closed_sql, us_closed_params)
-    us["capital"]      = _cfg.US_CAPITAL
-    us["balance"]      = round(_cfg.US_CAPITAL + us["total_pnl"] - us["deployed"], 2)
+    us["capital"]      = cap_us
+    us["balance"]      = round(cap_us + us["total_pnl"] - us["deployed"], 2)
 
     crypto = _market_summary("source='crypto_paper'", "$", 4, ist_closed_sql, ist_closed_params)
-    crypto["capital"]  = _cfg.CRYPTO_CAPITAL
-    crypto["balance"]  = round(_cfg.CRYPTO_CAPITAL + crypto["total_pnl"] - crypto["deployed"], 4)
+    crypto["capital"]  = cap_crypto
+    crypto["balance"]  = round(cap_crypto + crypto["total_pnl"] - crypto["deployed"], 4)
 
-    # Bot status
-    paused = os.path.exists(os.path.join(os.path.dirname(__file__), '..', 'paused.flag'))
+    # Per-user bot paused status
+    paused = bool(user_paused)
 
     conn.close()
     return {
@@ -335,9 +358,10 @@ def get_trades(
 ):
     conn = get_conn()
     c    = conn.cursor()
+    uid  = _get_user_id(user)
 
-    where = []
-    params = []
+    where  = ["user_id=?"]
+    params = [uid]
     if market == 'india':
         where.append("(source='paper' OR source IS NULL)")
     elif market == 'us':
@@ -416,16 +440,18 @@ def get_trades(
 def get_positions(market: Optional[str] = None, user: str = Depends(require_auth)):
     conn = get_conn()
     c    = conn.cursor()
+    uid  = _get_user_id(user)
     if market == 'india':
-        where = "(source='paper' OR source IS NULL)"
+        src_where = "(source='paper' OR source IS NULL)"
     elif market == 'us':
-        where = "source='us_paper'"
+        src_where = "source='us_paper'"
     elif market == 'crypto':
-        where = "source='crypto_paper'"
+        src_where = "source='crypto_paper'"
     else:
-        where = "1=1"
+        src_where = "1=1"
     c.execute(f"SELECT id,symbol,entry_time,entry_price,quantity,capital_used,stop_loss,target,source "
-              f"FROM trades WHERE status='open' AND {where} ORDER BY entry_time DESC")
+              f"FROM trades WHERE status='open' AND {src_where} AND user_id=? ORDER BY entry_time DESC",
+              (uid,))
     cols = ['id','symbol','entry_time','entry_price','quantity','capital_used','stop_loss','target','source']
     rows = [dict(zip(cols, r)) for r in c.fetchall()]
     conn.close()
@@ -712,6 +738,74 @@ def update_config(update: ConfigUpdate, user: str = Depends(require_auth)):
     return {"ok": True, "message": f"{key} saved to database + .env. Restart workers to apply."}
 
 
+class UserConfigUpdate(BaseModel):
+    capital_india:  Optional[float] = None
+    capital_us:     Optional[float] = None
+    capital_crypto: Optional[float] = None
+    risk_pct:       Optional[float] = None
+    max_positions:  Optional[int]   = None
+    sl_pct:         Optional[float] = None
+    target_mult:    Optional[float] = None
+    enable_india:   Optional[bool]  = None
+    enable_us:      Optional[bool]  = None
+    enable_crypto:  Optional[bool]  = None
+    paused:         Optional[bool]  = None
+
+@app.get("/api/config/user")
+def get_user_config(user: str = Depends(require_auth)):
+    """Return the current user's per-user config (capital, risk, market toggles, paused)."""
+    uid  = _get_user_id(user)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute(
+        "SELECT capital_india,capital_us,capital_crypto,risk_pct,max_positions,"
+        "sl_pct,target_mult,enable_india,enable_us,enable_crypto,paused "
+        "FROM user_config WHERE user_id=?", (uid,)
+    )
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "User config not found. Contact admin.")
+    keys = ['capital_india','capital_us','capital_crypto','risk_pct','max_positions',
+            'sl_pct','target_mult','enable_india','enable_us','enable_crypto','paused']
+    return dict(zip(keys, row))
+
+@app.put("/api/config/user")
+def update_user_config(body: UserConfigUpdate, user: str = Depends(require_auth)):
+    """Update the current user's per-user config."""
+    uid  = _get_user_id(user)
+    now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Build dynamic SET clause from provided fields only
+    fields = {
+        'capital_india':  body.capital_india,
+        'capital_us':     body.capital_us,
+        'capital_crypto': body.capital_crypto,
+        'risk_pct':       body.risk_pct,
+        'max_positions':  body.max_positions,
+        'sl_pct':         body.sl_pct,
+        'target_mult':    body.target_mult,
+        'enable_india':   (1 if body.enable_india else 0) if body.enable_india is not None else None,
+        'enable_us':      (1 if body.enable_us else 0)    if body.enable_us    is not None else None,
+        'enable_crypto':  (1 if body.enable_crypto else 0)if body.enable_crypto is not None else None,
+        'paused':         (1 if body.paused else 0)        if body.paused        is not None else None,
+    }
+    updates = {k: v for k, v in fields.items() if v is not None}
+    if not updates:
+        raise HTTPException(400, "No fields to update.")
+    set_clause = ', '.join(f"{k}=?" for k in updates)
+    values     = list(updates.values()) + [now, uid]
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute(f"UPDATE user_config SET {set_clause}, updated_at=? WHERE user_id=?", values)
+    if c.rowcount == 0:
+        conn.close()
+        raise HTTPException(404, "User config not found.")
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.post("/api/telegram/test")
 def test_telegram(user: str = Depends(require_auth)):
     try:
@@ -959,33 +1053,52 @@ def list_users(user: str = Depends(require_auth)):
 
 @app.post("/api/users")
 def create_user(body: NewUser, user: str = Depends(require_auth)):
-    """Create a new portal user. Admin only."""
+    """Create a new portal user. Admin only. Provisions user_config + NSSM services."""
     _require_admin(user)
     if body.role not in ('admin', 'viewer'):
         raise HTTPException(400, "Role must be 'admin' or 'viewer'.")
     if len(body.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters.")
-    pw_hash = _hash_password(body.password)
+    pw_hash  = _hash_password(body.password)
+    username = body.username.strip()
+    now      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_conn()
     c    = conn.cursor()
     try:
         c.execute(
             "INSERT INTO portal_users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
-            (body.username.strip(), pw_hash, body.role, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            (username, pw_hash, body.role, now)
+        )
+        c.execute("SELECT @@IDENTITY")
+        new_uid = int(c.fetchone()[0])
+        # Per-user config row — starts paused so no trades fire until admin activates
+        c.execute(
+            "INSERT INTO user_config "
+            "(user_id,capital_india,capital_us,capital_crypto,risk_pct,max_positions,"
+            " sl_pct,target_mult,enable_india,enable_us,enable_crypto,paused,created_at) "
+            "VALUES (?,100000,5000,1000,2.0,5,2.0,2.0,1,1,1,1,?)",
+            (new_uid, now)
         )
         conn.commit()
     except Exception as e:
         conn.close()
         raise HTTPException(400, f"Could not create user: {e}")
     conn.close()
-    return {"ok": True, "message": f"User '{body.username}' created."}
+    # Register NSSM services (best-effort — portal keeps working even if NSSM fails)
+    try:
+        _register_user_services(new_uid, username)
+    except Exception:
+        pass
+    return {"ok": True, "message": f"User '{username}' created (paused). Admin must activate."}
 
 @app.delete("/api/users/{username}")
 def delete_user(username: str, user: str = Depends(require_auth)):
-    """Delete a portal user. Admin only. Cannot delete own account."""
+    """Delete a portal user and all their services. Admin only."""
     _require_admin(user)
     if username == user:
         raise HTTPException(400, "Cannot delete your own account.")
+    # Get uid before deleting
+    uid = _get_user_id(username)
     conn = get_conn()
     c    = conn.cursor()
     c.execute("DELETE FROM portal_users WHERE username=?", (username,))
@@ -994,7 +1107,12 @@ def delete_user(username: str, user: str = Depends(require_auth)):
         raise HTTPException(404, f"User '{username}' not found.")
     conn.commit()
     conn.close()
-    return {"ok": True, "message": f"User '{username}' deleted."}
+    # Stop + remove NSSM services and cleanup user_config/user_services rows
+    try:
+        _deregister_user_services(uid)
+    except Exception:
+        pass
+    return {"ok": True, "message": f"User '{username}' and their services deleted."}
 
 @app.patch("/api/users/{username}")
 def patch_user(username: str, body: UserPatch, user: str = Depends(require_auth)):
@@ -1021,21 +1139,26 @@ def patch_user(username: str, body: UserPatch, user: str = Depends(require_auth)
 # ── Bot controls ──────────────────────────────────────────────────────────────
 @app.post("/api/bot/pause")
 def bot_pause(user: str = Depends(require_auth)):
-    flag = Path(__file__).parent.parent / 'paused.flag'
-    flag.touch()
+    uid = _get_user_id(user)
+    _set_user_paused(uid, True)
     return {"ok": True, "paused": True}
 
 @app.post("/api/bot/resume")
 def bot_resume(user: str = Depends(require_auth)):
-    flag = Path(__file__).parent.parent / 'paused.flag'
-    if flag.exists():
-        flag.unlink()
+    uid = _get_user_id(user)
+    _set_user_paused(uid, False)
     return {"ok": True, "paused": False}
 
 @app.get("/api/bot/status")
 def bot_status(user: str = Depends(require_auth)):
-    flag = Path(__file__).parent.parent / 'paused.flag'
-    return {"paused": flag.exists()}
+    uid  = _get_user_id(user)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT paused FROM user_config WHERE user_id=?", (uid,))
+    row  = c.fetchone()
+    conn.close()
+    paused = bool(row[0]) if row else False
+    return {"paused": paused}
 
 
 def _resolve_log_path(market: str, date: str = '') -> Path:
@@ -1175,6 +1298,97 @@ def get_services(user: str = Depends(require_auth)):
 
 
 _NSSM = r'C:\Windows\nssm.exe'
+_BOT_PYTHON = sys.executable
+_BOT_WORKER_SCRIPTS = {
+    'india':  'india_worker.py',
+    'us':     'us_worker.py',
+    'crypto': 'crypto_worker.py',
+}
+
+
+def _register_user_services(uid: int, username: str) -> list:
+    """Create 3 NSSM services for a new user (started paused/stopped). Returns service names."""
+    safe = _re.sub(r'[^A-Za-z0-9_-]', '', username)[:20]
+    now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_conn()
+    c    = conn.cursor()
+    svc_names = []
+    for market, script in _BOT_WORKER_SCRIPTS.items():
+        svc_name    = f"AngelBot-{market.capitalize()}-{safe}"
+        script_path = str(_BOT_DIR / script)
+        svc_names.append(svc_name)
+        try:
+            subprocess.run([_NSSM, 'install', svc_name, _BOT_PYTHON, script_path],
+                           capture_output=True, timeout=30)
+            subprocess.run([_NSSM, 'set', svc_name, 'AppDirectory', str(_BOT_DIR)],
+                           capture_output=True, timeout=15)
+            subprocess.run([_NSSM, 'set', svc_name, 'AppEnvironmentExtra',
+                            f'ANGELBOT_USER_ID={uid}'],
+                           capture_output=True, timeout=15)
+            # Manual start — service won't auto-run on boot until user unpauses
+            subprocess.run(['sc', 'config', svc_name, 'start=', 'demand'],
+                           capture_output=True, timeout=15)
+        except Exception:
+            pass
+        c.execute(
+            "INSERT INTO user_services (user_id,service_name,market,worker_script,status) "
+            "VALUES (?,?,?,?,'stopped')", (uid, svc_name, market, script)
+        )
+    conn.commit()
+    conn.close()
+    return svc_names
+
+
+def _deregister_user_services(uid: int):
+    """Stop + remove all NSSM services for a user, then delete DB rows."""
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("SELECT service_name FROM user_services WHERE user_id=?", (uid,))
+    svcs = [row[0] for row in c.fetchall()]
+    conn.close()
+    for svc in svcs:
+        try:
+            subprocess.run([_NSSM, 'stop', svc], capture_output=True, timeout=20)
+            subprocess.run([_NSSM, 'remove', svc, 'confirm'], capture_output=True, timeout=20)
+        except Exception:
+            pass
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("DELETE FROM user_services WHERE user_id=?", (uid,))
+    c.execute("DELETE FROM user_config  WHERE user_id=?", (uid,))
+    conn.commit()
+    conn.close()
+
+
+def _set_user_paused(uid: int, paused: bool):
+    """Pause/resume a user's bot: update user_config + start/stop their NSSM services."""
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("UPDATE user_config SET paused=? WHERE user_id=?", (1 if paused else 0, uid))
+    # Fetch this user's services (skip admin's shared services — they use paused.flag)
+    if uid != 1:
+        c.execute("SELECT service_name FROM user_services WHERE user_id=?", (uid,))
+        svcs = [row[0] for row in c.fetchall()]
+        conn.commit()
+        conn.close()
+        for svc in svcs:
+            try:
+                if paused:
+                    subprocess.run([_NSSM, 'stop', svc], capture_output=True, timeout=20)
+                else:
+                    subprocess.run([_NSSM, 'start', svc], capture_output=True, timeout=20)
+            except Exception:
+                pass
+    else:
+        conn.commit()
+        conn.close()
+        # Admin: also maintain legacy paused.flag so existing workers respect it
+        flag = _BOT_DIR / 'paused.flag'
+        if paused:
+            flag.touch()
+        elif flag.exists():
+            flag.unlink()
+
 
 @app.post("/api/services/{name}/start")
 def start_service(name: str, user: str = Depends(require_auth)):

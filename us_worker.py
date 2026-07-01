@@ -74,9 +74,22 @@ def sp():
 def sep(color=GY):
     cprint('─' * 60, color)
 
-# ── Pause flag ────────────────────────────────────────────────────────────────
+# ── Per-user identity ─────────────────────────────────────────────────────────
+_USER_ID   = int(os.getenv('ANGELBOT_USER_ID', '1'))
+
+# ── Pause check ───────────────────────────────────────────────────────────────
 _PAUSE_FLAG = os.path.join(_ROOT, 'paused.flag')
-def is_paused(): return os.path.exists(_PAUSE_FLAG)
+def is_paused():
+    if _USER_ID == 1:
+        return os.path.exists(_PAUSE_FLAG)
+    try:
+        from data.database import get_conn as _gc
+        _c = _gc(); _cur = _c.cursor()
+        _cur.execute("SELECT paused FROM user_config WHERE user_id=?", (_USER_ID,))
+        _r = _cur.fetchone(); _c.close()
+        return bool(_r[0]) if _r else False
+    except Exception:
+        return os.path.exists(_PAUSE_FLAG)
 
 # ── Single-instance lock ──────────────────────────────────────────────────────
 import socket as _sock
@@ -234,7 +247,7 @@ def run_us_scan():
             cr_pnl = cr_bal = cr_trades = 0.0
             if BINANCE_KEY:
                 from trading.crypto_trader import CryptoTrader
-                _cr = CryptoTrader()
+                _cr = CryptoTrader(user_id=_USER_ID)
                 _crs = _cr.get_daily_stats(stats['date'])
                 cr_pnl, cr_bal, cr_trades = _crs['day_pnl'], _crs['balance'], _crs['trades']
             send_combined_summary(
@@ -429,7 +442,7 @@ def main():
         cprint("ERROR: ALPACA_KEY not set in .env — US session disabled.", RD)
         sys.exit(1)
 
-    us_trader  = AlpacaTrader()
+    us_trader  = AlpacaTrader(user_id=_USER_ID)
 
     # Restore burst pause state from DB (survives restarts)
     global _loss_burst_pause_until
