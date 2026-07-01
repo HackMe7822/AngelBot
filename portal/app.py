@@ -1041,15 +1041,52 @@ class UserPatch(BaseModel):
 
 @app.get("/api/users")
 def list_users(user: str = Depends(require_auth)):
-    """Return all portal users. Admin only."""
+    """Return all portal users with bot status. Admin only."""
     _require_admin(user)
     conn = get_conn()
     c    = conn.cursor()
-    c.execute("SELECT id, username, role, created_at, last_login FROM portal_users ORDER BY id")
-    cols = ['id', 'username', 'role', 'created_at', 'last_login']
+    c.execute(
+        "SELECT p.id, p.username, p.role, p.created_at, p.last_login, "
+        "COALESCE(uc.paused, 1) AS paused "
+        "FROM portal_users p "
+        "LEFT JOIN user_config uc ON uc.user_id = p.id "
+        "ORDER BY p.id"
+    )
+    cols = ['id', 'username', 'role', 'created_at', 'last_login', 'paused']
     rows = [dict(zip(cols, r)) for r in c.fetchall()]
     conn.close()
     return {"users": rows}
+
+
+@app.post("/api/users/{username}/activate")
+def activate_user(username: str, user: str = Depends(require_auth)):
+    """Start a user's paper trading services. Admin only."""
+    _require_admin(user)
+    uid = _get_user_id(username)
+    if uid == 1 and username != 'admin':
+        raise HTTPException(404, f"User '{username}' not found.")
+    _set_user_paused(uid, False)
+    # Update service statuses in DB
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("UPDATE user_services SET status='running' WHERE user_id=?", (uid,))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "message": f"'{username}' bot services started."}
+
+
+@app.post("/api/users/{username}/deactivate")
+def deactivate_user(username: str, user: str = Depends(require_auth)):
+    """Stop a user's paper trading services. Admin only."""
+    _require_admin(user)
+    uid = _get_user_id(username)
+    _set_user_paused(uid, True)
+    conn = get_conn()
+    c    = conn.cursor()
+    c.execute("UPDATE user_services SET status='stopped' WHERE user_id=?", (uid,))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "message": f"'{username}' bot services stopped."}
 
 @app.post("/api/users")
 def create_user(body: NewUser, user: str = Depends(require_auth)):
