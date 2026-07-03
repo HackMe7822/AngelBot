@@ -197,9 +197,9 @@ def init_db():
         CREATE TABLE user_config (
             id              INT IDENTITY(1,1) PRIMARY KEY,
             user_id         INT NOT NULL,
-            capital_india   FLOAT DEFAULT 10000,
-            capital_us      FLOAT DEFAULT 10000,
-            capital_crypto  FLOAT DEFAULT 1000,
+            capital_india   FLOAT,
+            capital_us      FLOAT,
+            capital_crypto  FLOAT,
             risk_pct        FLOAT DEFAULT 2.0,
             max_positions   INT   DEFAULT 5,
             sl_pct          FLOAT DEFAULT 2.0,
@@ -219,13 +219,14 @@ def init_db():
         )
         CREATE UNIQUE INDEX idx_user_config_user_id ON user_config(user_id)
     """)
-    # Seed admin config row (user_id=1) — uses env-var capitals if set
+    # Seed admin config row (user_id=1) — reads capitals from .env via config.py
+    import config as _cfg
     _exec(c, f"""
         IF NOT EXISTS (SELECT 1 FROM user_config WHERE user_id=1)
         INSERT INTO user_config
             (user_id,capital_india,capital_us,capital_crypto,risk_pct,max_positions,
              sl_pct,target_mult,enable_india,enable_us,enable_crypto,paused,created_at)
-        VALUES (1,10000,10000,1000,2.0,5,2.0,2.0,1,1,1,0,'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+        VALUES (1,{_cfg.CAPITAL},{_cfg.US_CAPITAL},{_cfg.CRYPTO_CAPITAL},2.0,5,2.0,2.0,1,1,1,0,'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     """)
 
     # ── user_services ─────────────────────────────────────────────────────────
