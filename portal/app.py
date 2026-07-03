@@ -1055,6 +1055,15 @@ def list_instances(user: str = Depends(require_auth)):
     return {"instances": rows}
 
 
+class NewInstance(BaseModel):
+    name: str
+    port: int
+    admin_password: str
+    capital_india: float = 100000
+    capital_us: float = 5000
+    capital_crypto: float = 1000
+
+
 @app.post("/api/instances")
 def create_instance(body: NewInstance, user: str = Depends(require_auth)):
     _require_admin(user)
@@ -1148,15 +1157,6 @@ def delete_instance(name: str, user: str = Depends(require_auth)):
 
 
 # ── User management ───────────────────────────────────────────────────────────
-class NewInstance(BaseModel):
-    name: str
-    port: int
-    admin_password: str
-    capital_india: float = 100000
-    capital_us: float = 5000
-    capital_crypto: float = 1000
-
-
 class NewUser(BaseModel):
     username: str
     password: str
