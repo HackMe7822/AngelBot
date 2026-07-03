@@ -197,8 +197,8 @@ def init_db():
         CREATE TABLE user_config (
             id              INT IDENTITY(1,1) PRIMARY KEY,
             user_id         INT NOT NULL,
-            capital_india   FLOAT DEFAULT 100000,
-            capital_us      FLOAT DEFAULT 5000,
+            capital_india   FLOAT DEFAULT 10000,
+            capital_us      FLOAT DEFAULT 10000,
             capital_crypto  FLOAT DEFAULT 1000,
             risk_pct        FLOAT DEFAULT 2.0,
             max_positions   INT   DEFAULT 5,
@@ -225,7 +225,7 @@ def init_db():
         INSERT INTO user_config
             (user_id,capital_india,capital_us,capital_crypto,risk_pct,max_positions,
              sl_pct,target_mult,enable_india,enable_us,enable_crypto,paused,created_at)
-        VALUES (1,100000,5000,1000,2.0,5,2.0,2.0,1,1,1,0,'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+        VALUES (1,10000,10000,1000,2.0,5,2.0,2.0,1,1,1,0,'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     """)
 
     # ── user_services ─────────────────────────────────────────────────────────
