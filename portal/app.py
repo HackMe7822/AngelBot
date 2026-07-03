@@ -423,16 +423,34 @@ def get_trades(
 
     # Total count and total P&L for current filter
     count_params = params[:-2]  # exclude limit/offset
-    count_sql = "SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades"
-    if where:
-        count_sql += " WHERE " + " AND ".join(where)
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+    count_sql = f"SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades{where_sql}"
     c.execute(count_sql, count_params)
     row = c.fetchone()
     total = row[0]
     total_pnl = round(row[1] or 0, 4)
 
+    # Per-currency summary for INR / USD split display
+    summary_sql = f"""
+        SELECT
+            CASE WHEN source IN ('us_paper','crypto_paper') THEN 'usd' ELSE 'inr' END AS grp,
+            COALESCE(SUM(CASE WHEN pnl>0 THEN pnl ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN pnl<0 THEN pnl ELSE 0 END), 0),
+            COUNT(*)
+        FROM trades{where_sql}
+        GROUP BY CASE WHEN source IN ('us_paper','crypto_paper') THEN 'usd' ELSE 'inr' END
+    """
+    c.execute(summary_sql, count_params)
+    summary = {'inr': {'total_profit': 0.0, 'total_loss': 0.0, 'trade_count': 0},
+               'usd': {'total_profit': 0.0, 'total_loss': 0.0, 'trade_count': 0}}
+    for grp, profit, loss, cnt in c.fetchall():
+        summary[grp] = {'total_profit': round(profit or 0, 2),
+                        'total_loss':   round(loss   or 0, 2),
+                        'trade_count':  cnt or 0}
+
     conn.close()
-    return {"trades": rows, "total": total, "total_pnl": total_pnl, "limit": limit, "offset": offset}
+    return {"trades": rows, "total": total, "total_pnl": total_pnl,
+            "summary": summary, "limit": limit, "offset": offset}
 
 
 # ── Open positions ────────────────────────────────────────────────────────────

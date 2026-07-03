@@ -677,7 +677,7 @@
   <div id="page-trades" class="page">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
       <h2 style="margin-bottom:0">Trade History</h2>
-      <span id="trade-total-pnl" style="font-size:15px; font-weight:600;"></span>
+      <span id="trade-count-header" style="color:var(--muted);font-size:13px;"></span>
     </div>
     <div class="toolbar" style="flex-wrap:wrap; gap:8px;">
       <select id="trade-market" onchange="_tradeOffset=0;loadTrades()">
@@ -721,6 +721,7 @@
       <button class="btn" onclick="_tradeOffset=0;loadTrades()">↻ Refresh</button>
       <span id="trade-count" style="color:var(--muted); font-size:12px;"></span>
     </div>
+    <div id="trades-summary" style="margin-bottom:12px;"></div>
     <div class="table-wrap" id="trades-table">Loading...</div>
     <div id="trade-pagination" class="toolbar" style="margin-top:12px; justify-content:center;"></div>
   </div>
@@ -3002,7 +3003,7 @@ async function loadTrades() {
   var _ttel = document.getElementById('trades-table');
   if (_ttel) _ttel.innerHTML = _LOADING_HTML;
   var _tcel = document.getElementById('trade-count'); if (_tcel) _tcel.textContent = '';
-  var _tpel = document.getElementById('trade-total-pnl'); if (_tpel) _tpel.innerHTML = '';
+  var _tsel = document.getElementById('trades-summary'); if (_tsel) _tsel.innerHTML = '';
   var _tpgl = document.getElementById('trade-pagination'); if (_tpgl) _tpgl.innerHTML = '';
   const market    = document.getElementById('trade-market').value;
   const status    = document.getElementById('trade-status').value;
@@ -3020,16 +3021,52 @@ async function loadTrades() {
   _tradesRaw = d.trades || [];
   document.getElementById('trades-table').innerHTML = buildTradeTable(d.trades, true, 'trades');
   updateSortIcons('trades');
-  document.getElementById('trade-count').textContent = `${d.total} total trades`;
+  var countLabel = d.total + ' total trades';
+  document.getElementById('trade-count').textContent = countLabel;
+  var chEl = document.getElementById('trade-count-header'); if (chEl) chEl.textContent = countLabel;
 
-  // Total P&L display
-  const pnlEl = document.getElementById('trade-total-pnl');
-  if (d.total_pnl !== undefined) {
-    const pnl = d.total_pnl;
-    const cls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-    pnlEl.innerHTML = `Total P&L: <span class="${cls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>`;
-  } else {
-    pnlEl.textContent = '';
+  // Per-currency summary cards
+  var sumEl = document.getElementById('trades-summary');
+  if (sumEl && d.summary) {
+    var market = document.getElementById('trade-market').value;
+    var sm = d.summary;
+
+    function tradeMetricBox(label, valueHtml, borderRight) {
+      return '<div style="flex:1;min-width:130px;padding:6px 16px;' + (borderRight ? 'border-right:1px solid var(--border);' : '') + '">' +
+        '<div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">' + label + '</div>' +
+        '<div style="font-size:17px;font-weight:700;line-height:1.2">' + valueHtml + '</div>' +
+        '</div>';
+    }
+
+    function makeTradeSummaryCard(sym, dp, profit, loss, cnt) {
+      var net    = profit + loss;
+      var netCls = net >= 0 ? 'pnl-pos' : 'pnl-neg';
+      var netSign = net >= 0 ? '+' : '';
+      return '<div class="card" style="padding:10px 0;display:flex;flex-wrap:wrap;align-items:stretch;width:100%;overflow:hidden;">' +
+        tradeMetricBox('Total Profit', '<span class="pnl-pos">+' + sym + profit.toFixed(dp) + '</span>', true) +
+        tradeMetricBox('Total Loss',   '<span class="pnl-neg">' + sym + loss.toFixed(dp) + '</span>', true) +
+        tradeMetricBox('Net P&amp;L',  '<span class="' + netCls + '">' + netSign + sym + Math.abs(net).toFixed(dp) + '</span>', true) +
+        tradeMetricBox('Trades', '<span style="color:var(--text)">' + cnt + '</span>', false) +
+        '</div>';
+    }
+
+    var html = '';
+    if (market === '' || market === 'india') {
+      var inr = sm.inr || {total_profit:0,total_loss:0,trade_count:0};
+      if (inr.trade_count > 0) {
+        if (market === '') html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">India &#8377;</div>';
+        html += makeTradeSummaryCard('&#8377;', 2, inr.total_profit, inr.total_loss, inr.trade_count);
+      }
+    }
+    if (market === '' || market === 'us' || market === 'crypto') {
+      var usd = sm.usd || {total_profit:0,total_loss:0,trade_count:0};
+      if (usd.trade_count > 0) {
+        if (html) html += '<div style="height:6px;"></div>';
+        if (market === '') html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">US / Crypto $</div>';
+        html += makeTradeSummaryCard('$', market === 'crypto' ? 4 : 2, usd.total_profit, usd.total_loss, usd.trade_count);
+      }
+    }
+    sumEl.innerHTML = html;
   }
 
   // Pagination
