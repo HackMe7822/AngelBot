@@ -1984,6 +1984,23 @@ let _monitorPaused = false;
 let _monitorInterval = null;
 let _monitorStats = {err:0, warn:0, buy:0, sell:0};
 
+// ── Global error catcher — shows JS errors as a visible banner ───────────────
+window.onerror = function(msg, src, line, col, err) {
+  var banner = document.getElementById('_js_err_banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = '_js_err_banner';
+    banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#7f1d1d;color:#fecaca;font-size:12px;font-family:monospace;padding:8px 16px;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;cursor:pointer;';
+    banner.title = 'Click to dismiss';
+    banner.onclick = function(){ this.remove(); };
+    document.body.appendChild(banner);
+  }
+  banner.textContent += (err ? err.stack : (msg + ' (line ' + line + ':' + col + ')')) + '\n';
+};
+window.addEventListener('unhandledrejection', function(e) {
+  window.onerror(null, null, null, null, e.reason instanceof Error ? e.reason : new Error(String(e.reason)));
+});
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 function _toggleLoginPw(eye) {
   const inp = document.getElementById('login-pass');
