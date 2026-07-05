@@ -3051,7 +3051,6 @@ async function loadTrades() {
   // Per-currency summary cards
   var sumEl = document.getElementById('trades-summary');
   if (sumEl && d.summary) {
-    var market = document.getElementById('trade-market').value;
     var sm = d.summary;
 
     function tradeMetricBox(label, valueHtml, borderRight) {
