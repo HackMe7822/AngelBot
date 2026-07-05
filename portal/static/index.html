@@ -2057,7 +2057,13 @@ async function apiFetch(path, opts = {}) {
   const creds = localStorage.getItem('ab_creds');
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (creds) headers['Authorization'] = 'Basic ' + creds;
-  const r = await fetch(API + path, { ...opts, headers });
+  var r;
+  try {
+    r = await fetch(API + path, { ...opts, headers });
+  } catch (e) {
+    toast('Portal unreachable — retrying…', 4000);
+    return null;
+  }
   if (r.status === 401) {
     showLogin('Session expired. Please sign in again.');
     return null;
@@ -5260,7 +5266,20 @@ async function testTelegram() {
     showLogin();
     return;
   }
-  const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+  // Retry health check up to 8×, 1.5 s apart — handles portal still starting after NSSM restart
+  var r = null;
+  for (var _attempt = 0; _attempt < 8; _attempt++) {
+    try {
+      r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+      break;
+    } catch (e) {
+      if (_attempt < 7) await new Promise(function(res){ setTimeout(res, 1500); });
+    }
+  }
+  if (!r) {
+    showLogin('Portal server unreachable. Try refreshing in a moment.');
+    return;
+  }
   if (r.status === 401) {
     localStorage.removeItem('ab_creds');
     showLogin();
