@@ -402,50 +402,116 @@
         </div>
       </div>
 
-      <!-- Form -->
-      <div style="display:grid;gap:16px;">
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">Username</label>
+      <!-- ── Step: sign-in ─────────────────────────────────────────── -->
+      <div id="ls-login">
+        <div style="display:grid;gap:14px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">Username</label>
+            <div style="position:relative;">
+              <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">👤</span>
+              <input type="text" id="login-user" autocomplete="username" placeholder="Enter username"
+                style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px 12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
+                onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+                onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
+                onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">Password</label>
+            <div style="position:relative;">
+              <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">🔑</span>
+              <input type="password" id="login-pass" autocomplete="current-password" placeholder="Enter password"
+                style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
+                onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+                onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
+                onkeydown="if(event.key==='Enter')doLogin()">
+              <span onclick="_toggleLoginPw(this)" style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;user-select:none;opacity:.5;" title="Show/hide password">👁</span>
+            </div>
+          </div>
+
+          <!-- Remember me -->
+          <label style="display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;">
+            <input type="checkbox" id="login-remember" checked
+              style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+            <span style="font-size:13px;color:#374151;">Remember me on this device</span>
+          </label>
+
+          <div id="login-err" style="display:none;align-items:center;gap:9px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:11px 14px;color:#dc2626;font-size:12.5px;line-height:1.5;"></div>
+
+          <button id="login-btn" onclick="doLogin()"
+            style="width:100%;padding:13px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5 0%,#6366f1 100%);color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 18px rgba(79,70,229,.38);"
+            onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 24px rgba(79,70,229,.45)'"
+            onmouseout="this.style.transform='';this.style.boxShadow='0 4px 18px rgba(79,70,229,.38)'">
+            Sign In &nbsp;→
+          </button>
+
+          <div style="text-align:center;">
+            <button onclick="_loginStep('forgot')" style="background:none;border:none;color:#6366f1;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:2px 0;">Forgot password?</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Step: enter email for OTP ─────────────────────────────── -->
+      <div id="ls-forgot" style="display:none;">
+        <button onclick="_loginStep('login')" style="background:none;border:none;color:#6b7280;font-size:12px;cursor:pointer;padding:0 0 14px 0;display:flex;align-items:center;gap:5px;">&#8592; Back to sign in</button>
+        <div style="font-size:17px;font-weight:700;color:#1e1b4b;margin-bottom:6px;">Reset your password</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:18px;">Enter your registered email and we'll send a 6-digit OTP.</div>
+        <div style="display:grid;gap:12px;">
           <div style="position:relative;">
-            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">👤</span>
-            <input type="text" id="login-user" autocomplete="username" placeholder="Enter username"
+            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">✉️</span>
+            <input type="email" id="forgot-email" placeholder="your@email.com" autocomplete="email"
               style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px 12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
               onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
               onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
-              onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+              onkeydown="if(event.key==='Enter')doSendOTP()">
           </div>
+          <div id="forgot-msg" style="display:none;border-radius:9px;padding:10px 13px;font-size:12.5px;line-height:1.5;"></div>
+          <button id="forgot-btn" onclick="doSendOTP()"
+            style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5 0%,#6366f1 100%);color:#fff;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(79,70,229,.38);">
+            Send OTP
+          </button>
         </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">Password</label>
+      </div>
+
+      <!-- ── Step: enter OTP + new password ────────────────────────── -->
+      <div id="ls-otp" style="display:none;">
+        <button onclick="_loginStep('forgot')" style="background:none;border:none;color:#6b7280;font-size:12px;cursor:pointer;padding:0 0 14px 0;display:flex;align-items:center;gap:5px;">&#8592; Change email</button>
+        <div style="font-size:17px;font-weight:700;color:#1e1b4b;margin-bottom:6px;">Enter OTP &amp; new password</div>
+        <div id="otp-hint" style="font-size:13px;color:#6b7280;margin-bottom:18px;">Check your inbox for the 6-digit OTP.</div>
+        <div style="display:grid;gap:12px;">
+          <div style="position:relative;">
+            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">🔢</span>
+            <input type="text" id="otp-code" placeholder="6-digit OTP" maxlength="6" inputmode="numeric"
+              style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px 12px 42px;color:#1e293b;font-size:20px;letter-spacing:8px;outline:none;transition:border-color .15s,box-shadow .15s;"
+              onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+              onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''">
+          </div>
           <div style="position:relative;">
             <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">🔑</span>
-            <input type="password" id="login-pass" autocomplete="current-password" placeholder="Enter password"
+            <input type="password" id="otp-newpass" placeholder="New password (min 8 chars)" autocomplete="new-password"
               style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
               onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
               onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
-              onkeydown="if(event.key==='Enter')doLogin()">
-            <span onclick="_toggleLoginPw(this)" style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;user-select:none;opacity:.5;" title="Show/hide password">👁</span>
+              onkeydown="if(event.key==='Enter')doResetPassword()">
+            <span onclick="var i=document.getElementById('otp-newpass');i.type=i.type==='password'?'text':'password'"
+              style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;user-select:none;opacity:.5;" title="Show/hide">👁</span>
           </div>
-        </div>
-
-        <div id="login-err" style="display:none;align-items:center;gap:9px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:11px 14px;color:#dc2626;font-size:12.5px;line-height:1.5;"></div>
-
-        <button id="login-btn" onclick="doLogin()"
-          style="width:100%;padding:13px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5 0%,#6366f1 100%);color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 18px rgba(79,70,229,.38);"
-          onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 24px rgba(79,70,229,.45)'"
-          onmouseout="this.style.transform='';this.style.boxShadow='0 4px 18px rgba(79,70,229,.38)'">
-          Sign In &nbsp;→
-        </button>
-
-        <div style="text-align:center;margin-top:2px;">
-          <button onclick="_toggleForgot()" style="background:none;border:none;color:#6366f1;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:4px 0;">Forgot password?</button>
-        </div>
-
-        <div id="login-forgot" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:12px 14px;font-size:12.5px;color:#1e40af;line-height:1.7;">
-          <strong>To reset your password:</strong><br>
-          &bull; <strong>Regular user</strong> &mdash; ask your admin to go to Settings &rarr; Users &rarr; Reset Password.<br>
-          &bull; <strong>Admin locked out</strong> &mdash; on the server run:<br>
-          <code style="display:block;background:#dbeafe;border-radius:5px;padding:5px 8px;margin-top:5px;font-size:11.5px;color:#1e3a8a;word-break:break-all;">python C:\AngelBot\reset_portal_pass.py</code>
+          <div style="position:relative;">
+            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">🔑</span>
+            <input type="password" id="otp-confirm" placeholder="Confirm new password" autocomplete="new-password"
+              style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
+              onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+              onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
+              onkeydown="if(event.key==='Enter')doResetPassword()">
+          </div>
+          <div id="otp-msg" style="display:none;border-radius:9px;padding:10px 13px;font-size:12.5px;line-height:1.5;"></div>
+          <button id="otp-btn" onclick="doResetPassword()"
+            style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#4f46e5 0%,#6366f1 100%);color:#fff;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(79,70,229,.38);">
+            Reset Password
+          </button>
+          <div style="text-align:center;">
+            <button onclick="doSendOTP(true)" style="background:none;border:none;color:#6366f1;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:2px 0;">Resend OTP</button>
+          </div>
         </div>
       </div>
 
@@ -1390,6 +1456,24 @@
       <div id="cred-ai"></div>
     </div></div>
 
+    <!-- SMTP / Email -->
+    <div class="config-section"><div class="card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:18px; line-height:1;">✉️</span>
+        <div style="font-size:15px;font-weight:600;">Email (SMTP) — Password Reset OTPs</div>
+      </div>
+      <div class="cred-note">
+        <span class="icon">&#9432;</span>
+        <div>
+          <strong>Required for Forgot Password OTP emails.</strong><br>
+          Works with Gmail, Outlook, or any SMTP server.<br>
+          <strong>Gmail example:</strong> Host: <code>smtp.gmail.com</code> &middot; Port: <code>587</code> &middot; User: your Gmail address &middot; Pass: an <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--blue);">App Password</a> (not your login password).<br>
+          <strong>SMTP_FROM</strong> is the "From" address shown in the email — leave blank to use SMTP_USER.
+        </div>
+      </div>
+      <div id="cred-smtp"></div>
+    </div></div>
+
     <!-- Portal -->
     <div class="config-section"><div class="card">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
@@ -1658,6 +1742,56 @@
   <!-- USERS -->
   <div id="page-users" class="page">
 
+    <!-- ── My Account ─────────────────────────────────────────────────────────── -->
+    <div style="margin-bottom:32px;">
+      <h2 style="margin-bottom:4px;">My Account</h2>
+      <p style="color:var(--muted); font-size:13px; margin:0 0 16px;">Manage your login credentials and recovery email.</p>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px;">
+
+        <!-- Email & verification -->
+        <div class="card" style="padding:18px;">
+          <div style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">Recovery Email</div>
+          <div id="email-verified-badge" style="display:none;margin-bottom:10px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+            <input type="email" id="my-email" placeholder="your@email.com" autocomplete="email"
+              style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--input-bg,#f8fafc);color:var(--text);outline:none;"
+              onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
+            <button class="btn sm primary" onclick="saveMyEmail()">Save</button>
+          </div>
+          <div id="verify-email-row" style="display:none;">
+            <button class="btn sm" onclick="sendVerifyOTP()" style="margin-bottom:8px;">✉️ Send verification code</button>
+            <div id="verify-otp-row" style="display:none;display:flex;gap:8px;align-items:center;">
+              <input type="text" id="verify-otp-code" placeholder="6-digit code" maxlength="6"
+                style="width:120px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;letter-spacing:4px;outline:none;"
+                onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
+              <button class="btn sm primary" onclick="confirmVerifyOTP()">Verify</button>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;">Used for <strong>Forgot Password</strong> OTP resets. Must be verified to receive OTPs.</div>
+        </div>
+
+        <!-- Change password -->
+        <div class="card" style="padding:18px;">
+          <div style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">Change Password</div>
+          <div style="display:grid;gap:10px;">
+            <input type="password" id="auth-current" placeholder="Current password" autocomplete="current-password"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;"
+              onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
+            <input type="text" id="auth-newuser" placeholder="New username (leave blank to keep current)"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;"
+              onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
+            <input type="password" id="auth-newpass" placeholder="New password (min 8 chars)" autocomplete="new-password"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;"
+              onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
+            <input type="password" id="auth-confirm" placeholder="Confirm new password" autocomplete="new-password"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;"
+              onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
+            <button class="btn primary" onclick="changePassword()" style="width:100%;justify-content:center;">Update Credentials</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── My Paper Account (all users) ─────────────────────────────────────── -->
     <div style="margin-bottom:32px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
@@ -1740,14 +1874,14 @@
           <tr style="background:var(--bg);">
             <th style="padding:12px 16px; text-align:left; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">User</th>
             <th style="padding:12px 16px; text-align:left; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">Role</th>
+            <th style="padding:12px 16px; text-align:left; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">Email</th>
             <th style="padding:12px 16px; text-align:left; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">Bot Status</th>
-            <th style="padding:12px 16px; text-align:left; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">Created</th>
             <th style="padding:12px 16px; text-align:left; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">Last Login</th>
             <th style="padding:12px 16px; text-align:right; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border);">Actions</th>
           </tr>
         </thead>
         <tbody id="users-tbody">
-          <tr><td colspan="6" style="padding:24px; text-align:center; color:var(--muted);">Loading...</td></tr>
+          <tr><td colspan="7" style="padding:24px; text-align:center; color:var(--muted);">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1785,6 +1919,10 @@
         <div id="modal-pass-group">
           <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;">Password</label>
           <input type="password" id="modal-password" placeholder="Min 8 characters" style="width:100%;">
+        </div>
+        <div>
+          <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;">Email <span style="font-weight:400; color:var(--muted);">(optional — for password reset)</span></label>
+          <input type="email" id="modal-email" placeholder="user@example.com" style="width:100%;">
         </div>
         <div>
           <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:500;">Role</label>
@@ -2014,6 +2152,7 @@ window.addEventListener('unhandledrejection', function(e) {
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 var _liveIntervals = [];
+var _resetToken    = null;  // holds OTP-verified token for password reset
 
 function _startIntervals() {
   _liveIntervals.forEach(function(id){ clearInterval(id); });
@@ -2023,18 +2162,33 @@ function _startIntervals() {
   ];
 }
 
+// Credential helpers — check both localStorage (remember me) and sessionStorage (session only)
+function _getCreds() { return localStorage.getItem('ab_creds') || sessionStorage.getItem('ab_creds') || null; }
+function _getUser()  { return localStorage.getItem('ab_user')  || sessionStorage.getItem('ab_user')  || null; }
+function _setCreds(creds, user, remember) {
+  _clearCreds();
+  if (remember) { localStorage.setItem('ab_creds', creds); localStorage.setItem('ab_user', user); }
+  else          { sessionStorage.setItem('ab_creds', creds); sessionStorage.setItem('ab_user', user); }
+}
+function _clearCreds() {
+  localStorage.removeItem('ab_creds');   localStorage.removeItem('ab_user');
+  sessionStorage.removeItem('ab_creds'); sessionStorage.removeItem('ab_user');
+}
+
 function _toggleLoginPw(eye) {
   const inp = document.getElementById('login-pass');
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
-function _toggleForgot() {
-  const el = document.getElementById('login-forgot');
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+function _loginStep(step) {
+  document.getElementById('ls-login').style.display  = step === 'login'  ? '' : 'none';
+  document.getElementById('ls-forgot').style.display = step === 'forgot' ? '' : 'none';
+  document.getElementById('ls-otp').style.display    = step === 'otp'    ? '' : 'none';
+  if (step === 'forgot') setTimeout(function(){ var e = document.getElementById('forgot-email'); if(e) e.focus(); }, 80);
+  if (step === 'otp')    setTimeout(function(){ var e = document.getElementById('otp-code');     if(e) e.focus(); }, 80);
 }
 
 function showLogin(errMsg) {
-  // Stop background intervals so they can't overwrite the error message
   _liveIntervals.forEach(function(id){ clearInterval(id); });
   _liveIntervals = [];
   const overlay = document.getElementById('login-overlay');
@@ -2044,9 +2198,7 @@ function showLogin(errMsg) {
   const e = document.getElementById('login-err');
   if (errMsg) { e.innerHTML = '⚠️&nbsp; ' + errMsg; e.style.display = 'flex'; }
   else { e.style.display = 'none'; }
-  // Hide forgot panel on each show
-  const fg = document.getElementById('login-forgot');
-  if (fg) fg.style.display = 'none';
+  _loginStep('login');
   setTimeout(function(){ const u = document.getElementById('login-user'); if(u && !u.value) u.focus(); }, 80);
 }
 
@@ -2059,10 +2211,11 @@ function hideLogin(username) {
 }
 
 async function doLogin() {
-  const u = document.getElementById('login-user').value.trim();
-  const p = document.getElementById('login-pass').value;
-  const errEl = document.getElementById('login-err');
-  const btn   = document.getElementById('login-btn');
+  const u      = document.getElementById('login-user').value.trim();
+  const p      = document.getElementById('login-pass').value;
+  const rem    = document.getElementById('login-remember').checked;
+  const errEl  = document.getElementById('login-err');
+  const btn    = document.getElementById('login-btn');
   if (!u || !p) {
     errEl.innerHTML = '⚠️&nbsp; Please enter your username and password.';
     errEl.style.display = 'flex';
@@ -2087,11 +2240,13 @@ async function doLogin() {
       errEl.style.display = 'flex';
       return;
     }
-    localStorage.setItem('ab_creds', creds);
-    localStorage.setItem('ab_user', u);
+    const loginData = await r.json().catch(function(){ return {}; });
+    _setCreds(creds, u, rem);
     _currentUser = u;
     hideLogin(u);
     _startIntervals();
+    _loadMyAccount(loginData);
+    if (!loginData.email) setTimeout(_showNoEmailBanner, 3000);
     apiFetch('/api/prefs').then(function(pr){ if(pr) _prefs = pr; });
     await loadConfig();
     var startPage = _urlToPage();
@@ -2108,8 +2263,90 @@ async function doLogin() {
   }
 }
 
+function _msgBox(elId, text, isErr) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.background = isErr ? '#fef2f2' : '#f0fdf4';
+  el.style.border     = '1px solid ' + (isErr ? '#fecaca' : '#bbf7d0');
+  el.style.color      = isErr ? '#dc2626' : '#15803d';
+  el.innerHTML        = (isErr ? '⚠️&nbsp; ' : '✅&nbsp; ') + text;
+}
+
+var _forgotEmail = '';
+
+async function doSendOTP(resend) {
+  const emailEl = document.getElementById('forgot-email');
+  const email   = resend ? _forgotEmail : (emailEl ? emailEl.value.trim() : '');
+  if (!email) { _msgBox('forgot-msg', 'Please enter your email.', true); return; }
+  _forgotEmail = email;
+  const btn = document.getElementById('forgot-btn');
+  if (btn) { btn.textContent = 'Sending…'; btn.disabled = true; }
+  try {
+    const r = await fetch(API + '/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    const d = await r.json();
+    if (!r.ok) { _msgBox('forgot-msg', d.detail || 'Error. Try again.', true); return; }
+    // Move to OTP step regardless (server never reveals if email exists)
+    document.getElementById('otp-hint').textContent =
+      'OTP sent to ' + email + '. Check your inbox (and spam folder).';
+    if (resend) { _msgBox('otp-msg', 'New OTP sent.', false); }
+    _loginStep('otp');
+  } catch(e) {
+    _msgBox('forgot-msg', 'Could not reach server. Check your connection.', true);
+  } finally {
+    if (btn) { btn.textContent = 'Send OTP'; btn.disabled = false; }
+  }
+}
+
+async function doResetPassword() {
+  const otp      = (document.getElementById('otp-code').value || '').trim();
+  const newPass  = document.getElementById('otp-newpass').value;
+  const confirm  = document.getElementById('otp-confirm').value;
+  if (!otp)            { _msgBox('otp-msg', 'Please enter the OTP.', true); return; }
+  if (newPass.length < 8) { _msgBox('otp-msg', 'Password must be at least 8 characters.', true); return; }
+  if (newPass !== confirm) { _msgBox('otp-msg', 'Passwords do not match.', true); return; }
+  const btn = document.getElementById('otp-btn');
+  btn.textContent = 'Verifying…'; btn.disabled = true;
+  try {
+    // Step 1: verify OTP → get reset token
+    const vr = await fetch(API + '/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: _forgotEmail, otp: otp })
+    });
+    const vd = await vr.json();
+    if (!vr.ok) { _msgBox('otp-msg', vd.detail || 'Invalid OTP.', true); return; }
+    // Step 2: set new password
+    btn.textContent = 'Resetting…';
+    const rr = await fetch(API + '/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: vd.reset_token, new_password: newPass })
+    });
+    const rd = await rr.json();
+    if (!rr.ok) { _msgBox('otp-msg', rd.detail || 'Reset failed.', true); return; }
+    // Success — go back to login with success message
+    _loginStep('login');
+    const errEl = document.getElementById('login-err');
+    errEl.style.background = '#f0fdf4'; errEl.style.border = '1px solid #bbf7d0'; errEl.style.color = '#15803d';
+    errEl.innerHTML = '✅&nbsp; Password reset! Please sign in with your new password.';
+    errEl.style.display = 'flex';
+    document.getElementById('otp-code').value    = '';
+    document.getElementById('otp-newpass').value = '';
+    document.getElementById('otp-confirm').value = '';
+  } catch(e) {
+    _msgBox('otp-msg', 'Could not reach server. Check your connection.', true);
+  } finally {
+    btn.textContent = 'Reset Password'; btn.disabled = false;
+  }
+}
+
 async function apiFetch(path, opts = {}) {
-  const creds = localStorage.getItem('ab_creds');
+  const creds = _getCreds();
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (creds) headers['Authorization'] = 'Basic ' + creds;
   var r;
@@ -2120,9 +2357,8 @@ async function apiFetch(path, opts = {}) {
     return null;
   }
   if (r.status === 401) {
-    const wasLoggedIn = !!localStorage.getItem('ab_creds');
-    localStorage.removeItem('ab_creds');
-    localStorage.removeItem('ab_user');
+    const wasLoggedIn = !!_getCreds();
+    _clearCreds();
     showLogin(wasLoggedIn ? 'Session expired. Please sign in again.' : null);
     return null;
   }
@@ -4288,6 +4524,13 @@ const _CRED_SECTIONS = [
       {k:'ANTHROPIC_API_KEY', label:'Anthropic API Key (Claude — for AI report analysis)'},
       {k:'OPENAI_API_KEY',    label:'OpenAI API Key (GPT-4o Mini — fallback if no Anthropic key)'},
   ]},
+  { id: 'smtp', keys: [
+      {k:'SMTP_HOST', label:'SMTP Host (e.g. smtp.gmail.com)'},
+      {k:'SMTP_PORT', label:'SMTP Port (587 for TLS, 465 for SSL)'},
+      {k:'SMTP_USER', label:'SMTP Username / Email'},
+      {k:'SMTP_PASS', label:'SMTP Password / App Password'},
+      {k:'SMTP_FROM', label:'From Address (optional, defaults to SMTP_USER)'},
+  ]},
   { id: 'portal', keys: [
       {k:'PORTAL_PASS', label:'Admin Password'},
       {k:'SQL_SA_PASS', label:'SQL SA Password'},
@@ -4833,7 +5076,8 @@ async function changePassword() {
   if (d.ok) {
     toast('✅ ' + d.message, 5000);
     // Update stored credentials so the next request succeeds
-    localStorage.setItem('ab_creds', btoa(newUser + ':' + newPass));
+    const rem = !!localStorage.getItem('ab_creds');
+    _setCreds(btoa(newUser + ':' + newPass), newUser, rem);
     document.getElementById('auth-current').value = '';
     document.getElementById('auth-newpass').value = '';
     document.getElementById('auth-confirm').value = '';
@@ -4843,9 +5087,107 @@ async function changePassword() {
 }
 
 function logout() {
-  localStorage.removeItem('ab_creds');
-  localStorage.removeItem('ab_user');
+  _clearCreds();
   location.reload();
+}
+
+// ── My Account — email & verification ─────────────────────────────────────
+var _myEmail = '';
+var _verifyOTPSent = false;
+
+function _loadMyAccount(verifyData) {
+  // verifyData = {username, email} from /api/auth/verify on login
+  _myEmail = verifyData.email || '';
+  const emailEl = document.getElementById('my-email');
+  if (emailEl) emailEl.value = _myEmail;
+  _refreshEmailUI();
+}
+
+function _refreshEmailUI() {
+  const badge = document.getElementById('email-verified-badge');
+  const verRow = document.getElementById('verify-email-row');
+  if (!badge || !verRow) return;
+  if (_myEmail) {
+    badge.style.display = 'block';
+    badge.innerHTML = '<span style="font-size:12px;color:#15803d;font-weight:600;">✅ Email set: ' + _myEmail + '</span>';
+    verRow.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+    verRow.style.display = 'none';
+  }
+}
+
+async function saveMyEmail() {
+  const email = (document.getElementById('my-email').value || '').trim();
+  const r = await apiFetch('/api/auth/set-email', { method:'POST', body: JSON.stringify({email}) });
+  if (!r) return;
+  const d = await r.json();
+  if (d.ok) {
+    _myEmail = email;
+    _refreshEmailUI();
+    toast(email ? '✅ Email saved.' : '✅ Email removed.', 3000);
+    // Dismiss no-email banner if present
+    var b = document.getElementById('no-email-banner');
+    if (b) b.style.display = 'none';
+  } else {
+    toast('❌ ' + (d.detail || 'Error saving email'), 4000);
+  }
+}
+
+async function sendVerifyOTP() {
+  if (!_myEmail) { toast('Save your email first.', 3000); return; }
+  const r = await fetch(API + '/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: _myEmail })
+  });
+  if (r.ok) {
+    _verifyOTPSent = true;
+    const row = document.getElementById('verify-otp-row');
+    if (row) { row.style.display = 'flex'; setTimeout(function(){ var e = document.getElementById('verify-otp-code'); if(e) e.focus(); }, 80); }
+    toast('OTP sent to ' + _myEmail, 4000);
+  } else {
+    toast('Could not send OTP. Check SMTP settings.', 5000);
+  }
+}
+
+async function confirmVerifyOTP() {
+  const code = (document.getElementById('verify-otp-code').value || '').trim();
+  if (!code) { toast('Enter the OTP code.', 3000); return; }
+  const r = await fetch(API + '/api/auth/verify-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: _myEmail, otp: code })
+  });
+  const d = await r.json();
+  if (r.ok) {
+    document.getElementById('verify-otp-row').style.display = 'none';
+    document.getElementById('verify-otp-code').value = '';
+    document.getElementById('email-verified-badge').innerHTML =
+      '<span style="font-size:12px;color:#15803d;font-weight:600;">✅ Email verified: ' + _myEmail + '</span>';
+    toast('✅ Email verified!', 3000);
+  } else {
+    toast('❌ ' + (d.detail || 'Invalid OTP'), 4000);
+  }
+}
+
+function _showNoEmailBanner() {
+  // Show a gentle banner prompting user to set recovery email
+  var existing = document.getElementById('no-email-banner');
+  if (existing) return;
+  var banner = document.createElement('div');
+  banner.id = 'no-email-banner';
+  banner.style.cssText = 'position:fixed;bottom:70px;right:20px;z-index:500;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400e;box-shadow:0 4px 14px rgba(0,0,0,.12);max-width:320px;line-height:1.5;';
+  banner.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">⚠️ No recovery email set</div>'
+    + 'Set your email so you can reset your password if you get locked out.'
+    + '<div style="margin-top:8px;display:flex;gap:8px;">'
+    + '<button onclick="showPage(\'users\');document.getElementById(\'my-email\').focus();document.getElementById(\'no-email-banner\').style.display=\'none\'" '
+    + 'style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600;">Set Email</button>'
+    + '<button onclick="document.getElementById(\'no-email-banner\').style.display=\'none\'" '
+    + 'style="background:none;border:1px solid #fcd34d;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#92400e;">Dismiss</button>'
+    + '</div>';
+  document.body.appendChild(banner);
+  setTimeout(function(){ if (banner.parentNode) banner.style.display='none'; }, 30000);
 }
 
 // ── User Management ───────────────────────────────────────────────────────
@@ -4889,6 +5231,9 @@ async function loadUsers() {
     const activateBtn = isPaused
       ? `<button class="btn sm success" onclick="activateUser('${u.username}')">▶ Activate</button>`
       : `<button class="btn sm" onclick="deactivateUser('${u.username}')">⏸ Pause</button>`;
+    const emailCell = u.email
+      ? `<span style="font-size:12px;color:var(--muted);">${u.email}</span>`
+      : `<span style="font-size:11px;color:#f59e0b;font-weight:500;">⚠ Not set</span>`;
     return `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:14px 16px;">
         <div style="display:flex; align-items:center; gap:10px;">
@@ -4900,8 +5245,8 @@ async function loadUsers() {
         </div>
       </td>
       <td style="padding:14px 16px;">${_roleHTML(u.role)}</td>
+      <td style="padding:14px 16px;">${emailCell}</td>
       <td style="padding:14px 16px;">${botBadge}</td>
-      <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${_fmtDate(u.created_at)}</td>
       <td style="padding:14px 16px; color:var(--muted); font-size:12px;">${_fmtDate(u.last_login)}</td>
       <td style="padding:14px 16px; text-align:right;">
         <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
@@ -4921,6 +5266,7 @@ function openAddUserModal() {
   document.getElementById('modal-username').value = '';
   document.getElementById('modal-username').disabled = false;
   document.getElementById('modal-password').value = '';
+  document.getElementById('modal-email').value = '';
   document.getElementById('modal-pass-group').style.display = 'block';
   document.getElementById('modal-role').value = 'viewer';
   document.getElementById('modal-err').style.display = 'none';
@@ -4953,6 +5299,7 @@ async function saveUserModal() {
   const username = document.getElementById('modal-username').value.trim();
   const password = document.getElementById('modal-password').value;
   const role     = document.getElementById('modal-role').value;
+  const email    = (document.getElementById('modal-email').value || '').trim();
   const errEl    = document.getElementById('modal-err');
 
   if (!username) { errEl.textContent = 'Username is required.'; errEl.style.display='block'; return; }
@@ -4963,9 +5310,9 @@ async function saveUserModal() {
 
   let r;
   if (_editingUser) {
-    r = await apiFetch(`/api/users/${_editingUser}`, { method:'PATCH', body: JSON.stringify({new_password: password}) });
+    r = await apiFetch(`/api/users/${_editingUser}`, { method:'PATCH', body: JSON.stringify({new_password: password, email: email || null}) });
   } else {
-    r = await apiFetch('/api/users', { method:'POST', body: JSON.stringify({username, password, role}) });
+    r = await apiFetch('/api/users', { method:'POST', body: JSON.stringify({username, password, role, email: email || null}) });
   }
   document.getElementById('modal-save-btn').textContent = _editingUser ? 'Save Password' : 'Create User';
 
@@ -5317,8 +5664,8 @@ async function testTelegram() {
 }
 
 (async function init() {
-  const creds = localStorage.getItem('ab_creds');
-  const user  = localStorage.getItem('ab_user') || 'admin';
+  const creds = _getCreds();
+  const user  = _getUser() || 'admin';
   if (!creds) {
     showLogin();
     return;
@@ -5338,19 +5685,21 @@ async function testTelegram() {
     return;
   }
   if (r.status === 401) {
-    localStorage.removeItem('ab_creds');
-    localStorage.removeItem('ab_user');
+    _clearCreds();
     showLogin();
     return;
   }
   if (!r.ok) {
-    localStorage.removeItem('ab_creds');
-    localStorage.removeItem('ab_user');
+    _clearCreds();
     showLogin('Portal error (' + r.status + '). Try refreshing.');
     return;
   }
-  _currentUser = user;
-  hideLogin(user);
+  const loginData = await r.json().catch(function(){ return {}; });
+  _currentUser = loginData.username || user;
+  hideLogin(_currentUser);
+  _startIntervals();
+  _loadMyAccount(loginData);
+  if (!loginData.email) setTimeout(_showNoEmailBanner, 3000);
   const p = await apiFetch('/api/prefs');
   if (p) _prefs = p;
   await loadConfig();
@@ -5359,7 +5708,6 @@ async function testTelegram() {
   checkUpdate();
   _checkAdminAccess();
   updateLiveIndicators();
-  _startIntervals();
 })();
 
 // ══════════════════════════════════════════════════════════════════════════

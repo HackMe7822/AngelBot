@@ -8,10 +8,12 @@ Default admin credentials:  admin / AngelBot@1234
 Change via PORTAL_PASS in .env (sets initial admin password on first run)
 """
 
-import os, sys, json, subprocess, hashlib, hmac, secrets, asyncio, re as _re
+import os, sys, json, subprocess, hashlib, hmac, secrets, asyncio, re as _re, smtplib, random
 from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 from pathlib import Path
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -80,10 +82,67 @@ def _sync_db_to_env():
         print(f"[Portal] DB→.env sync: {e}")
 
 
+# In-memory stores — acceptable for OTP/reset tokens; cleared on portal restart
+_otp_store    = {}  # {email: {otp, username, expires}}
+_reset_tokens = {}  # {token: {username, expires}}
+
+
+def _add_email_column():
+    """Idempotent migration: add email column to portal_users."""
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("""
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.columns
+                WHERE object_id = OBJECT_ID('portal_users') AND name = 'email'
+            )
+            ALTER TABLE portal_users ADD email NVARCHAR(200) NULL
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Portal] email column migration: {e}")
+
+
+def _send_otp_email(to_email: str, otp: str, username: str):
+    host  = os.getenv('SMTP_HOST', '')
+    port  = int(os.getenv('SMTP_PORT', '587'))
+    uname = os.getenv('SMTP_USER', '')
+    pwd   = os.getenv('SMTP_PASS', '')
+    frm   = os.getenv('SMTP_FROM', uname)
+    if not host or not uname:
+        raise ValueError("SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASS in Settings → Credentials.")
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = 'AngelBot Portal — Password Reset OTP'
+    msg['From']    = frm
+    msg['To']      = to_email
+    plain = (f"Hello {username},\n\nYour AngelBot Portal password reset OTP is:\n\n"
+             f"  {otp}\n\nExpires in 10 minutes.\n\n"
+             f"If you did not request this, ignore this email.")
+    html  = (f"<html><body style='font-family:sans-serif'>"
+             f"<h2 style='color:#4f46e5'>AngelBot Portal — Password Reset</h2>"
+             f"<p>Hello <strong>{username}</strong>,</p>"
+             f"<p>Your one-time password reset OTP is:</p>"
+             f"<div style='font-size:36px;letter-spacing:10px;font-weight:700;"
+             f"color:#4f46e5;padding:16px 0'>{otp}</div>"
+             f"<p>This OTP expires in <strong>10 minutes</strong>.</p>"
+             f"<p style='color:#6b7280;font-size:12px'>If you did not request this, ignore this email.</p>"
+             f"</body></html>")
+    msg.attach(MIMEText(plain, 'plain'))
+    msg.attach(MIMEText(html, 'html'))
+    with smtplib.SMTP(host, port, timeout=15) as srv:
+        srv.ehlo()
+        srv.starttls()
+        srv.login(uname, pwd)
+        srv.sendmail(frm, to_email, msg.as_string())
+
+
 @app.on_event("startup")
 async def _on_startup():
     _ensure_settings_table()
     _sync_db_to_env()
+    _add_email_column()
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1021,7 +1080,107 @@ def save_pref(update: PrefUpdate, user: str = Depends(require_auth)):
 # ── Auth management ───────────────────────────────────────────────────────────
 @app.get("/api/auth/verify")
 def auth_verify(user: str = Depends(require_auth)):
-    return {"ok": True, "username": user}
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT email FROM portal_users WHERE username=?", (user,))
+    row = c.fetchone()
+    conn.close()
+    email = row[0] if row and row[0] else ""
+    return {"ok": True, "username": user, "email": email}
+
+
+class ForgotPasswordReq(BaseModel):
+    email: str
+
+class VerifyOTPReq(BaseModel):
+    email: str
+    otp: str
+
+class ResetByTokenReq(BaseModel):
+    token: str
+    new_password: str
+
+class SetEmailReq(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(body: ForgotPasswordReq):
+    email = body.email.strip().lower()
+    if not email:
+        raise HTTPException(400, "Email is required.")
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT username FROM portal_users WHERE LOWER(email)=?", (email,))
+    row = c.fetchone()
+    conn.close()
+    # Always return generic message to avoid revealing registered emails
+    if not row:
+        return {"ok": True, "message": "If that email is registered, an OTP has been sent."}
+    username = row[0]
+    otp = str(random.randint(100000, 999999))
+    _otp_store[email] = {
+        'otp': otp, 'username': username,
+        'expires': datetime.now(timezone.utc) + timedelta(minutes=10)
+    }
+    try:
+        _send_otp_email(email, otp, username)
+    except Exception as e:
+        raise HTTPException(500, f"Could not send email: {e}")
+    return {"ok": True, "message": "OTP sent. Check your inbox (and spam folder)."}
+
+
+@app.post("/api/auth/verify-otp")
+def verify_otp(body: VerifyOTPReq):
+    email = body.email.strip().lower()
+    entry = _otp_store.get(email)
+    if not entry:
+        raise HTTPException(400, "No OTP found for this email. Request a new one.")
+    if datetime.now(timezone.utc) > entry['expires']:
+        del _otp_store[email]
+        raise HTTPException(400, "OTP expired. Request a new one.")
+    if entry['otp'] != body.otp.strip():
+        raise HTTPException(400, "Incorrect OTP. Try again.")
+    del _otp_store[email]
+    token = secrets.token_urlsafe(32)
+    _reset_tokens[token] = {
+        'username': entry['username'],
+        'expires': datetime.now(timezone.utc) + timedelta(minutes=5)
+    }
+    return {"ok": True, "reset_token": token}
+
+
+@app.post("/api/auth/reset-password")
+def reset_password_by_token(body: ResetByTokenReq):
+    entry = _reset_tokens.get(body.reset_token)
+    if not entry:
+        raise HTTPException(400, "Invalid or expired reset link. Start over.")
+    if datetime.now(timezone.utc) > entry['expires']:
+        del _reset_tokens[body.reset_token]
+        raise HTTPException(400, "Reset link expired. Start over.")
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters.")
+    username = entry['username']
+    new_hash = _hash_password(body.new_password)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE portal_users SET password_hash=? WHERE username=?", (new_hash, username))
+    conn.commit()
+    conn.close()
+    del _reset_tokens[body.reset_token]
+    return {"ok": True, "message": "Password reset. You can now log in."}
+
+
+@app.post("/api/auth/set-email")
+def set_own_email(body: SetEmailReq, user: str = Depends(require_auth)):
+    email = body.email.strip().lower() if body.email else None
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE portal_users SET email=? WHERE username=?", (email, user))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -1183,10 +1342,12 @@ class NewUser(BaseModel):
     username: str
     password: str
     role: str = "viewer"
+    email: Optional[str] = None
 
 class UserPatch(BaseModel):
     role: Optional[str] = None
     new_password: Optional[str] = None
+    email: Optional[str] = None
 
 @app.get("/api/users")
 def list_users(user: str = Depends(require_auth)):
@@ -1196,12 +1357,12 @@ def list_users(user: str = Depends(require_auth)):
     c    = conn.cursor()
     c.execute(
         "SELECT p.id, p.username, p.role, p.created_at, p.last_login, "
-        "COALESCE(uc.paused, 1) AS paused "
+        "COALESCE(uc.paused, 1) AS paused, COALESCE(p.email, '') AS email "
         "FROM portal_users p "
         "LEFT JOIN user_config uc ON uc.user_id = p.id "
         "ORDER BY p.id"
     )
-    cols = ['id', 'username', 'role', 'created_at', 'last_login', 'paused']
+    cols = ['id', 'username', 'role', 'created_at', 'last_login', 'paused', 'email']
     rows = [dict(zip(cols, r)) for r in c.fetchall()]
     conn.close()
     return {"users": rows}
@@ -1251,9 +1412,10 @@ def create_user(body: NewUser, user: str = Depends(require_auth)):
     conn = get_conn()
     c    = conn.cursor()
     try:
+        email = body.email.strip().lower() if body.email else None
         c.execute(
-            "INSERT INTO portal_users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
-            (username, pw_hash, body.role, now)
+            "INSERT INTO portal_users (username, password_hash, role, created_at, email) VALUES (?,?,?,?,?)",
+            (username, pw_hash, body.role, now, email)
         )
         c.execute("SELECT @@IDENTITY")
         new_uid = int(c.fetchone()[0])
@@ -1317,6 +1479,9 @@ def patch_user(username: str, body: UserPatch, user: str = Depends(require_auth)
             raise HTTPException(400, "Password must be at least 8 characters.")
         pw_hash = _hash_password(body.new_password)
         c.execute("UPDATE portal_users SET password_hash=? WHERE username=?", (pw_hash, username))
+    if body.email is not None:
+        email = body.email.strip().lower() if body.email else None
+        c.execute("UPDATE portal_users SET email=? WHERE username=?", (email, username))
     conn.commit()
     conn.close()
     return {"ok": True, "message": f"User '{username}' updated."}
@@ -1858,6 +2023,7 @@ _CREDENTIAL_KEYS = [
     'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID',
     'WHATSAPP_PHONE', 'ULTRAMSG_INSTANCE', 'ULTRAMSG_TOKEN',
     'ANTHROPIC_API_KEY', 'OPENAI_API_KEY',
+    'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
     'PORTAL_PASS', 'SQL_SA_PASS',
 ]
 
