@@ -4560,6 +4560,23 @@ async function loadCredentials() {
       `<div style="display:flex;justify-content:flex-end;padding-top:12px;margin-top:8px;border-top:1px solid var(--border);">
         <button class="btn primary" id="cred-save-${sec.id}" onclick="saveAllCredSection('${sec.id}')">&#10003; Save ${lbl}</button>
       </div>`;
+    // SMTP section: append test-email row
+    if (sec.id === 'smtp') {
+      var extra = document.createElement('div');
+      extra.innerHTML =
+        `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+           <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">
+             Send a test email to verify your SMTP settings (save first):
+           </div>
+           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+             <input type="email" id="smtp-test-to" class="config-val" style="flex:1;min-width:180px;"
+                    placeholder="recipient@example.com" />
+             <button class="btn" id="smtp-test-btn" onclick="testSmtp()">&#9993; Send Test Email</button>
+           </div>
+           <div id="smtp-test-result" style="margin-top:8px;font-size:12px;display:none;line-height:1.5;"></div>
+         </div>`;
+      el.appendChild(extra);
+    }
   }
 }
 
@@ -5661,6 +5678,41 @@ async function testTelegram() {
   const d = await r.json();
   if (d && d.ok) toast('Telegram connected ✓');
   else toast('Telegram test failed — check token/chat ID', 5000);
+}
+
+async function testSmtp() {
+  var to  = ((document.getElementById('smtp-test-to') || {}).value || '').trim();
+  if (!to || !to.includes('@')) { toast('Enter a recipient email address first.', 3000); return; }
+  var btn = document.getElementById('smtp-test-btn');
+  var res = document.getElementById('smtp-test-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+  var r = await apiFetch('/api/smtp/test', { method: 'POST', body: JSON.stringify({ to: to }) });
+  if (btn) { btn.disabled = false; btn.innerHTML = '&#9993; Send Test Email'; }
+  if (!r) {
+    if (res) { res.style.display = 'block'; res.style.color = 'var(--red)'; res.textContent = '✗ Request failed — check portal connection.'; }
+    return;
+  }
+  var d = await r.json();
+  if (res) {
+    res.style.display = 'block';
+    if (d.ok) {
+      res.style.color = 'var(--green)';
+      res.textContent = '✓ ' + (d.message || 'Test email sent.');
+    } else {
+      res.style.color = 'var(--red)';
+      res.innerHTML = '<strong>✗ ' + escHtml(d.error || 'Unknown error') + '</strong>';
+      if (d.detail) {
+        var pre = document.createElement('pre');
+        pre.style.cssText = 'font-size:10px;margin-top:6px;white-space:pre-wrap;word-break:break-all;' +
+          'max-height:220px;overflow-y:auto;background:var(--surface);padding:8px;border-radius:4px;' +
+          'border:1px solid var(--border);color:var(--muted);';
+        pre.textContent = d.detail;
+        res.appendChild(pre);
+      }
+      res.innerHTML += '<div style="margin-top:6px;font-size:11px;color:var(--muted);">Full traceback also logged to <strong>Logs → Portal</strong>.</div>';
+    }
+  }
 }
 
 (async function init() {

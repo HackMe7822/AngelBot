@@ -937,6 +937,24 @@ def test_ntfy(user: str = Depends(require_auth)):
         return {"ok": False, "error": str(e)}
 
 
+class SmtpTestReq(BaseModel):
+    to: str
+
+@app.post("/api/smtp/test")
+def test_smtp(body: SmtpTestReq, user: str = Depends(require_auth)):
+    import traceback as _tb
+    to_email = (body.to or '').strip()
+    if not to_email or '@' not in to_email:
+        raise HTTPException(400, "Provide a valid recipient email address.")
+    try:
+        _send_otp_email(to_email, "123456", user)
+        return {"ok": True, "message": f"Test email sent to {to_email}. Check your inbox (and spam folder)."}
+    except Exception as e:
+        tb = _tb.format_exc()
+        print(f"[Portal] SMTP test failed → {to_email}:\n{tb}")
+        return {"ok": False, "error": str(e), "detail": tb}
+
+
 class ReportAnalysisRequest(BaseModel):
     period: str
     market: str
@@ -1145,6 +1163,8 @@ def forgot_password(body: ForgotPasswordReq):
     try:
         _send_otp_email(email, otp, username)
     except Exception as e:
+        import traceback as _tb
+        print(f"[Portal] OTP email failed → {email}:\n{_tb.format_exc()}")
         raise HTTPException(500, f"Could not send email: {e}")
     return {"ok": True, "message": "OTP sent. Check your inbox (and spam folder)."}
 
