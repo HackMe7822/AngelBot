@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$LogDir    = "C:\AngelBot\logs",
     [int]$KeepDays     = 3,       # recent daily logs per market to leave unzipped
     [int]$NssmMaxMB    = 50,      # zip NSSM service logs when they exceed this size

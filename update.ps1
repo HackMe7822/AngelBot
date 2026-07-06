@@ -1,4 +1,4 @@
-param([switch]$NoGit)
+﻿param([switch]$NoGit)
 
 $SERVICE = "AngelBot-Portal"
 $TIMEOUT = 30

@@ -1,4 +1,4 @@
-# AngelBot Service Fix
+﻿# AngelBot Service Fix
 # Right-click -> Run as Administrator
 
 $BOT_DIR = "C:\AngelBot"
