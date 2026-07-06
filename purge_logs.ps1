@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$LogDir    = "C:\AngelBot\logs",
     [int]$KeepDays     = 3,       # recent daily logs per market to leave unzipped
     [int]$NssmMaxMB    = 50,      # zip NSSM service logs when they exceed this size
@@ -8,7 +8,7 @@
 
 $TASK_NAME = "AngelBot-LogPurge"
 
-# ── Scheduled task management ─────────────────────────────────────────────────
+# -- Scheduled task management -------------------------------------------------
 if ($Unregister) {
     Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false -ErrorAction SilentlyContinue
     Write-Host "Scheduled task '$TASK_NAME' removed." -ForegroundColor Yellow
@@ -23,11 +23,11 @@ if ($Register) {
     $settings = New-ScheduledTaskSettingsSet -RunOnlyIfIdle:$false -StartWhenAvailable
     Register-ScheduledTask -TaskName $TASK_NAME -Action $action -Trigger $trigger `
         -Settings $settings -RunLevel Highest -Force | Out-Null
-    Write-Host "Scheduled task '$TASK_NAME' registered — runs daily at 02:00." -ForegroundColor Green
+    Write-Host "Scheduled task '$TASK_NAME' registered -- runs daily at 02:00." -ForegroundColor Green
     exit 0
 }
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# -- Helpers -------------------------------------------------------------------
 function Zip-And-Delete($path, $zipDest) {
     if (Test-Path $zipDest) { return $true }   # already zipped from a prior run
     try {
@@ -47,7 +47,7 @@ Write-Host "  Keep    : last $KeepDays daily logs per market"
 Write-Host "  NSSM    : rotate service logs over ${NssmMaxMB} MB"
 Write-Host ""
 
-# ── 1. Daily market logs: {market}_{YYYYMMDD}.log ────────────────────────────
+# -- 1. Daily market logs: {market}_{YYYYMMDD}.log ----------------------------
 # Group by market prefix, keep newest $KeepDays, zip the rest.
 $daily = Get-ChildItem $LogDir -Filter '*_????????.log' -File `
          | Where-Object { $_.BaseName -match '^(.+)_(\d{8})$' } `
@@ -67,7 +67,7 @@ foreach ($mkt in $groups.Keys | Sort-Object) {
     $toKeep  = $files | Select-Object -First $KeepDays
     $toZip   = $files | Select-Object -Skip  $KeepDays
 
-    Write-Host "  [$mkt] $($files.Count) files — keeping $([Math]::Min($KeepDays,$files.Count)), zipping $($toZip.Count)" -ForegroundColor DarkCyan
+    Write-Host "  [$mkt] $($files.Count) files -- keeping $([Math]::Min($KeepDays,$files.Count)), zipping $($toZip.Count)" -ForegroundColor DarkCyan
     foreach ($f in $toZip) {
         $zip = $f.FullName + ".zip"
         if (Zip-And-Delete $f.FullName $zip) {
@@ -78,7 +78,7 @@ foreach ($mkt in $groups.Keys | Sort-Object) {
     }
 }
 
-# ── 2. NSSM service logs: AngelBot-*.log ─────────────────────────────────────
+# -- 2. NSSM service logs: AngelBot-*.log -------------------------------------
 # These are single growing files (not daily). When over $NssmMaxMB MB:
 #   - zip to AngelBot-{name}-{YYYYMMDD-HHmm}.log.zip
 #   - truncate the original (NSSM keeps writing to the same filename)
@@ -91,7 +91,7 @@ foreach ($f in Get-ChildItem $LogDir -Filter 'AngelBot-*.log' -File) {
         $zipName = [IO.Path]::GetFileNameWithoutExtension($f.Name) + "-$stamp.log.zip"
         $zipPath = Join-Path $LogDir $zipName
         if (Zip-And-Delete $f.FullName $zipPath) {
-            # Truncate in-place — NSSM keeps the file handle open, so we clear content
+            # Truncate in-place -- NSSM keeps the file handle open, so we clear content
             # rather than delete, so it keeps appending to the same path.
             try {
                 [IO.File]::WriteAllText($f.FullName, '')   # fastest truncate
@@ -107,7 +107,7 @@ foreach ($f in Get-ChildItem $LogDir -Filter 'AngelBot-*.log' -File) {
     }
 }
 
-# ── 3. Date-based subdirectories: logs/YYYY-MM-DD/ ───────────────────────────
+# -- 3. Date-based subdirectories: logs/YYYY-MM-DD/ ---------------------------
 $dateDirs = Get-ChildItem $LogDir -Directory `
             | Where-Object { $_.Name -match '^\d{4}-\d{2}-\d{2}$' } `
             | Sort-Object Name -Descending
@@ -126,7 +126,7 @@ if ($dateDirs.Count -gt 0) {
     }
 }
 
-# ── 4. Already-zipped archives older than 90 days ────────────────────────────
+# -- 4. Already-zipped archives older than 90 days ----------------------------
 # Safety net: delete very old .zip archives so disk never fills completely.
 $cutoff = (Get-Date).AddDays(-90)
 $oldZips = Get-ChildItem $LogDir -Filter '*.zip' -File | Where-Object { $_.LastWriteTime -lt $cutoff }

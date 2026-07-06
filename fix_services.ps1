@@ -1,4 +1,4 @@
-﻿# AngelBot Service Fix
+# AngelBot Service Fix
 # Right-click -> Run as Administrator
 
 $BOT_DIR = "C:\AngelBot"
@@ -15,7 +15,7 @@ Write-Host "   AngelBot Full Service Fix Script   " -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── 1. Find Python (needed early for patching) ────────────────────────────────
+# -- 1. Find Python (needed early for patching) --------------------------------
 Info "Locating Python executable..."
 $pyReal = $null
 try { $pyReal = (& python -c "import sys; print(sys.executable)" 2>$null).Trim() } catch {}
@@ -35,7 +35,7 @@ if (-not $pyReal) {
 if (-not $pyReal) { Fail "Python not found. Run the main installer first."; pause; exit 1 }
 OK "Python: $pyReal"
 
-# ── 2. Pull latest code from GitHub ──────────────────────────────────────────
+# -- 2. Pull latest code from GitHub ------------------------------------------
 Info "Pulling latest code from GitHub..."
 $oldPref = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
@@ -46,8 +46,8 @@ $ErrorActionPreference = $oldPref
 if ($gitOk) { OK "Code up to date" }
 else { Warn "git had issues: $resetOut" }
 
-# ── 3. Python patch (fix SQLite SQL that breaks SQL Server) ───────────────────
-# Idempotent — already-fixed files are unchanged.
+# -- 3. Python patch (fix SQLite SQL that breaks SQL Server) -------------------
+# Idempotent -- already-fixed files are unchanged.
 $patchPy = @'
 import os, re
 ROOT = r'C:\AngelBot'
@@ -70,7 +70,7 @@ def patch(path):
     txt = txt.replace('date(time)',      'TRY_CAST(TRY_CAST(time AS DATETIME2) AS DATE)')
     if 'c.lastrowid' in txt:
         txt = txt.replace('trade_id = c.lastrowid', 'trade_id = c.fetchone()[0]')
-        # Add OUTPUT INSERTED.id before VALUES — handle Windows \r\n and multi-line INSERT
+        # Add OUTPUT INSERTED.id before VALUES -- handle Windows \r\n and multi-line INSERT
         txt = re.sub(
             r'(status(?:, source)?)\)\s*\r?\n(\s+)VALUES',
             lambda m: m.group(1) + ')\n' + m.group(2) + 'OUTPUT INSERTED.id\n' + m.group(2) + 'VALUES',
@@ -100,7 +100,7 @@ if ($patchOut) {
 } else { OK "Python files already up to date" }
 Remove-Item $patchFile -ErrorAction SilentlyContinue
 
-# ── 4. ODBC Driver 17 check ───────────────────────────────────────────────────
+# -- 4. ODBC Driver 17 check ---------------------------------------------------
 $odbcRegKey = "HKLM:\SOFTWARE\ODBC\ODBCINST.INI\ODBC Driver 17 for SQL Server"
 if (Test-Path $odbcRegKey) {
     OK "ODBC Driver 17 installed"
@@ -108,7 +108,7 @@ if (Test-Path $odbcRegKey) {
     Warn "ODBC Driver 17 not found. Install from https://aka.ms/odbc17 if workers fail to connect."
 }
 
-# ── 5. SQL Server SA + database ───────────────────────────────────────────────
+# -- 5. SQL Server SA + database -----------------------------------------------
 $envFile    = "$BOT_DIR\.env"
 $envContent = if (Test-Path $envFile) { Get-Content $envFile -Raw } else { "" }
 $saPass = ""
@@ -139,7 +139,7 @@ if ($saPass) {
     Info "Testing SQL Server SA login..."
     $saOk = Test-SALogin $saPass
     if ($saOk) { OK "SA login works" }
-    else        { Warn "SA login failed with saved password — will reset" }
+    else        { Warn "SA login failed with saved password -- will reset" }
 }
 
 if (-not $saOk) {
@@ -153,7 +153,7 @@ if (-not $saOk) {
     Start-Sleep 2
     $saOk = Test-SALogin $saPass
     if ($saOk) { OK "SA login works" }
-    else        { Warn "SA login still failing — workers may not connect" }
+    else        { Warn "SA login still failing -- workers may not connect" }
     if ($envContent -match "SQL_SA_PASS=") {
         $envContent = $envContent -replace "SQL_SA_PASS=.*(\r?\n|$)", "SQL_SA_PASS=$saPass`n"
         Set-Content $envFile $envContent.TrimEnd() -Encoding ASCII
@@ -172,13 +172,13 @@ elseif ($saOk) {
     OK "Database 'angelbot' created via SA"
 } else { Warn "Could not create database" }
 
-# ── 6. Install Python packages ────────────────────────────────────────────────
+# -- 6. Install Python packages ------------------------------------------------
 Info "Installing Python packages..."
 $null = & $pyReal -m pip install pyodbc --quiet 2>&1
 $null = & $pyReal -m pip install -r "$BOT_DIR\requirements.txt" --quiet 2>&1
 OK "Packages ready"
 
-# ── 7. Create DB tables via sqlcmd ────────────────────────────────────────────
+# -- 7. Create DB tables via sqlcmd --------------------------------------------
 Info "Creating database tables..."
 $fixSql = @"
 USE angelbot;
@@ -247,7 +247,7 @@ except Exception as e:
 $seedOut = & $pyReal -c $seedPy 2>&1
 if ($seedOut) { OK "$seedOut" }
 
-# ── 8. NSSM setup ─────────────────────────────────────────────────────────────
+# -- 8. NSSM setup -------------------------------------------------------------
 $nssm = "C:\Windows\nssm.exe"
 if (-not (Test-Path $nssm)) {
     $bundled = "$BOT_DIR\prerequisite\setup\nssm\nssm.exe"
@@ -255,7 +255,7 @@ if (-not (Test-Path $nssm)) {
     else { Fail "NSSM not found."; pause; exit 1 }
 }
 
-# ── 9. Re-register and start worker services ──────────────────────────────────
+# -- 9. Re-register and start worker services ----------------------------------
 Write-Host ""
 Info "Re-registering worker services..."
 
@@ -298,7 +298,7 @@ foreach ($w in $workers) {
     }
 }
 
-# ── Portal service ────────────────────────────────────────────────────────────
+# -- Portal service ------------------------------------------------------------
 $null = & $nssm set AngelBot-Portal AppEnvironmentExtra "PYTHONUTF8=1" 2>&1
 Restart-Service AngelBot-Portal -Force -ErrorAction SilentlyContinue
 Start-Sleep 4

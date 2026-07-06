@@ -1,4 +1,4 @@
-﻿# Run this anytime to see the current public tunnel URL
+# Run this anytime to see the current public tunnel URL
 $log = "C:\AngelBot\logs\AngelBot-Tunnel.log"
 
 if (-not (Test-Path $log)) {

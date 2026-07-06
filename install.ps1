@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"
 
@@ -579,15 +579,15 @@ if (-not (Test-Path $cfDest)) {
 
 $script:cfPublicUrl = $null
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # CASE A: Existing 'cloudflared' Windows service (e.g. installed by MeshCentral)
-#   Add trading.creationsit.com to the existing config and restart — do NOT
+#   Add trading.creationsit.com to the existing config and restart -- do NOT
 #   create a second tunnel service or touch any other ingress rules.
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 $existingCfSvc = Get-Service -Name "cloudflared" -ErrorAction SilentlyContinue
 
 if ($existingCfSvc) {
-    Info "Existing 'cloudflared' service detected — patching config for $CF_HOSTNAME ..."
+    Info "Existing 'cloudflared' service detected -- patching config for $CF_HOSTNAME ..."
 
     # Locate the config.yml used by the running service
     $cfConfigPath = $null
@@ -608,7 +608,7 @@ if ($existingCfSvc) {
         $cfContent = Get-Content $cfConfigPath -Raw
 
         if ($cfContent -match [regex]::Escape($CF_HOSTNAME)) {
-            OK "$CF_HOSTNAME already in config — no changes needed"
+            OK "$CF_HOSTNAME already in config -- no changes needed"
             $script:cfPublicUrl = "https://$CF_HOSTNAME"
         } else {
             # Insert before the final catch-all line, preserving all existing rules
@@ -628,7 +628,7 @@ if ($existingCfSvc) {
                 $ErrorActionPreference = $oldPref2
                 OK "DNS CNAME created"
             } else {
-                Warn "Could not auto-create DNS route — run manually:"
+                Warn "Could not auto-create DNS route -- run manually:"
                 Write-Host "      cloudflared tunnel route dns <TUNNEL-NAME> $CF_HOSTNAME" -ForegroundColor White
             }
 
@@ -637,17 +637,17 @@ if ($existingCfSvc) {
             try {
                 Restart-Service -Name "cloudflared" -Force -ErrorAction Stop
                 if (Wait-ServiceRunning "cloudflared" 30) {
-                    OK "cloudflared restarted — $CF_HOSTNAME is live"
+                    OK "cloudflared restarted -- $CF_HOSTNAME is live"
                     $script:cfPublicUrl = "https://$CF_HOSTNAME"
                 } else {
-                    Warn "cloudflared restart may have stalled — check: sc query cloudflared"
+                    Warn "cloudflared restart may have stalled -- check: sc query cloudflared"
                 }
             } catch {
-                Warn "Restart-Service failed ($_) — try manually: net stop cloudflared && net start cloudflared"
+                Warn "Restart-Service failed ($_) -- try manually: net stop cloudflared && net start cloudflared"
             }
         }
     } else {
-        Warn "Could not find cloudflared config.yml — add $CF_HOSTNAME manually:"
+        Warn "Could not find cloudflared config.yml -- add $CF_HOSTNAME manually:"
         Write-Host ""
         Write-Host "  1. Edit config.yml and add:" -ForegroundColor Yellow
         Write-Host "       - hostname: $CF_HOSTNAME" -ForegroundColor White
@@ -656,9 +656,9 @@ if ($existingCfSvc) {
         Write-Host "  3. net stop cloudflared && net start cloudflared" -ForegroundColor White
     }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CASE B: No existing cloudflared service — set up a fresh tunnel
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# CASE B: No existing cloudflared service -- set up a fresh tunnel
+# -----------------------------------------------------------------------------
 } elseif ($cfDest -and (Test-Path $cfDest)) {
 
     Write-Host ""
@@ -740,7 +740,7 @@ if ($existingCfSvc) {
             else {
                 OK "Tunnel UUID: $tunnelUUID"
 
-                # Write config — trading.creationsit.com hardcoded as the hostname
+                # Write config -- trading.creationsit.com hardcoded as the hostname
                 $cfConfigPath = "C:\cloudflared\config.yml"
                 New-Item -ItemType Directory -Force -Path "C:\cloudflared" | Out-Null
                 @"
@@ -767,7 +767,7 @@ ingress:
                 $ErrorActionPreference = $oldPref2
                 Start-Service cloudflared -ErrorAction SilentlyContinue
                 if (Wait-ServiceRunning "cloudflared" 30) {
-                    OK "cloudflared service running — $CF_HOSTNAME is live"
+                    OK "cloudflared service running -- $CF_HOSTNAME is live"
                 } else {
                     Warn "cloudflared service may not have started -- check: sc query cloudflared"
                 }
