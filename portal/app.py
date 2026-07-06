@@ -263,8 +263,8 @@ def require_auth(request: Request):
     conn = get_conn()
     c    = conn.cursor()
     c.execute(
-        "SELECT username, role FROM portal_users WHERE username=? AND password_hash=? AND role IS NOT NULL",
-        (username, pw_hash)
+        "SELECT username, role FROM portal_users WHERE (username=? OR LOWER(email)=LOWER(?)) AND password_hash=? AND role IS NOT NULL",
+        (username, username, pw_hash)
     )
     row = c.fetchone()
     if not row:
