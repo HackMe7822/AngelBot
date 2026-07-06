@@ -119,12 +119,22 @@ def _send_otp_email(to_email: str, otp: str, username: str):
     port  = int(ev.get('SMTP_PORT') or os.getenv('SMTP_PORT', '587') or '587')
     uname = ev.get('SMTP_USER')  or os.getenv('SMTP_USER', '')
     pwd   = ev.get('SMTP_PASS')  or os.getenv('SMTP_PASS', '')
-    frm   = ev.get('SMTP_FROM')  or os.getenv('SMTP_FROM', '') or uname
+    frm_raw = ev.get('SMTP_FROM') or os.getenv('SMTP_FROM', '') or ''
+    # If SMTP_FROM is a display name (no @), format as "Name <email>"; envelope always uses uname
+    if frm_raw and '@' not in frm_raw:
+        frm_header   = f"{frm_raw} <{uname}>"
+        frm_envelope = uname
+    elif frm_raw:
+        frm_header   = frm_raw
+        frm_envelope = frm_raw
+    else:
+        frm_header   = uname
+        frm_envelope = uname
     if not host or not uname:
         raise ValueError("SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASS in API Keys → Email.")
     msg = MIMEMultipart('alternative')
     msg['Subject'] = 'AngelBot Portal — Password Reset OTP'
-    msg['From']    = frm
+    msg['From']    = frm_header
     msg['To']      = to_email
     plain = (f"Hello {username},\n\nYour AngelBot Portal password reset OTP is:\n\n"
              f"  {otp}\n\nExpires in 10 minutes.\n\n"
@@ -144,7 +154,7 @@ def _send_otp_email(to_email: str, otp: str, username: str):
         srv.ehlo()
         srv.starttls()
         srv.login(uname, pwd)
-        srv.sendmail(frm, to_email, msg.as_string())
+        srv.sendmail(frm_envelope, to_email, msg.as_string())
 
 
 @app.on_event("startup")
