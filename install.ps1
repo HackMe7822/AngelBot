@@ -761,15 +761,29 @@ ingress:
                 OK "DNS route created: $CF_HOSTNAME -> tunnel"
                 $script:cfPublicUrl = "https://$CF_HOSTNAME"
 
-                # Register as native Windows service (matches how MeshCentral installs it)
-                $oldPref2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-                & $cfDest --config $cfConfigPath service install 2>&1 | Out-Null
-                $ErrorActionPreference = $oldPref2
-                Start-Service cloudflared -ErrorAction SilentlyContinue
-                if (Wait-ServiceRunning "cloudflared" 30) {
+                # Register via NSSM so the --config flag is always passed explicitly.
+                # cloudflared's own 'service install' omits the config path from the
+                # service command line, causing it to silently use the wrong config when
+                # running as SYSTEM.
+                $cfSvcName = "AngelBot-Tunnel"
+                $cfLog     = "$BOT_DIR\logs\AngelBot-Tunnel.log"
+                $existingCf = Get-Service -Name $cfSvcName -ErrorAction SilentlyContinue
+                if ($existingCf) {
+                    Stop-Service $cfSvcName -Force -ErrorAction SilentlyContinue
+                    & $nssmDest remove $cfSvcName confirm 2>&1 | Out-Null
+                    Start-Sleep -Seconds 2
+                }
+                & $nssmDest install $cfSvcName $cfDest 2>&1 | Out-Null
+                & $nssmDest set $cfSvcName AppParameters  "tunnel --config `"$cfConfigPath`" run" 2>&1 | Out-Null
+                & $nssmDest set $cfSvcName AppDirectory   $BOT_DIR           2>&1 | Out-Null
+                & $nssmDest set $cfSvcName Start          SERVICE_AUTO_START 2>&1 | Out-Null
+                & $nssmDest set $cfSvcName AppStdout      $cfLog             2>&1 | Out-Null
+                & $nssmDest set $cfSvcName AppStderr      $cfLog             2>&1 | Out-Null
+                Start-Service $cfSvcName -ErrorAction SilentlyContinue
+                if (Wait-ServiceRunning $cfSvcName 30) {
                     OK "cloudflared service running -- $CF_HOSTNAME is live"
                 } else {
-                    Warn "cloudflared service may not have started -- check: sc query cloudflared"
+                    Warn "cloudflared service may not have started -- check logs\AngelBot-Tunnel.log"
                 }
             }
         }
