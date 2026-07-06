@@ -104,22 +104,22 @@ BINANCE_SECRET = os.getenv("BINANCE_SECRET", "")
 BINANCE_PAPER  = os.getenv("BINANCE_PAPER",  "true").lower() == "true"
 
 CRYPTO_CAPITAL          = float(os.getenv("CRYPTO_CAPITAL", "1000"))   # set in .env when going live
-CRYPTO_MAX_POSITIONS    = 500      # capital is the natural cap
-CRYPTO_MAX_POSITION_PCT = 0.05     # 5% per trade (adaptive — see crypto_trader.py)
-CRYPTO_MAX_DAILY_LOSS_PCT = 0.03   # 3% daily loss limit (crypto is more volatile)
-CRYPTO_MAX_DAILY_TRADES   = 20     # circuit breaker for crypto session
+CRYPTO_MAX_POSITIONS      = 500    # capital is the natural cap
+CRYPTO_MAX_POSITION_PCT   = 0.05   # 5% per trade (adaptive — see crypto_trader.py)
+CRYPTO_MAX_DAILY_LOSS_PCT = float(os.getenv("CRYPTO_MAX_DAILY_LOSS_PCT", "0.03"))
+CRYPTO_MAX_DAILY_TRADES   = int(os.getenv("CRYPTO_MAX_DAILY_TRADES",     "20"))
 CRYPTO_MIN_TRADE_USD    = float(os.getenv("CRYPTO_MIN_TRADE", "5.0"))  # Binance min notional
 
 # Crypto needs wider SL/target — crypto wicks are 3× larger than stock wicks
-CRYPTO_TARGET_PCT = 0.030   # 3% profit target (stocks use 1.5%)
-CRYPTO_SL_PCT     = 0.015   # 1.5% stop-loss   (stocks use 0.6%)
+CRYPTO_TARGET_PCT = float(os.getenv("CRYPTO_TARGET_PCT", "0.030"))
+CRYPTO_SL_PCT     = float(os.getenv("CRYPTO_SL_PCT",     "0.015"))
 
 # Only place NEW buys during US market hours — crypto volume is 3× higher then
 CRYPTO_HIGH_LIQ_START = (19, 0)   # 7:00 PM IST = NYSE open
 CRYPTO_HIGH_LIQ_END   = (1,  0)   # 1:00 AM IST = NYSE close
 
 # BTC trend filter — skip alt buys if BTC is down more than this % from 1h ago
-CRYPTO_BTC_MIN_CHANGE = -0.4      # if BTC dropped >0.4% in last 1h, skip all buys
+CRYPTO_BTC_MIN_CHANGE = float(os.getenv("CRYPTO_BTC_MIN_CHANGE", "-0.4"))
 
 # Crypto scans 24/7 but skips the lowest-liquidity window to save resources
 CRYPTO_SCAN_SKIP_START  = (2, 0)   # skip 2:00 AM IST
