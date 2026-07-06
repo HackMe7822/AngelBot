@@ -436,6 +436,17 @@
           onmouseout="this.style.transform='';this.style.boxShadow='0 4px 18px rgba(79,70,229,.38)'">
           Sign In &nbsp;→
         </button>
+
+        <div style="text-align:center;margin-top:2px;">
+          <button onclick="_toggleForgot()" style="background:none;border:none;color:#6366f1;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:4px 0;">Forgot password?</button>
+        </div>
+
+        <div id="login-forgot" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:12px 14px;font-size:12.5px;color:#1e40af;line-height:1.7;">
+          <strong>To reset your password:</strong><br>
+          &bull; <strong>Regular user</strong> &mdash; ask your admin to go to Settings &rarr; Users &rarr; Reset Password.<br>
+          &bull; <strong>Admin locked out</strong> &mdash; on the server run:<br>
+          <code style="display:block;background:#dbeafe;border-radius:5px;padding:5px 8px;margin-top:5px;font-size:11.5px;color:#1e3a8a;word-break:break-all;">python C:\AngelBot\reset_portal_pass.py</code>
+        </div>
       </div>
 
       <div style="text-align:center;margin-top:24px;padding-top:18px;border-top:1px solid #f1f5f9;">
@@ -2002,12 +2013,30 @@ window.addEventListener('unhandledrejection', function(e) {
 });
 
 // ── Auth ────────────────────────────────────────────────────────────────────
+var _liveIntervals = [];
+
+function _startIntervals() {
+  _liveIntervals.forEach(function(id){ clearInterval(id); });
+  _liveIntervals = [
+    setInterval(checkUpdate, 1800000),
+    setInterval(updateLiveIndicators, 30000)
+  ];
+}
+
 function _toggleLoginPw(eye) {
   const inp = document.getElementById('login-pass');
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
+function _toggleForgot() {
+  const el = document.getElementById('login-forgot');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 function showLogin(errMsg) {
+  // Stop background intervals so they can't overwrite the error message
+  _liveIntervals.forEach(function(id){ clearInterval(id); });
+  _liveIntervals = [];
   const overlay = document.getElementById('login-overlay');
   overlay.style.display = 'flex';
   document.querySelector('aside.sidebar').style.visibility = 'hidden';
@@ -2015,6 +2044,9 @@ function showLogin(errMsg) {
   const e = document.getElementById('login-err');
   if (errMsg) { e.innerHTML = '⚠️&nbsp; ' + errMsg; e.style.display = 'flex'; }
   else { e.style.display = 'none'; }
+  // Hide forgot panel on each show
+  const fg = document.getElementById('login-forgot');
+  if (fg) fg.style.display = 'none';
   setTimeout(function(){ const u = document.getElementById('login-user'); if(u && !u.value) u.focus(); }, 80);
 }
 
@@ -2054,6 +2086,7 @@ async function doLogin() {
     localStorage.setItem('ab_user', u);
     _currentUser = u;
     hideLogin(u);
+    _startIntervals();
     apiFetch('/api/prefs').then(function(pr){ if(pr) _prefs = pr; });
     await loadConfig();
     var startPage = _urlToPage();
@@ -2082,7 +2115,10 @@ async function apiFetch(path, opts = {}) {
     return null;
   }
   if (r.status === 401) {
-    showLogin('Session expired. Please sign in again.');
+    const wasLoggedIn = !!localStorage.getItem('ab_creds');
+    localStorage.removeItem('ab_creds');
+    localStorage.removeItem('ab_user');
+    showLogin(wasLoggedIn ? 'Session expired. Please sign in again.' : null);
     return null;
   }
   return r;
@@ -5311,8 +5347,7 @@ async function testTelegram() {
   checkUpdate();
   _checkAdminAccess();
   updateLiveIndicators();
-  setInterval(checkUpdate, 1800000);
-  setInterval(updateLiveIndicators, 30000);
+  _startIntervals();
 })();
 
 // ══════════════════════════════════════════════════════════════════════════
