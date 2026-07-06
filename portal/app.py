@@ -150,11 +150,22 @@ def _send_otp_email(to_email: str, otp: str, username: str):
              f"</body></html>")
     msg.attach(MIMEText(plain, 'plain'))
     msg.attach(MIMEText(html, 'html'))
-    with smtplib.SMTP(host, port, timeout=15) as srv:
-        srv.ehlo()
-        srv.starttls()
-        srv.login(uname, pwd)
-        srv.sendmail(frm_envelope, to_email, msg.as_string())
+    import ssl as _ssl
+    ctx = _ssl.create_default_context()
+    if port == 465:
+        # Implicit TLS (SMTPS) — no STARTTLS handshake
+        with smtplib.SMTP_SSL(host, port, timeout=15, context=ctx) as srv:
+            srv.ehlo()
+            srv.login(uname, pwd)
+            srv.sendmail(frm_envelope, to_email, msg.as_string())
+    else:
+        # Explicit TLS via STARTTLS (port 587 or 25)
+        with smtplib.SMTP(host, port, timeout=15) as srv:
+            srv.ehlo()
+            srv.starttls(context=ctx)
+            srv.ehlo()  # re-identify after TLS upgrade
+            srv.login(uname, pwd)
+            srv.sendmail(frm_envelope, to_email, msg.as_string())
 
 
 @app.on_event("startup")
