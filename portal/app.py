@@ -1019,6 +1019,10 @@ def save_pref(update: PrefUpdate, user: str = Depends(require_auth)):
 
 
 # ── Auth management ───────────────────────────────────────────────────────────
+@app.get("/api/auth/verify")
+def auth_verify(user: str = Depends(require_auth)):
+    return {"ok": True, "username": user}
+
 class PasswordChange(BaseModel):
     current_password: str
     new_username: str

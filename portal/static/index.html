@@ -2074,7 +2074,7 @@ async function doLogin() {
   errEl.style.display = 'none';
   try {
     const creds = btoa(unescape(encodeURIComponent(u + ':' + p)));
-    const r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+    const r = await fetch(API + '/api/auth/verify', { headers: { 'Authorization': 'Basic ' + creds } });
     if (r.status === 401) {
       errEl.innerHTML = '⚠️&nbsp; Incorrect username or password. Please try again.';
       errEl.style.display = 'flex';
@@ -5318,11 +5318,11 @@ async function testTelegram() {
     showLogin();
     return;
   }
-  // Retry health check up to 8×, 1.5 s apart — handles portal still starting after NSSM restart
+  // Retry auth verify up to 8x, 1.5s apart -- handles portal still starting after NSSM restart
   var r = null;
   for (var _attempt = 0; _attempt < 8; _attempt++) {
     try {
-      r = await fetch(API + '/api/health', { headers: { 'Authorization': 'Basic ' + creds } });
+      r = await fetch(API + '/api/auth/verify', { headers: { 'Authorization': 'Basic ' + creds } });
       break;
     } catch (e) {
       if (_attempt < 7) await new Promise(function(res){ setTimeout(res, 1500); });
