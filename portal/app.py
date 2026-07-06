@@ -82,9 +82,62 @@ def _sync_db_to_env():
         print(f"[Portal] DB→.env sync: {e}")
 
 
-# In-memory stores — acceptable for OTP/reset tokens; cleared on portal restart
-_otp_store    = {}  # {email: {otp, username, expires}}
-_reset_tokens = {}  # {token: {username, expires}}
+# _otp_store replaced by DB table portal_otps (survives portal restarts)
+_reset_tokens = {}  # {token: {username, expires}} — short-lived, in-memory is fine
+
+
+def _ensure_otps_table():
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("""
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='portal_otps')
+            CREATE TABLE portal_otps (
+                email      NVARCHAR(200) NOT NULL,
+                otp        NVARCHAR(10)  NOT NULL,
+                username   NVARCHAR(100) NOT NULL,
+                expires_at DATETIME2     NOT NULL,
+                CONSTRAINT PK_portal_otps PRIMARY KEY (email)
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Portal] portal_otps init: {e}")
+
+
+def _db_store_otp(email: str, otp: str, username: str):
+    expires = (datetime.utcnow() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "IF EXISTS (SELECT 1 FROM portal_otps WHERE email=?) "
+        "  UPDATE portal_otps SET otp=?, username=?, expires_at=? WHERE email=? "
+        "ELSE "
+        "  INSERT INTO portal_otps (email, otp, username, expires_at) VALUES (?,?,?,?)",
+        (email, otp, username, expires, email,  email, otp, username, expires)
+    )
+    conn.commit()
+    conn.close()
+
+
+def _db_get_otp(email: str):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT otp, username, expires_at FROM portal_otps WHERE email=?", (email,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {'otp': row[0], 'username': row[1], 'expires_at': row[2]}
+
+
+def _db_delete_otp(email: str):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM portal_otps WHERE email=?", (email,))
+    conn.commit()
+    conn.close()
 
 
 def _add_email_column():
@@ -182,6 +235,7 @@ async def _on_startup():
     _ensure_settings_table()
     _sync_db_to_env()
     _add_email_column()
+    _ensure_otps_table()
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1176,10 +1230,7 @@ def forgot_password(body: ForgotPasswordReq):
         return {"ok": True, "message": "If that email is registered, an OTP has been sent."}
     username = row[0]
     otp = str(random.randint(100000, 999999))
-    _otp_store[email] = {
-        'otp': otp, 'username': username,
-        'expires': datetime.now(timezone.utc) + timedelta(minutes=10)
-    }
+    _db_store_otp(email, otp, username)
     try:
         _send_otp_email(email, otp, username)
     except Exception as e:
@@ -1192,15 +1243,15 @@ def forgot_password(body: ForgotPasswordReq):
 @app.post("/api/auth/verify-otp")
 def verify_otp(body: VerifyOTPReq):
     email = body.email.strip().lower()
-    entry = _otp_store.get(email)
+    entry = _db_get_otp(email)
     if not entry:
         raise HTTPException(400, "No OTP found for this email. Request a new one.")
-    if datetime.now(timezone.utc) > entry['expires']:
-        del _otp_store[email]
+    if datetime.utcnow() > entry['expires_at']:
+        _db_delete_otp(email)
         raise HTTPException(400, "OTP expired. Request a new one.")
     if entry['otp'] != body.otp.strip():
         raise HTTPException(400, "Incorrect OTP. Try again.")
-    del _otp_store[email]
+    _db_delete_otp(email)
     token = secrets.token_urlsafe(32)
     _reset_tokens[token] = {
         'username': entry['username'],
