@@ -1211,6 +1211,11 @@ class ResetByTokenReq(BaseModel):
     token: str
     new_password: str
 
+class ResetByOTPReq(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
 class SetEmailReq(BaseModel):
     email: str
 
@@ -1238,6 +1243,31 @@ def forgot_password(body: ForgotPasswordReq):
         print(f"[Portal] OTP email failed → {email}:\n{_tb.format_exc()}")
         raise HTTPException(500, f"Could not send email: {e}")
     return {"ok": True, "message": "OTP sent. Check your inbox (and spam folder)."}
+
+
+@app.post("/api/auth/reset-password-otp")
+def reset_password_otp(body: ResetByOTPReq):
+    """Verify OTP and reset password atomically — one call, no intermediate token."""
+    email = body.email.strip().lower()
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters.")
+    entry = _db_get_otp(email)
+    if not entry:
+        raise HTTPException(400, "No OTP found for this email. Request a new one.")
+    if datetime.utcnow() > entry['expires_at']:
+        _db_delete_otp(email)
+        raise HTTPException(400, "OTP expired. Request a new one.")
+    if entry['otp'] != body.otp.strip():
+        raise HTTPException(400, "Incorrect OTP. Try again.")
+    username = entry['username']
+    new_hash = _hash_password(body.new_password)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE portal_users SET password_hash=? WHERE username=?", (new_hash, username))
+    conn.commit()
+    conn.close()
+    _db_delete_otp(email)
+    return {"ok": True, "message": "Password reset. You can now log in."}
 
 
 @app.post("/api/auth/verify-otp")

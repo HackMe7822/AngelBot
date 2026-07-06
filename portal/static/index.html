@@ -2310,22 +2310,13 @@ async function doResetPassword() {
   if (newPass.length < 8) { _msgBox('otp-msg', 'Password must be at least 8 characters.', true); return; }
   if (newPass !== confirm) { _msgBox('otp-msg', 'Passwords do not match.', true); return; }
   const btn = document.getElementById('otp-btn');
-  btn.textContent = 'Verifying…'; btn.disabled = true;
+  btn.textContent = 'Resetting…'; btn.disabled = true;
   try {
-    // Step 1: verify OTP → get reset token
-    const vr = await fetch(API + '/api/auth/verify-otp', {
+    // Single atomic call — verifies OTP and resets password together
+    const rr = await fetch(API + '/api/auth/reset-password-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: _forgotEmail, otp: otp })
-    });
-    const vd = await vr.json();
-    if (!vr.ok) { _msgBox('otp-msg', vd.detail || 'Invalid OTP.', true); return; }
-    // Step 2: set new password
-    btn.textContent = 'Resetting…';
-    const rr = await fetch(API + '/api/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: vd.reset_token, new_password: newPass })
+      body: JSON.stringify({ email: _forgotEmail, otp: otp, new_password: newPass })
     });
     const rd = await rr.json();
     if (!rr.ok) { _msgBox('otp-msg', rd.detail || 'Reset failed.', true); return; }
