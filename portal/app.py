@@ -1251,11 +1251,13 @@ def verify_otp(body: VerifyOTPReq):
         raise HTTPException(400, "OTP expired. Request a new one.")
     if entry['otp'] != body.otp.strip():
         raise HTTPException(400, "Incorrect OTP. Try again.")
-    _db_delete_otp(email)
+    # Do NOT delete OTP here — if the response is lost mid-flight the user
+    # must be able to retry with the same OTP. Deleted after actual password reset.
     token = secrets.token_urlsafe(32)
     _reset_tokens[token] = {
         'username': entry['username'],
-        'expires': datetime.now(timezone.utc) + timedelta(minutes=5)
+        'email':    email,
+        'expires':  datetime.now(timezone.utc) + timedelta(minutes=15)
     }
     return {"ok": True, "reset_token": token}
 
@@ -1264,10 +1266,10 @@ def verify_otp(body: VerifyOTPReq):
 def reset_password_by_token(body: ResetByTokenReq):
     entry = _reset_tokens.get(body.reset_token)
     if not entry:
-        raise HTTPException(400, "Invalid or expired reset link. Start over.")
+        raise HTTPException(400, "Invalid or expired reset link. Request a new OTP.")
     if datetime.now(timezone.utc) > entry['expires']:
         del _reset_tokens[body.reset_token]
-        raise HTTPException(400, "Reset link expired. Start over.")
+        raise HTTPException(400, "Reset link expired. Request a new OTP.")
     if len(body.new_password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters.")
     username = entry['username']
@@ -1278,6 +1280,8 @@ def reset_password_by_token(body: ResetByTokenReq):
     conn.commit()
     conn.close()
     del _reset_tokens[body.reset_token]
+    # Now safe to delete the OTP — password successfully changed
+    _db_delete_otp(entry.get('email', ''))
     return {"ok": True, "message": "Password reset. You can now log in."}
 
 
