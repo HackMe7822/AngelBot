@@ -2313,13 +2313,17 @@ async function doResetPassword() {
   btn.textContent = 'Resetting…'; btn.disabled = true;
   try {
     // Single atomic call — verifies OTP and resets password together
-    const rr = await fetch(API + '/api/auth/reset-password-otp', {
+    var resetRes = await fetch(API + '/api/auth/reset-password-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: _forgotEmail, otp: otp, new_password: newPass })
     });
-    const rd = await rr.json();
-    if (!rr.ok) { _msgBox('otp-msg', rd.detail || 'Reset failed.', true); return; }
+    var resetBody;
+    try { resetBody = await resetRes.json(); } catch(je) { resetBody = {}; }
+    if (!resetRes.ok) {
+      _msgBox('otp-msg', resetBody.detail || ('Server error ' + resetRes.status), true);
+      return;
+    }
     // Success — go back to login with success message
     _loginStep('login');
     const errEl = document.getElementById('login-err');
@@ -2330,7 +2334,7 @@ async function doResetPassword() {
     document.getElementById('otp-newpass').value = '';
     document.getElementById('otp-confirm').value = '';
   } catch(e) {
-    _msgBox('otp-msg', 'Could not reach server. Check your connection.', true);
+    _msgBox('otp-msg', 'Network error: ' + (e.message || String(e)), true);
   } finally {
     btn.textContent = 'Reset Password'; btn.disabled = false;
   }
