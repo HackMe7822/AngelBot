@@ -106,13 +106,22 @@ def _add_email_column():
 
 
 def _send_otp_email(to_email: str, otp: str, username: str):
-    host  = os.getenv('SMTP_HOST', '')
-    port  = int(os.getenv('SMTP_PORT', '587'))
-    uname = os.getenv('SMTP_USER', '')
-    pwd   = os.getenv('SMTP_PASS', '')
-    frm   = os.getenv('SMTP_FROM', uname)
+    # Read .env directly — credentials are written to .env, not to process environment
+    env_path = _BOT_DIR / '.env'
+    ev = {}
+    if env_path.exists():
+        for _line in env_path.read_text(encoding='utf-8').splitlines():
+            _line = _line.strip()
+            if '=' in _line and not _line.startswith('#'):
+                _k, _, _v = _line.partition('=')
+                ev[_k.strip()] = _v.strip()
+    host  = ev.get('SMTP_HOST')  or os.getenv('SMTP_HOST', '')
+    port  = int(ev.get('SMTP_PORT') or os.getenv('SMTP_PORT', '587') or '587')
+    uname = ev.get('SMTP_USER')  or os.getenv('SMTP_USER', '')
+    pwd   = ev.get('SMTP_PASS')  or os.getenv('SMTP_PASS', '')
+    frm   = ev.get('SMTP_FROM')  or os.getenv('SMTP_FROM', '') or uname
     if not host or not uname:
-        raise ValueError("SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASS in Settings → Credentials.")
+        raise ValueError("SMTP not configured. Set SMTP_HOST / SMTP_USER / SMTP_PASS in API Keys → Email.")
     msg = MIMEMultipart('alternative')
     msg['Subject'] = 'AngelBot Portal — Password Reset OTP'
     msg['From']    = frm
