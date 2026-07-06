@@ -764,8 +764,9 @@ ingress:
                 # Register via NSSM so the --config flag is always passed explicitly.
                 # cloudflared's own 'service install' omits the config path from the
                 # service command line, causing it to silently use the wrong config when
-                # running as SYSTEM.
-                $cfSvcName = "AngelBot-Tunnel"
+                # running as SYSTEM. Name the service 'cloudflared' so that MeshCentral's
+                # install script (which does sc stop/start cloudflared) works without changes.
+                $cfSvcName = "cloudflared"
                 $cfLog     = "$BOT_DIR\logs\AngelBot-Tunnel.log"
                 $existingCf = Get-Service -Name $cfSvcName -ErrorAction SilentlyContinue
                 if ($existingCf) {
