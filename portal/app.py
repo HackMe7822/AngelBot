@@ -270,13 +270,14 @@ def require_auth(request: Request):
     if not row:
         conn.close()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    db_username = row[0]  # always the real username, even if user logged in with email
     c.execute(
         "UPDATE portal_users SET last_login=? WHERE username=?",
-        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username)
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), db_username)
     )
     conn.commit()
     conn.close()
-    return username
+    return db_username
 
 def _require_admin(username: str):
     """Raise 403 if username is not an admin."""
