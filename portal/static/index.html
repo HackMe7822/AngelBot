@@ -412,7 +412,7 @@
               <input type="text" id="login-user" autocomplete="username" placeholder="Enter username"
                 style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px 12px 42px;color:#1e293b;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s;"
                 onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
-                onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
+                onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow='';_checkLoginWebAuthn(this.value)"
                 onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
             </div>
           </div>
@@ -436,6 +436,16 @@
             <span style="font-size:13px;color:#374151;">Remember me on this device</span>
           </label>
 
+          <!-- MFA code row (hidden until MFA is detected) -->
+          <div id="login-mfa-row" style="display:none;">
+            <label style="font-size:11px;font-weight:700;color:#374151;letter-spacing:.6px;display:block;margin-bottom:7px;text-transform:uppercase;">🔐 Authenticator Code</label>
+            <input type="text" id="login-mfa" autocomplete="one-time-code" placeholder="6-digit code" maxlength="6" inputmode="numeric"
+              style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;color:#1e293b;font-size:16px;letter-spacing:6px;outline:none;text-align:center;transition:border-color .15s,box-shadow .15s;"
+              onfocus="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.12)'"
+              onblur="this.style.borderColor='#e2e8f0';this.style.boxShadow=''"
+              onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+
           <div id="login-err" style="display:none;align-items:center;gap:9px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:11px 14px;color:#dc2626;font-size:12.5px;line-height:1.5;"></div>
 
           <button id="login-btn" onclick="doLogin()"
@@ -444,6 +454,16 @@
             onmouseout="this.style.transform='';this.style.boxShadow='0 4px 18px rgba(79,70,229,.38)'">
             Sign In &nbsp;→
           </button>
+
+          <div id="login-webauthn-row" style="display:none;text-align:center;">
+            <div style="display:flex;align-items:center;gap:10px;color:#9ca3af;font-size:12px;margin-bottom:10px;"><div style="flex:1;height:1px;background:currentColor;opacity:.3;"></div>or<div style="flex:1;height:1px;background:currentColor;opacity:.3;"></div></div>
+            <button onclick="loginWithSecurityKey()" id="webauthn-login-btn"
+              style="width:100%;padding:11px;border-radius:10px;border:1.5px solid #e2e8f0;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .15s,box-shadow .15s;"
+              onmouseover="this.style.borderColor='#6366f1';this.style.boxShadow='0 0 0 3px rgba(99,102,241,.08)'"
+              onmouseout="this.style.borderColor='#e2e8f0';this.style.boxShadow=''">
+              🔑 Sign in with Security Key
+            </button>
+          </div>
 
           <div style="text-align:center;">
             <button onclick="_loginStep('forgot')" style="background:none;border:none;color:#6366f1;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:2px 0;">Forgot password?</button>
@@ -1760,7 +1780,7 @@
           </div>
           <div id="verify-email-row" style="display:none;">
             <button class="btn sm" onclick="sendVerifyOTP()" style="margin-bottom:8px;">✉️ Send verification code</button>
-            <div id="verify-otp-row" style="display:none;display:flex;gap:8px;align-items:center;">
+            <div id="verify-otp-row" style="display:none;gap:8px;align-items:center;">
               <input type="text" id="verify-otp-code" placeholder="6-digit code" maxlength="6"
                 style="width:120px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;letter-spacing:4px;outline:none;"
                 onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'">
@@ -1789,6 +1809,48 @@
             <button class="btn primary" onclick="changePassword()" style="width:100%;justify-content:center;">Update Credentials</button>
           </div>
         </div>
+
+        <!-- MFA (TOTP) -->
+        <div class="card" style="padding:18px;" id="mfa-card">
+          <div style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">Two-Factor Authentication (MFA)</div>
+          <div id="mfa-status-row" style="margin-bottom:10px;"></div>
+          <div id="mfa-setup-area" style="display:none;">
+            <div id="mfa-qr-area" style="margin-bottom:10px;"></div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Scan the QR code with Google Authenticator, Authy, or any TOTP app. Then enter the 6-digit code to confirm.</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+              <input type="text" id="mfa-code-input" placeholder="6-digit code" maxlength="6" inputmode="numeric"
+                style="width:130px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;letter-spacing:4px;outline:none;"
+                onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'"
+                onkeydown="if(event.key==='Enter')enableMFA()">
+              <button class="btn sm primary" onclick="enableMFA()">Confirm &amp; Enable</button>
+              <button class="btn sm" onclick="cancelMFASetup()">Cancel</button>
+            </div>
+            <div id="mfa-msg" style="display:none;font-size:12.5px;border-radius:8px;padding:8px 12px;"></div>
+          </div>
+          <div id="mfa-disable-area" style="display:none;">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Enter your authenticator code to disable MFA.</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+              <input type="text" id="mfa-disable-code" placeholder="6-digit code" maxlength="6" inputmode="numeric"
+                style="width:130px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;letter-spacing:4px;outline:none;"
+                onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='var(--border)'"
+                onkeydown="if(event.key==='Enter')disableMFA()">
+              <button class="btn sm" onclick="disableMFA()" style="background:#dc2626;color:#fff;">Disable MFA</button>
+              <button class="btn sm" onclick="cancelMFADisable()">Cancel</button>
+            </div>
+            <div id="mfa-disable-msg" style="display:none;font-size:12.5px;border-radius:8px;padding:8px 12px;"></div>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;">Adds a time-based code requirement every login. Works with Google Authenticator, Authy, and 1Password.</div>
+        </div>
+
+        <!-- Hardware Security Keys (WebAuthn) -->
+        <div class="card" style="padding:18px;" id="webauthn-card">
+          <div style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">Hardware Security Keys</div>
+          <div id="webauthn-keys-list" style="margin-bottom:10px;"></div>
+          <button class="btn sm primary" onclick="registerSecurityKey()" id="webauthn-register-btn">+ Register Security Key</button>
+          <div id="webauthn-msg" style="display:none;font-size:12.5px;border-radius:8px;padding:8px 12px;margin-top:8px;"></div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;">Supports YubiKey, Windows Hello, Touch ID, and any FIDO2/WebAuthn device. Can be used as a login method or second factor.</div>
+        </div>
+
       </div>
     </div>
 
@@ -2173,6 +2235,9 @@ function _setCreds(creds, user, remember) {
 function _clearCreds() {
   localStorage.removeItem('ab_creds');   localStorage.removeItem('ab_user');
   sessionStorage.removeItem('ab_creds'); sessionStorage.removeItem('ab_user');
+  localStorage.removeItem('ab_session_token');
+  sessionStorage.removeItem('ab_session_token');
+  sessionStorage.removeItem('ab_mfa_pending');
 }
 
 function _toggleLoginPw(eye) {
@@ -2221,14 +2286,48 @@ async function doLogin() {
     errEl.style.display = 'flex';
     return;
   }
+  const mfaEl  = document.getElementById('login-mfa');
+  const mfaRow = document.getElementById('login-mfa-row');
+  const mfaCode = mfaEl ? mfaEl.value.trim() : '';
+  errEl.style.display = 'none';
+
+  // If MFA row is showing but code is blank, focus it
+  if (mfaRow && mfaRow.style.display !== 'none' && !mfaCode) {
+    errEl.innerHTML = '⚠️&nbsp; Please enter your authenticator code.';
+    errEl.style.display = 'flex';
+    if (mfaEl) mfaEl.focus();
+    return;
+  }
+
   btn.textContent = 'Signing in…';
   btn.disabled = true;
   btn.style.opacity = '.7';
-  errEl.style.display = 'none';
   try {
     const creds = btoa(unescape(encodeURIComponent(u + ':' + p)));
-    const r = await fetch(API + '/api/auth/verify', { headers: { 'Authorization': 'Basic ' + creds } });
+    const hdrs  = { 'Authorization': 'Basic ' + creds };
+    if (mfaCode) hdrs['X-MFA-Code'] = mfaCode;
+
+    const r = await fetch(API + '/api/auth/verify', { headers: hdrs });
+
     if (r.status === 401) {
+      var body401 = {};
+      try { body401 = await r.json(); } catch(e) {}
+      var detail = body401.detail || '';
+      if (detail === 'MFA code required') {
+        // First time hitting MFA — show the MFA row and ask again
+        if (mfaRow) mfaRow.style.display = 'block';
+        setTimeout(function(){ if(mfaEl) mfaEl.focus(); }, 50);
+        errEl.innerHTML = '🔐&nbsp; Enter your authenticator code below.';
+        errEl.style.display = 'flex';
+        errEl.style.background = '#eff6ff'; errEl.style.borderColor = '#bfdbfe'; errEl.style.color = '#1d4ed8';
+        return;
+      }
+      if (detail === 'Invalid MFA code') {
+        errEl.innerHTML = '⚠️&nbsp; Incorrect authenticator code. Try again.';
+        errEl.style.display = 'flex';
+        if (mfaEl) { mfaEl.value = ''; mfaEl.focus(); }
+        return;
+      }
       errEl.innerHTML = '⚠️&nbsp; Incorrect username or password. Please try again.';
       errEl.style.display = 'flex';
       document.getElementById('login-pass').value = '';
@@ -2240,19 +2339,13 @@ async function doLogin() {
       errEl.style.display = 'flex';
       return;
     }
+    // Login succeeded
+    if (mfaRow) mfaRow.style.display = 'none';
+    if (mfaEl) mfaEl.value = '';
     const loginData = await r.json().catch(function(){ return {}; });
     _setCreds(creds, u, rem);
     _currentUser = u;
-    hideLogin(u);
-    _startIntervals();
-    _loadMyAccount(loginData);
-    if (!loginData.email) setTimeout(_showNoEmailBanner, 3000);
-    apiFetch('/api/prefs').then(function(pr){ if(pr) _prefs = pr; });
-    await loadConfig();
-    var startPage = _urlToPage();
-    showPage(startPage, false);
-    checkUpdate();
-    _checkAdminAccess();
+    _postLogin(loginData);
   } catch(ex) {
     errEl.innerHTML = '⚠️&nbsp; Could not reach the portal server. Check your connection.';
     errEl.style.display = 'flex';
@@ -2263,6 +2356,93 @@ async function doLogin() {
   }
 }
 
+async function loginWithSecurityKey() {
+  const u = document.getElementById('login-user').value.trim();
+  if (!u) {
+    var errEl = document.getElementById('login-err');
+    errEl.innerHTML = '⚠️&nbsp; Enter your username first, then click Sign in with Security Key.';
+    errEl.style.display = 'flex';
+    document.getElementById('login-user').focus();
+    return;
+  }
+  const btn = document.getElementById('webauthn-login-btn');
+  btn.textContent = '🔑 Waiting for key…';
+  btn.disabled = true;
+  var errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  try {
+    // 1. Get challenge from server
+    var r = await fetch(API + '/api/auth/webauthn/auth-begin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u })
+    });
+    if (!r.ok) {
+      var d = await r.json().catch(function(){ return {}; });
+      errEl.innerHTML = '⚠️&nbsp; ' + (d.detail || 'Could not start WebAuthn.');
+      errEl.style.display = 'flex';
+      return;
+    }
+    var options = await r.json();
+    // 2. Convert base64url to Uint8Array for WebAuthn API
+    options.challenge = _b64urlToBytes(options.challenge);
+    if (options.allowCredentials) {
+      options.allowCredentials = options.allowCredentials.map(function(c) {
+        return { ...c, id: _b64urlToBytes(c.id) };
+      });
+    }
+    // 3. Prompt hardware key
+    var credential = await navigator.credentials.get({ publicKey: options });
+    // 4. Send assertion to server
+    var credJson = _credentialToJSON(credential);
+    var r2 = await fetch(API + '/api/auth/webauthn/auth-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, credential: credJson })
+    });
+    var d2 = await r2.json().catch(function(){ return {}; });
+    if (!r2.ok) {
+      errEl.innerHTML = '⚠️&nbsp; ' + (d2.detail || 'Authentication failed.');
+      errEl.style.display = 'flex';
+      return;
+    }
+    // 5. Store session token and complete login
+    var rem = document.getElementById('login-remember').checked;
+    if (rem) localStorage.setItem('ab_session_token', d2.session_token);
+    else     sessionStorage.setItem('ab_session_token', d2.session_token);
+    // Fetch login data using session token
+    var rv = await fetch(API + '/api/auth/verify', { headers: { 'X-Session-Token': d2.session_token } });
+    var loginData = rv.ok ? await rv.json().catch(function(){ return {}; }) : {};
+    loginData.username = loginData.username || d2.username;
+    _currentUser = loginData.username || u;
+    _postLogin(loginData);
+  } catch(ex) {
+    if (ex.name === 'NotAllowedError') {
+      errEl.innerHTML = '⚠️&nbsp; Key prompt was dismissed or timed out.';
+    } else {
+      errEl.innerHTML = '⚠️&nbsp; ' + (ex.message || 'Security key error.');
+    }
+    errEl.style.display = 'flex';
+  } finally {
+    btn.textContent = '🔑 Sign in with Security Key';
+    btn.disabled = false;
+  }
+}
+
+function _postLogin(loginData) {
+  hideLogin(loginData.username || _currentUser);
+  _startIntervals();
+  _loadMyAccount(loginData);
+  if (!loginData.email) setTimeout(_showNoEmailBanner, 3000);
+  apiFetch('/api/prefs').then(function(pr){ if(pr) _prefs = pr; });
+  loadConfig().then(function(){
+    var startPage = _urlToPage();
+    showPage(startPage, false);
+    checkUpdate();
+    _checkAdminAccess();
+  });
+}
+
 function _msgBox(elId, text, isErr) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -2271,6 +2451,283 @@ function _msgBox(elId, text, isErr) {
   el.style.border     = '1px solid ' + (isErr ? '#fecaca' : '#bbf7d0');
   el.style.color      = isErr ? '#dc2626' : '#15803d';
   el.innerHTML        = (isErr ? '⚠️&nbsp; ' : '✅&nbsp; ') + text;
+}
+
+// ── Login: show security key button when user has keys registered ─────────
+async function _checkLoginWebAuthn(username) {
+  if (!username || !window.PublicKeyCredential) return;
+  try {
+    var r = await fetch(API + '/api/auth/check-mfa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    if (!r.ok) return;
+    var d = await r.json();
+    var row = document.getElementById('login-webauthn-row');
+    if (row) row.style.display = d.webauthn_available ? 'block' : 'none';
+  } catch(e) { /* ignore */ }
+}
+
+// ── WebAuthn / Base64url utilities ────────────────────────────────────────
+function _b64urlToBytes(b64url) {
+  var b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  var bin = atob(b64);
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function _bytesToB64url(bytes) {
+  var bin = '';
+  var arr = new Uint8Array(bytes);
+  for (var i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function _credentialToJSON(cred) {
+  var obj = {
+    id: cred.id,
+    rawId: _bytesToB64url(cred.rawId),
+    type: cred.type,
+    response: {}
+  };
+  if (cred.response.clientDataJSON)
+    obj.response.clientDataJSON = _bytesToB64url(cred.response.clientDataJSON);
+  if (cred.response.attestationObject)
+    obj.response.attestationObject = _bytesToB64url(cred.response.attestationObject);
+  if (cred.response.authenticatorData)
+    obj.response.authenticatorData = _bytesToB64url(cred.response.authenticatorData);
+  if (cred.response.signature)
+    obj.response.signature = _bytesToB64url(cred.response.signature);
+  if (cred.response.userHandle)
+    obj.response.userHandle = _bytesToB64url(cred.response.userHandle);
+  return obj;
+}
+
+// ── MFA section ───────────────────────────────────────────────────────────
+function _renderMFASection() {
+  var statusRow = document.getElementById('mfa-status-row');
+  var setupArea = document.getElementById('mfa-setup-area');
+  var disableArea = document.getElementById('mfa-disable-area');
+  if (!statusRow) return;
+  if (_myMFAEnabled) {
+    statusRow.innerHTML =
+      '<span style="font-size:12px;color:#15803d;font-weight:600;">✅ MFA is enabled</span>'
+      + '&nbsp;<button class="btn sm" style="font-size:11px;padding:3px 10px;" onclick="showMFADisable()">Disable</button>';
+  } else {
+    statusRow.innerHTML =
+      '<span style="font-size:12px;color:#9ca3af;">MFA is not enabled</span>'
+      + '&nbsp;<button class="btn sm primary" style="font-size:11px;padding:3px 10px;" onclick="setupMFA()">Set up MFA</button>';
+  }
+  if (setupArea) setupArea.style.display = 'none';
+  if (disableArea) disableArea.style.display = 'none';
+}
+
+async function setupMFA() {
+  var area = document.getElementById('mfa-setup-area');
+  var msgEl = document.getElementById('mfa-msg');
+  if (!area) return;
+  if (msgEl) { msgEl.style.display='none'; msgEl.innerHTML=''; }
+  area.style.display = 'block';
+  document.getElementById('mfa-disable-area').style.display = 'none';
+  // Request setup secret from server
+  var r = await apiFetch('/api/auth/mfa-setup', { method: 'POST' });
+  if (!r) return;
+  var d = await r.json();
+  if (!d.ok) {
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='❌ ' + (d.detail||'Error'); }
+    area.style.display = 'none'; return;
+  }
+  // Store secret temporarily for confirmEnableMFA
+  area._mfaSecret = d.secret;
+  var qrDiv = document.getElementById('mfa-qr-area');
+  if (qrDiv) {
+    if (d.qr_svg) {
+      qrDiv.innerHTML = d.qr_svg;
+      qrDiv.style.display = 'block';
+    } else {
+      qrDiv.innerHTML = '<p style="font-size:12px;color:#6b7280;">Scan this key in your authenticator app:<br><strong style="font-size:13px;word-break:break-all;">' + d.secret + '</strong></p>';
+      qrDiv.style.display = 'block';
+    }
+  }
+  var keyEl = document.getElementById('mfa-secret-text');
+  if (keyEl) keyEl.textContent = d.secret;
+  var codeInput = document.getElementById('mfa-code-input');
+  if (codeInput) { codeInput.value = ''; setTimeout(function(){ codeInput.focus(); }, 100); }
+}
+
+async function enableMFA() {
+  var area = document.getElementById('mfa-setup-area');
+  var code = (document.getElementById('mfa-code-input').value || '').trim();
+  var msgEl = document.getElementById('mfa-msg');
+  if (!code) { if(msgEl){msgEl.style.display='block';msgEl.style.background='#fef2f2';msgEl.style.border='1px solid #fecaca';msgEl.style.color='#dc2626';msgEl.innerHTML='Enter the 6-digit code from your authenticator app.';} return; }
+  var r = await apiFetch('/api/auth/mfa-enable', { method:'POST', body: JSON.stringify({code}) });
+  if (!r) return;
+  var d = await r.json();
+  if (d.ok) {
+    _myMFAEnabled = true;
+    _renderMFASection();
+    toast('✅ MFA enabled!', 3000);
+  } else {
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='❌ ' + (d.detail||'Invalid code'); }
+  }
+}
+
+function cancelMFASetup() {
+  var area = document.getElementById('mfa-setup-area');
+  if (area) area.style.display = 'none';
+}
+
+function showMFADisable() {
+  var dis = document.getElementById('mfa-disable-area');
+  var setup = document.getElementById('mfa-setup-area');
+  if (setup) setup.style.display = 'none';
+  if (dis) {
+    dis.style.display = 'block';
+    var inp = document.getElementById('mfa-disable-code');
+    if (inp) { inp.value = ''; setTimeout(function(){ inp.focus(); }, 100); }
+  }
+}
+
+async function disableMFA() {
+  var code = (document.getElementById('mfa-disable-code').value || '').trim();
+  var msgEl = document.getElementById('mfa-disable-msg');
+  if (!code) { if(msgEl){msgEl.style.display='block';msgEl.style.background='#fef2f2';msgEl.style.border='1px solid #fecaca';msgEl.style.color='#dc2626';msgEl.innerHTML='Enter your current authenticator code to confirm.';} return; }
+  var r = await apiFetch('/api/auth/mfa-disable', { method:'POST', body: JSON.stringify({code}) });
+  if (!r) return;
+  var d = await r.json();
+  if (d.ok) {
+    _myMFAEnabled = false;
+    _renderMFASection();
+    toast('MFA disabled.', 3000);
+  } else {
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='❌ ' + (d.detail||'Invalid code'); }
+  }
+}
+
+function cancelMFADisable() {
+  var dis = document.getElementById('mfa-disable-area');
+  if (dis) dis.style.display = 'none';
+}
+
+// ── WebAuthn / hardware key section ──────────────────────────────────────
+async function _renderWebAuthnSection() {
+  var listEl = document.getElementById('webauthn-keys-list');
+  var msgEl  = document.getElementById('webauthn-msg');
+  if (!listEl) return;
+  listEl.innerHTML = '<span style="font-size:12px;color:#9ca3af;">Loading...</span>';
+  var r = await apiFetch('/api/auth/webauthn/credentials');
+  if (!r) { listEl.innerHTML = ''; return; }
+  var d = await r.json();
+  if (!d.ok || !d.credentials || d.credentials.length === 0) {
+    listEl.innerHTML = '<span style="font-size:12px;color:#9ca3af;">No security keys registered.</span>';
+    return;
+  }
+  listEl.innerHTML = d.credentials.map(function(k) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">'
+      + '<span style="font-size:18px;">🔑</span>'
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="font-size:13px;font-weight:600;color:var(--text);" id="wau-name-' + k.id + '">' + _esc(k.name) + '</div>'
+      + '<div style="font-size:11px;color:#9ca3af;">Last used: ' + (k.last_used ? new Date(k.last_used).toLocaleString() : 'Never') + '</div>'
+      + '</div>'
+      + '<button class="btn sm" style="font-size:11px;padding:3px 8px;" onclick="renameSecurityKey(' + JSON.stringify(k.credential_id) + ')">Rename</button>'
+      + '<button class="btn sm" style="font-size:11px;padding:3px 8px;color:#dc2626;" onclick="deleteSecurityKey(' + JSON.stringify(k.credential_id) + ')">Remove</button>'
+      + '</div>';
+  }).join('');
+}
+
+function _esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function registerSecurityKey() {
+  var msgEl = document.getElementById('webauthn-msg');
+  if (msgEl) { msgEl.style.display='none'; }
+  if (!window.PublicKeyCredential) {
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='This browser does not support security keys (WebAuthn).'; }
+    return;
+  }
+  // Step 1: get registration challenge
+  var r = await apiFetch('/api/auth/webauthn/register-begin', { method: 'POST' });
+  if (!r) return;
+  if (!r.ok) {
+    var e = await r.json().catch(function(){ return {}; });
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='❌ ' + (e.detail||'WebAuthn not available on this server.'); }
+    return;
+  }
+  var options = await r.json();
+  // Convert base64url fields to ArrayBuffer
+  options.challenge = _b64urlToBytes(options.challenge);
+  options.user.id   = _b64urlToBytes(options.user.id);
+  if (options.excludeCredentials) {
+    options.excludeCredentials = options.excludeCredentials.map(function(c) {
+      return Object.assign({}, c, { id: _b64urlToBytes(c.id) });
+    });
+  }
+  var cred;
+  try {
+    cred = await navigator.credentials.create({ publicKey: options });
+  } catch(ex) {
+    if (ex.name === 'NotAllowedError') return; // user cancelled
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='❌ ' + ex.message; }
+    return;
+  }
+  // Prompt for key name
+  var keyName = prompt('Name this security key (e.g. "YubiKey 5"):', 'Security Key');
+  if (keyName === null) return; // cancelled
+  keyName = (keyName || 'Security Key').trim().slice(0, 100);
+  // Step 2: complete registration
+  var r2 = await apiFetch('/api/auth/webauthn/register-complete', {
+    method: 'POST',
+    body: JSON.stringify({ credential: _credentialToJSON(cred), name: keyName })
+  });
+  if (!r2) return;
+  var d2 = await r2.json();
+  if (d2.ok) {
+    _myWebAuthnCount++;
+    await _renderWebAuthnSection();
+    toast('✅ Security key registered!', 3000);
+    // Show security key login button now that user has at least one key
+    var loginRow = document.getElementById('login-webauthn-row');
+    if (loginRow) loginRow.style.display = 'block';
+  } else {
+    if (msgEl) { msgEl.style.display='block'; msgEl.style.background='#fef2f2'; msgEl.style.border='1px solid #fecaca'; msgEl.style.color='#dc2626'; msgEl.innerHTML='❌ ' + (d2.detail||'Registration failed'); }
+  }
+}
+
+async function deleteSecurityKey(credId) {
+  if (!confirm('Remove this security key? You will no longer be able to use it to sign in.')) return;
+  var r = await apiFetch('/api/auth/webauthn/credential/' + encodeURIComponent(credId), { method: 'DELETE' });
+  if (!r) return;
+  var d = await r.json();
+  if (d.ok) {
+    if (_myWebAuthnCount > 0) _myWebAuthnCount--;
+    await _renderWebAuthnSection();
+    toast('Security key removed.', 3000);
+  } else {
+    toast('❌ ' + (d.detail||'Could not remove key'), 4000);
+  }
+}
+
+async function renameSecurityKey(credId) {
+  var newName = prompt('New name for this security key:', '');
+  if (newName === null) return;
+  newName = (newName || '').trim().slice(0, 100);
+  if (!newName) return;
+  var r = await apiFetch('/api/auth/webauthn/credential/' + encodeURIComponent(credId), {
+    method: 'PATCH',
+    body: JSON.stringify({ name: newName })
+  });
+  if (!r) return;
+  var d = await r.json();
+  if (d.ok) {
+    await _renderWebAuthnSection();
+    toast('Security key renamed.', 2000);
+  } else {
+    toast('❌ ' + (d.detail||'Could not rename key'), 4000);
+  }
 }
 
 var _forgotEmail = '';
@@ -2344,6 +2801,12 @@ async function apiFetch(path, opts = {}) {
   const creds = _getCreds();
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (creds) headers['Authorization'] = 'Basic ' + creds;
+  // WebAuthn session token — used when no Basic Auth credentials are present
+  const sessionToken = sessionStorage.getItem('ab_session_token') || localStorage.getItem('ab_session_token');
+  if (sessionToken && !creds) headers['X-Session-Token'] = sessionToken;
+  // MFA code — per-request header sent during initial login flow
+  const mfaCode = sessionStorage.getItem('ab_mfa_pending');
+  if (mfaCode) headers['X-MFA-Code'] = mfaCode;
   var r;
   try {
     r = await fetch(API + path, { ...opts, headers });
@@ -5104,15 +5567,27 @@ function logout() {
 }
 
 // ── My Account — email & verification ─────────────────────────────────────
-var _myEmail = '';
-var _verifyOTPSent = false;
+var _myEmail         = '';
+var _myEmailVerified = false;
+var _myMFAEnabled    = false;
+var _myWebAuthnCount = 0;
+var _verifyOTPSent   = false;
 
 function _loadMyAccount(verifyData) {
-  // verifyData = {username, email} from /api/auth/verify on login
-  _myEmail = verifyData.email || '';
+  _myEmail         = verifyData.email         || '';
+  _myEmailVerified = !!verifyData.email_verified;
+  _myMFAEnabled    = !!verifyData.mfa_enabled;
+  _myWebAuthnCount = verifyData.webauthn_count || 0;
   const emailEl = document.getElementById('my-email');
   if (emailEl) emailEl.value = _myEmail;
   _refreshEmailUI();
+  _renderMFASection();
+  _renderWebAuthnSection();
+  // Show WebAuthn login button on login page if user has keys registered
+  if (_myWebAuthnCount > 0) {
+    var wauRow = document.getElementById('login-webauthn-row');
+    if (wauRow) wauRow.style.display = 'block';
+  }
 }
 
 function _refreshEmailUI() {
@@ -5121,8 +5596,13 @@ function _refreshEmailUI() {
   if (!badge || !verRow) return;
   if (_myEmail) {
     badge.style.display = 'block';
-    badge.innerHTML = '<span style="font-size:12px;color:#15803d;font-weight:600;">✅ Email set: ' + _myEmail + '</span>';
-    verRow.style.display = 'block';
+    if (_myEmailVerified) {
+      badge.innerHTML = '<span style="font-size:12px;color:#15803d;font-weight:600;">✅ Email verified: ' + _myEmail + '</span>';
+      verRow.style.display = 'none';
+    } else {
+      badge.innerHTML = '<span style="font-size:12px;color:#b45309;font-weight:600;">⚠️ Email set but not verified: ' + _myEmail + '</span>';
+      verRow.style.display = 'block';
+    }
   } else {
     badge.style.display = 'none';
     verRow.style.display = 'none';
@@ -5173,10 +5653,10 @@ async function confirmVerifyOTP() {
   });
   const d = await r.json();
   if (r.ok) {
+    _myEmailVerified = true;
     document.getElementById('verify-otp-row').style.display = 'none';
     document.getElementById('verify-otp-code').value = '';
-    document.getElementById('email-verified-badge').innerHTML =
-      '<span style="font-size:12px;color:#15803d;font-weight:600;">✅ Email verified: ' + _myEmail + '</span>';
+    _refreshEmailUI();
     toast('✅ Email verified!', 3000);
   } else {
     toast('❌ ' + (d.detail || 'Invalid OTP'), 4000);
@@ -5712,16 +6192,20 @@ async function testSmtp() {
 
 (async function init() {
   const creds = _getCreds();
+  const sessionToken = sessionStorage.getItem('ab_session_token') || localStorage.getItem('ab_session_token');
   const user  = _getUser() || 'admin';
-  if (!creds) {
+  if (!creds && !sessionToken) {
     showLogin();
     return;
   }
+  const authHdrs = creds
+    ? { 'Authorization': 'Basic ' + creds }
+    : { 'X-Session-Token': sessionToken };
   // Retry auth verify up to 8x, 1.5s apart -- handles portal still starting after NSSM restart
   var r = null;
   for (var _attempt = 0; _attempt < 8; _attempt++) {
     try {
-      r = await fetch(API + '/api/auth/verify', { headers: { 'Authorization': 'Basic ' + creds } });
+      r = await fetch(API + '/api/auth/verify', { headers: authHdrs });
       break;
     } catch (e) {
       if (_attempt < 7) await new Promise(function(res){ setTimeout(res, 1500); });

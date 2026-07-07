@@ -8,7 +8,7 @@ Default admin credentials:  admin / AngelBot@1234
 Change via PORTAL_PASS in .env (sets initial admin password on first run)
 """
 
-import os, sys, json, subprocess, hashlib, hmac, secrets, asyncio, re as _re, smtplib, random
+import os, sys, io, json, subprocess, hashlib, hmac, secrets, asyncio, re as _re, smtplib, random
 from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -85,6 +85,10 @@ def _sync_db_to_env():
 # _otp_store replaced by DB table portal_otps (survives portal restarts)
 _reset_tokens = {}  # {token: {username, expires}} — short-lived, in-memory is fine
 
+# WebAuthn challenge stores — in-memory is fine (5-min TTL, lost on restart = harmless)
+_webauthn_reg_challenges  = {}  # {username: (challenge_bytes, datetime_utc)}
+_webauthn_auth_challenges = {}  # {username: (challenge_bytes, datetime_utc)}
+
 
 def _ensure_otps_table():
     try:
@@ -156,6 +160,86 @@ def _add_email_column():
         conn.close()
     except Exception as e:
         print(f"[Portal] email column migration: {e}")
+
+
+def _add_security_columns():
+    """Idempotent migration: add email_verified, mfa_secret, mfa_enabled to portal_users."""
+    cols = [
+        ('email_verified', 'BIT NOT NULL DEFAULT 0'),
+        ('mfa_secret',     'NVARCHAR(64) NULL'),
+        ('mfa_enabled',    'BIT NOT NULL DEFAULT 0'),
+    ]
+    for col, defn in cols:
+        try:
+            conn = get_conn()
+            c = conn.cursor()
+            c.execute(f"""
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.columns
+                    WHERE object_id = OBJECT_ID('portal_users') AND name = '{col}'
+                )
+                ALTER TABLE portal_users ADD {col} {defn}
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[Portal] {col} column migration: {e}")
+
+
+def _ensure_security_tables():
+    """Create portal_webauthn_credentials and portal_sessions tables (idempotent)."""
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("""
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='portal_webauthn_credentials')
+            CREATE TABLE portal_webauthn_credentials (
+                id            INT IDENTITY(1,1) PRIMARY KEY,
+                user_id       INT NOT NULL,
+                credential_id NVARCHAR(500) NOT NULL UNIQUE,
+                public_key    NVARCHAR(MAX) NOT NULL,
+                sign_count    BIGINT NOT NULL DEFAULT 0,
+                name          NVARCHAR(200) NOT NULL DEFAULT 'Security Key',
+                created_at    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                last_used     DATETIME2 NULL
+            )
+        """)
+        c.execute("""
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='portal_sessions')
+            CREATE TABLE portal_sessions (
+                token      NVARCHAR(200) NOT NULL PRIMARY KEY,
+                username   NVARCHAR(100) NOT NULL,
+                created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+                expires_at DATETIME2 NOT NULL
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Portal] security tables init: {e}")
+
+
+def _get_setting(key: str) -> str:
+    """Read a setting from DB/env (for WebAuthn RP config etc.)."""
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT setting_value FROM bot_settings WHERE setting_key=?", (key,))
+        row = c.fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    env_path = _BOT_DIR / '.env'
+    if env_path.exists():
+        for line in env_path.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                k, _, v = line.partition('=')
+                if k.strip() == key:
+                    return v.strip()
+    return os.getenv(key, '')
 
 
 def _send_otp_email(to_email: str, otp: str, username: str):
@@ -235,7 +319,9 @@ async def _on_startup():
     _ensure_settings_table()
     _sync_db_to_env()
     _add_email_column()
+    _add_security_columns()
     _ensure_otps_table()
+    _ensure_security_tables()
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -246,10 +332,25 @@ def _hash_password(pw: str) -> str:
     return sha256(pw.encode()).hexdigest()
 
 def require_auth(request: Request):
-    """Authenticate against the portal_users table.
-    Parses Authorization: Basic header manually so browsers never see
-    WWW-Authenticate: Basic and never pop up their native login dialog.
-    """
+    """Authenticate. Accepts X-Session-Token (WebAuthn) or Basic auth + optional X-MFA-Code."""
+    # X-Session-Token: issued after WebAuthn authentication
+    session_token = request.headers.get("X-Session-Token", "").strip()
+    if session_token:
+        try:
+            conn = get_conn()
+            c = conn.cursor()
+            c.execute(
+                "SELECT username FROM portal_sessions WHERE token=? AND expires_at > GETUTCDATE()",
+                (session_token,)
+            )
+            row = c.fetchone()
+            conn.close()
+            if row:
+                return row[0]
+        except Exception as e:
+            print(f"[Portal] session token check: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired or invalid")
+
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Basic "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
@@ -263,14 +364,29 @@ def require_auth(request: Request):
     conn = get_conn()
     c    = conn.cursor()
     c.execute(
-        "SELECT username, role FROM portal_users WHERE (username=? OR LOWER(email)=LOWER(?)) AND password_hash=? AND role IS NOT NULL",
+        "SELECT username, role, COALESCE(mfa_enabled,0), mfa_secret "
+        "FROM portal_users WHERE (username=? OR LOWER(email)=LOWER(?)) AND password_hash=? AND role IS NOT NULL",
         (username, username, pw_hash)
     )
     row = c.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    db_username = row[0]  # always the real username, even if user logged in with email
+    db_username = row[0]
+    mfa_enabled = bool(row[2])
+    mfa_secret  = row[3]
+
+    # Check MFA code if enabled
+    if mfa_enabled and mfa_secret:
+        mfa_code = request.headers.get("X-MFA-Code", "").strip()
+        if not mfa_code:
+            conn.close()
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MFA code required")
+        import pyotp as _pyotp
+        if not _pyotp.TOTP(mfa_secret).verify(mfa_code, valid_window=1):
+            conn.close()
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid MFA code")
+
     c.execute(
         "UPDATE portal_users SET last_login=? WHERE username=?",
         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), db_username)
@@ -1194,11 +1310,26 @@ def save_pref(update: PrefUpdate, user: str = Depends(require_auth)):
 def auth_verify(user: str = Depends(require_auth)):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT email FROM portal_users WHERE username=?", (user,))
+    c.execute(
+        "SELECT email, COALESCE(email_verified,0), COALESCE(mfa_enabled,0), id "
+        "FROM portal_users WHERE username=?", (user,)
+    )
     row = c.fetchone()
+    if not row:
+        conn.close()
+        return {"ok": True, "username": user, "email": "", "email_verified": False,
+                "mfa_enabled": False, "webauthn_count": 0}
+    email          = row[0] or ""
+    email_verified = bool(row[1])
+    mfa_enabled    = bool(row[2])
+    uid            = row[3]
+    c.execute("SELECT COUNT(*) FROM portal_webauthn_credentials WHERE user_id=?", (uid,))
+    cnt = c.fetchone()
+    webauthn_count = cnt[0] if cnt else 0
     conn.close()
-    email = row[0] if row and row[0] else ""
-    return {"ok": True, "username": user, "email": email}
+    return {"ok": True, "username": user, "email": email,
+            "email_verified": email_verified, "mfa_enabled": mfa_enabled,
+            "webauthn_count": webauthn_count}
 
 
 class ForgotPasswordReq(BaseModel):
@@ -1284,6 +1415,7 @@ def reset_password_otp(body: ResetByOTPReq):
 
 @app.post("/api/auth/verify-otp")
 def verify_otp(body: VerifyOTPReq):
+    """Verify OTP for My Account email verification — marks email as verified in DB."""
     email = body.email.strip().lower()
     entry = _db_get_otp(email)
     if not entry:
@@ -1293,15 +1425,16 @@ def verify_otp(body: VerifyOTPReq):
         raise HTTPException(400, "OTP expired. Request a new one.")
     if entry['otp'] != body.otp.strip():
         raise HTTPException(400, "Incorrect OTP. Try again.")
-    # Do NOT delete OTP here — if the response is lost mid-flight the user
-    # must be able to retry with the same OTP. Deleted after actual password reset.
-    token = secrets.token_urlsafe(32)
-    _reset_tokens[token] = {
-        'username': entry['username'],
-        'email':    email,
-        'expires':  datetime.now(timezone.utc) + timedelta(minutes=15)
-    }
-    return {"ok": True, "reset_token": token}
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("UPDATE portal_users SET email_verified=1 WHERE username=?", (entry['username'],))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Portal] email_verified update: {e}")
+    _db_delete_otp(email)
+    return {"ok": True}
 
 
 @app.post("/api/auth/reset-password")
@@ -1641,6 +1774,439 @@ def patch_user(username: str, body: UserPatch, user: str = Depends(require_auth)
     conn.commit()
     conn.close()
     return {"ok": True, "message": f"User '{username}' updated."}
+
+
+# ── MFA / TOTP ────────────────────────────────────────────────────────────────
+
+class CheckMFAReq(BaseModel):
+    username: str
+
+class MFACodeReq(BaseModel):
+    code: str
+
+class WebAuthnRegCompleteReq(BaseModel):
+    credential: dict
+    name: Optional[str] = "Security Key"
+
+class WebAuthnAuthBeginReq(BaseModel):
+    username: str
+
+class WebAuthnAuthCompleteReq(BaseModel):
+    username: str
+    credential: dict
+
+class WebAuthnCredNameReq(BaseModel):
+    name: str
+
+
+@app.post("/api/auth/check-mfa")
+def check_mfa(body: CheckMFAReq):
+    """Public: return whether username/email has MFA or WebAuthn enabled (used before login)."""
+    identifier = body.username.strip().lower()
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute(
+            "SELECT COALESCE(mfa_enabled,0), id FROM portal_users "
+            "WHERE LOWER(username)=? OR LOWER(email)=?",
+            (identifier, identifier)
+        )
+        row = c.fetchone()
+        if not row:
+            conn.close()
+            return {"mfa_enabled": False, "webauthn_available": False}
+        mfa_enabled = bool(row[0])
+        uid = row[1]
+        c.execute("SELECT COUNT(*) FROM portal_webauthn_credentials WHERE user_id=?", (uid,))
+        cnt = c.fetchone()
+        webauthn_count = cnt[0] if cnt else 0
+        conn.close()
+        return {"mfa_enabled": mfa_enabled, "webauthn_available": webauthn_count > 0}
+    except Exception:
+        return {"mfa_enabled": False, "webauthn_available": False}
+
+
+@app.post("/api/auth/mfa-setup")
+def mfa_setup(user: str = Depends(require_auth)):
+    """Generate a new TOTP secret. Returns secret + URI + QR SVG (if qrcode lib available)."""
+    import pyotp as _pyotp
+    secret = _pyotp.random_base32()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE portal_users SET mfa_secret=?, mfa_enabled=0 WHERE username=?", (secret, user))
+    conn.commit()
+    conn.close()
+    uri = _pyotp.TOTP(secret).provisioning_uri(name=user, issuer_name="AngelBot Portal")
+    qr_svg = ""
+    try:
+        _lib = os.path.join(os.path.dirname(__file__), 'lib')
+        if _lib not in sys.path:
+            sys.path.insert(0, _lib)
+        import qrcode
+        import qrcode.image.svg
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_L)
+        qr.add_data(uri)
+        qr.make(fit=True)
+        img = qr.make_image(image_factory=qrcode.image.svg.SvgImage)
+        buf = io.BytesIO()
+        img.save(buf)
+        qr_svg = buf.getvalue().decode('utf-8')
+    except Exception as qr_e:
+        print(f"[Portal] QR code generation failed: {qr_e}")
+    return {"ok": True, "secret": secret, "uri": uri, "qr_svg": qr_svg}
+
+
+@app.post("/api/auth/mfa-enable")
+def mfa_enable(body: MFACodeReq, user: str = Depends(require_auth)):
+    """Verify first TOTP code and enable MFA for this account."""
+    import pyotp as _pyotp
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT mfa_secret FROM portal_users WHERE username=?", (user,))
+    row = c.fetchone()
+    if not row or not row[0]:
+        conn.close()
+        raise HTTPException(400, "Run MFA setup first.")
+    if not _pyotp.TOTP(row[0]).verify(body.code.strip(), valid_window=1):
+        conn.close()
+        raise HTTPException(400, "Invalid code. Check your authenticator app.")
+    c.execute("UPDATE portal_users SET mfa_enabled=1 WHERE username=?", (user,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/auth/mfa-disable")
+def mfa_disable(body: MFACodeReq, user: str = Depends(require_auth)):
+    """Verify TOTP code and disable MFA."""
+    import pyotp as _pyotp
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT mfa_secret, COALESCE(mfa_enabled,0) FROM portal_users WHERE username=?", (user,))
+    row = c.fetchone()
+    if not row or not row[0]:
+        conn.close()
+        raise HTTPException(400, "MFA is not set up.")
+    if not row[1]:
+        conn.close()
+        raise HTTPException(400, "MFA is not currently enabled.")
+    if not _pyotp.TOTP(row[0]).verify(body.code.strip(), valid_window=1):
+        conn.close()
+        raise HTTPException(400, "Invalid code.")
+    c.execute("UPDATE portal_users SET mfa_enabled=0, mfa_secret=NULL WHERE username=?", (user,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ── WebAuthn (hardware security keys) ─────────────────────────────────────────
+
+def _wau_available() -> bool:
+    """Return True if the webauthn library is importable."""
+    try:
+        _lib = os.path.join(os.path.dirname(__file__), 'lib')
+        if _lib not in sys.path:
+            sys.path.insert(0, _lib)
+        from webauthn import generate_registration_options  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _wau_cleanup():
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    for d in (_webauthn_reg_challenges, _webauthn_auth_challenges):
+        expired = [k for k, (_, ts) in list(d.items()) if ts < cutoff]
+        for k in expired:
+            d.pop(k, None)
+
+
+@app.get("/api/auth/webauthn/credentials")
+def webauthn_list_credentials(user: str = Depends(require_auth)):
+    uid = _get_user_id(user)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, credential_id, name, created_at, last_used "
+        "FROM portal_webauthn_credentials WHERE user_id=? ORDER BY created_at",
+        (uid,)
+    )
+    rows = c.fetchall()
+    conn.close()
+    return {"ok": True, "credentials": [
+        {"id": r[0], "credential_id": r[1], "name": r[2],
+         "created_at": str(r[3]), "last_used": str(r[4]) if r[4] else None}
+        for r in rows
+    ]}
+
+
+@app.post("/api/auth/webauthn/register-begin")
+def webauthn_register_begin(user: str = Depends(require_auth)):
+    _wau_cleanup()
+    if not _wau_available():
+        raise HTTPException(503, "WebAuthn library not available. Run: pip install webauthn")
+    _lib = os.path.join(os.path.dirname(__file__), 'lib')
+    if _lib not in sys.path:
+        sys.path.insert(0, _lib)
+    from webauthn import generate_registration_options, options_to_json
+    from webauthn.helpers.structs import AuthenticatorSelectionCriteria, UserVerificationRequirement
+
+    uid     = _get_user_id(user)
+    rp_id   = _get_setting('WEBAUTHN_RP_ID')   or 'localhost'
+    rp_name = _get_setting('WEBAUTHN_RP_NAME') or 'AngelBot Portal'
+    options = generate_registration_options(
+        rp_id=rp_id, rp_name=rp_name,
+        user_id=str(uid).encode(), user_name=user, user_display_name=user,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            user_verification=UserVerificationRequirement.PREFERRED,
+        ),
+        timeout=60000,
+    )
+    _webauthn_reg_challenges[user] = (options.challenge, datetime.utcnow())
+    import json as _json
+    return _json.loads(options_to_json(options))
+
+
+@app.post("/api/auth/webauthn/register-complete")
+def webauthn_register_complete(body: WebAuthnRegCompleteReq, user: str = Depends(require_auth)):
+    _wau_cleanup()
+    challenge_data = _webauthn_reg_challenges.get(user)
+    if not challenge_data:
+        raise HTTPException(400, "No pending registration. Refresh and try again.")
+    challenge, ts = challenge_data
+    if datetime.utcnow() - ts > timedelta(minutes=5):
+        _webauthn_reg_challenges.pop(user, None)
+        raise HTTPException(400, "Registration challenge expired. Try again.")
+
+    _lib = os.path.join(os.path.dirname(__file__), 'lib')
+    if _lib not in sys.path:
+        sys.path.insert(0, _lib)
+    from webauthn import verify_registration_response
+
+    rp_id = _get_setting('WEBAUTHN_RP_ID') or 'localhost'
+    try:
+        import json as _json, base64 as _b64
+        cdata_b64 = body.credential.get('response', {}).get('clientDataJSON', '')
+        padded    = cdata_b64 + '=' * (-len(cdata_b64) % 4)
+        cdata     = _json.loads(_b64.urlsafe_b64decode(padded).decode())
+        expected_origin = cdata.get('origin', '')
+    except Exception as e:
+        raise HTTPException(400, f"Invalid credential data: {e}")
+
+    try:
+        verification = verify_registration_response(
+            credential=body.credential,
+            expected_challenge=challenge,
+            expected_rp_id=rp_id,
+            expected_origin=expected_origin,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Registration failed: {e}")
+
+    _webauthn_reg_challenges.pop(user, None)
+
+    import base64 as _b64
+    cred_id_b64 = _b64.urlsafe_b64encode(verification.credential_id).rstrip(b'=').decode()
+    pub_key_b64 = _b64.b64encode(verification.credential_public_key).decode()
+    uid = _get_user_id(user)
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO portal_webauthn_credentials (user_id, credential_id, public_key, sign_count, name) "
+            "VALUES (?,?,?,?,?)",
+            (uid, cred_id_b64, pub_key_b64, verification.sign_count, (body.name or 'Security Key')[:200])
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, f"Could not save credential: {e}")
+    conn.close()
+    return {"ok": True, "credential_id": cred_id_b64}
+
+
+@app.delete("/api/auth/webauthn/credential/{cred_id:path}")
+def webauthn_delete_credential(cred_id: str, user: str = Depends(require_auth)):
+    uid = _get_user_id(user)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "DELETE FROM portal_webauthn_credentials WHERE credential_id=? AND user_id=?",
+        (cred_id, uid)
+    )
+    deleted = c.rowcount
+    conn.commit()
+    conn.close()
+    if not deleted:
+        raise HTTPException(404, "Credential not found.")
+    return {"ok": True}
+
+
+@app.patch("/api/auth/webauthn/credential/{cred_id:path}")
+def webauthn_rename_credential(cred_id: str, body: WebAuthnCredNameReq, user: str = Depends(require_auth)):
+    uid = _get_user_id(user)
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE portal_webauthn_credentials SET name=? WHERE credential_id=? AND user_id=?",
+        (body.name.strip()[:200], cred_id, uid)
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/auth/webauthn/auth-begin")
+def webauthn_auth_begin(body: WebAuthnAuthBeginReq):
+    _wau_cleanup()
+    if not _wau_available():
+        raise HTTPException(503, "WebAuthn library not available.")
+    _lib = os.path.join(os.path.dirname(__file__), 'lib')
+    if _lib not in sys.path:
+        sys.path.insert(0, _lib)
+    from webauthn import generate_authentication_options, options_to_json
+    from webauthn.helpers.structs import UserVerificationRequirement, PublicKeyCredentialDescriptor
+
+    identifier = body.username.strip().lower()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "SELECT username, id FROM portal_users WHERE LOWER(username)=? OR LOWER(email)=?",
+        (identifier, identifier)
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(400, "User not found.")
+    real_user, uid = row[0], row[1]
+    c.execute("SELECT credential_id FROM portal_webauthn_credentials WHERE user_id=?", (uid,))
+    cred_rows = c.fetchall()
+    conn.close()
+    if not cred_rows:
+        raise HTTPException(400, "No security keys registered for this user.")
+
+    import base64 as _b64
+    allow_credentials = [
+        PublicKeyCredentialDescriptor(id=_b64.urlsafe_b64decode(r[0] + '=='))
+        for r in cred_rows
+    ]
+    rp_id = _get_setting('WEBAUTHN_RP_ID') or 'localhost'
+    options = generate_authentication_options(
+        rp_id=rp_id,
+        allow_credentials=allow_credentials,
+        user_verification=UserVerificationRequirement.PREFERRED,
+        timeout=60000,
+    )
+    _webauthn_auth_challenges[real_user] = (options.challenge, datetime.utcnow())
+    import json as _json
+    return _json.loads(options_to_json(options))
+
+
+@app.post("/api/auth/webauthn/auth-complete")
+def webauthn_auth_complete(body: WebAuthnAuthCompleteReq):
+    _wau_cleanup()
+    identifier = body.username.strip().lower()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "SELECT username, id FROM portal_users WHERE LOWER(username)=? OR LOWER(email)=?",
+        (identifier, identifier)
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(400, "User not found.")
+    real_user, uid = row[0], row[1]
+
+    challenge_data = _webauthn_auth_challenges.get(real_user)
+    if not challenge_data:
+        conn.close()
+        raise HTTPException(400, "No pending authentication. Start again.")
+    challenge, ts = challenge_data
+    if datetime.utcnow() - ts > timedelta(minutes=5):
+        _webauthn_auth_challenges.pop(real_user, None)
+        conn.close()
+        raise HTTPException(400, "Challenge expired. Start again.")
+
+    _lib = os.path.join(os.path.dirname(__file__), 'lib')
+    if _lib not in sys.path:
+        sys.path.insert(0, _lib)
+    from webauthn import verify_authentication_response
+
+    rp_id = _get_setting('WEBAUTHN_RP_ID') or 'localhost'
+    import base64 as _b64, json as _json
+
+    cred_id_raw = body.credential.get('id', '')
+    cred_id_b64 = cred_id_raw.rstrip('=').replace('+', '-').replace('/', '_')
+    c.execute(
+        "SELECT id, public_key, sign_count FROM portal_webauthn_credentials "
+        "WHERE credential_id=? AND user_id=?",
+        (cred_id_b64, uid)
+    )
+    cred_row = c.fetchone()
+    if not cred_row:
+        conn.close()
+        raise HTTPException(400, "Credential not found.")
+    cred_db_id = cred_row[0]
+    pub_key_bytes = _b64.b64decode(cred_row[1])
+    sign_count    = cred_row[2]
+
+    try:
+        cdata_b64 = body.credential.get('response', {}).get('clientDataJSON', '')
+        padded    = cdata_b64 + '=' * (-len(cdata_b64) % 4)
+        cdata     = _json.loads(_b64.urlsafe_b64decode(padded).decode())
+        expected_origin = cdata.get('origin', '')
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, f"Invalid credential data: {e}")
+
+    try:
+        verification = verify_authentication_response(
+            credential=body.credential,
+            expected_challenge=challenge,
+            expected_rp_id=rp_id,
+            expected_origin=expected_origin,
+            credential_public_key=pub_key_bytes,
+            credential_current_sign_count=sign_count,
+        )
+    except Exception as e:
+        conn.close()
+        raise HTTPException(400, f"Authentication failed: {e}")
+
+    _webauthn_auth_challenges.pop(real_user, None)
+    c.execute(
+        "UPDATE portal_webauthn_credentials SET sign_count=?, last_used=GETUTCDATE() WHERE id=?",
+        (verification.new_sign_count, cred_db_id)
+    )
+    c.execute(
+        "UPDATE portal_users SET last_login=? WHERE username=?",
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), real_user)
+    )
+    session_token = secrets.token_urlsafe(32)
+    expires_at = (datetime.utcnow() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+    c.execute(
+        "INSERT INTO portal_sessions (token, username, expires_at) VALUES (?,?,?)",
+        (session_token, real_user, expires_at)
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "session_token": session_token, "username": real_user}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request):
+    """Invalidate a WebAuthn session token."""
+    token = request.headers.get("X-Session-Token", "").strip()
+    if token:
+        try:
+            conn = get_conn()
+            c = conn.cursor()
+            c.execute("DELETE FROM portal_sessions WHERE token=?", (token,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[Portal] logout: {e}")
+    return {"ok": True}
 
 
 # ── Bot controls ──────────────────────────────────────────────────────────────
