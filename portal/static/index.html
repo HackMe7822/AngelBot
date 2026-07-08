@@ -3195,7 +3195,7 @@ function setDashView(view) {
   }
 }
 function loadDashRecent() {
-  if (_dashView === 'buys') loadRecentBuys(); else loadRecentTrades();
+  setDashView(_dashView);
 }
 
 async function loadRecentTrades() {
@@ -3262,6 +3262,7 @@ async function loadRecentBuys() {
   fetchLivePrices(rows, function(prices, normed) {
     var totalUpnlINR = 0, totalCapINR = 0, pricedINR = 0;
     var totalUpnlUSD = 0, totalCapUSD = 0, pricedUSD = 0;
+    var profitINR = 0, lossINR = 0, profitUSD = 0, lossUSD = 0;
     (normed || rows).forEach(function(p) {
       var key    = p.symbol + '|' + (p.source || 'paper');
       var lp     = prices[key];
@@ -3304,7 +3305,13 @@ async function loadRecentBuys() {
       var upnl    = gainPS * (p.quantity || 0);
       var invested = entry * (p.quantity || 0);
       var upnlPct  = invested > 0 ? (upnl / invested * 100) : 0;
-      if (_isUSD) { totalUpnlUSD += upnl; } else { totalUpnlINR += upnl; }
+      if (_isUSD) {
+        totalUpnlUSD += upnl;
+        if (upnl >= 0) { profitUSD += upnl; } else { lossUSD += upnl; }
+      } else {
+        totalUpnlINR += upnl;
+        if (upnl >= 0) { profitINR += upnl; } else { lossINR += upnl; }
+      }
       var uCls = upnl > 0 ? 'pos' : upnl < 0 ? 'neg' : 'flat';
       upnlEl.className = '';
       upnlEl.innerHTML = '<span class="pnl-badge ' + uCls + '" style="font-size:13px;padding:4px 10px;">' +
@@ -3316,36 +3323,19 @@ async function loadRecentBuys() {
     var totalPriced = pricedINR + pricedUSD;
     if (sumEl && totalPriced > 0) {
       sumEl.style.display = 'block';
-      function _pnlSpan(sym, upnl, cap) {
-        var cls  = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-        var sign = upnl >= 0 ? '+' : '';
-        var pct  = cap > 0 ? (upnl / cap * 100) : 0;
-        return '<span style="font-size:14px;font-weight:700">Unrealised: <span class="' + cls + '">' +
-          sign + sym + Math.abs(upnl).toFixed(2) + ' (' + sign + pct.toFixed(2) + '%)</span></span>';
-      }
       var inrCount = rows.filter(function(p){ return p.source !== 'us_paper' && p.source !== 'crypto_paper'; }).length;
       var usdCount = rows.filter(function(p){ return p.source === 'us_paper' || p.source === 'crypto_paper'; }).length;
-      var parts = [];
-      if (inrCount > 0)
-        parts.push('<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">' +
-          '<span style="color:var(--muted);font-size:12px;font-weight:600">India &#8377;</span>' +
-          '<span style="color:var(--muted);font-size:12px">Open: <strong style="color:var(--text)">' + inrCount + '</strong></span>' +
-          '<span style="color:var(--muted);font-size:12px">Capital: <strong style="color:var(--text)">&#8377;' + totalCapINR.toFixed(2) + '</strong></span>' +
-          _pnlSpan('&#8377;', totalUpnlINR, totalCapINR) +
-          '<span style="color:var(--muted);font-size:11px">(' + pricedINR + '/' + inrCount + ' priced)</span>' +
-          '</div>');
-      if (usdCount > 0)
-        parts.push('<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">' +
-          '<span style="color:var(--muted);font-size:12px;font-weight:600">US / Crypto $</span>' +
-          '<span style="color:var(--muted);font-size:12px">Open: <strong style="color:var(--text)">' + usdCount + '</strong></span>' +
-          '<span style="color:var(--muted);font-size:12px">Capital: <strong style="color:var(--text)">$' + totalCapUSD.toFixed(2) + '</strong></span>' +
-          _pnlSpan('$', totalUpnlUSD, totalCapUSD) +
-          '<span style="color:var(--muted);font-size:11px">(' + pricedUSD + '/' + usdCount + ' priced)</span>' +
-          '</div>');
-      sumEl.innerHTML =
-        '<div style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">' +
-        parts.join('<div style="height:1px;background:var(--border);"></div>') +
-        '</div>';
+      var html = '';
+      if (inrCount > 0) {
+        html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">India &#8377;</div>';
+        html += _pnlSummaryCard('&#8377;', 2, profitINR, lossINR, totalUpnlINR, totalCapINR, pricedINR, inrCount);
+      }
+      if (usdCount > 0) {
+        if (html) html += '<div style="height:6px;"></div>';
+        html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">US / Crypto $</div>';
+        html += _pnlSummaryCard('$', 2, profitUSD, lossUSD, totalUpnlUSD, totalCapUSD, pricedUSD, usdCount);
+      }
+      sumEl.innerHTML = html;
     }
   });
 }
@@ -3477,6 +3467,32 @@ function _buildPositionsTable(positions) {
   updateSortIcons('pos');
 }
 
+function _pnlMetricBox(label, valueHtml, borderRight) {
+  return '<div style="flex:1;min-width:130px;padding:6px 16px;' + (borderRight ? 'border-right:1px solid var(--border);' : '') + '">' +
+    '<div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">' + label + '</div>' +
+    '<div style="font-size:17px;font-weight:700;line-height:1.2">' + valueHtml + '</div>' +
+    '</div>';
+}
+
+function _pnlSummaryCard(sym, dp, profit, loss, upnl, capital, priced, count) {
+  var upnlCls  = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+  var upnlSign = upnl >= 0 ? '+' : '';
+  var upnlPct  = capital > 0 ? (upnl / capital * 100) : 0;
+  var netPnl   = upnl;
+  var netCls   = netPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+  var netSign  = netPnl >= 0 ? '+' : '';
+  return '<div class="card" style="padding:10px 0;display:flex;flex-wrap:wrap;align-items:stretch;width:100%;overflow:hidden;">' +
+    _pnlMetricBox('Total Profit', '<span class="pnl-pos">+' + sym + profit.toFixed(dp) + '</span>', true) +
+    _pnlMetricBox('Total Loss', '<span class="pnl-neg">' + sym + loss.toFixed(dp) + '</span>', true) +
+    _pnlMetricBox('Unrealised P&amp;L',
+      '<span class="' + upnlCls + '">' + upnlSign + sym + Math.abs(upnl).toFixed(dp) +
+      ' <span style="font-size:12px;opacity:.75">(' + upnlSign + upnlPct.toFixed(1) + '%)</span></span>', true) +
+    _pnlMetricBox('Net P&amp;L', '<span class="' + netCls + '">' + netSign + sym + Math.abs(netPnl).toFixed(dp) + '</span>', false) +
+    '<div style="padding:6px 14px;display:flex;align-items:flex-end;flex-shrink:0;">' +
+    '<span style="color:var(--muted);font-size:10px">' + count + ' open &middot; ' + priced + ' priced</span></div>' +
+    '</div>';
+}
+
 function _refreshPositionPrices(positions) {
   fetchLivePrices(positions, function(prices, normed) {
     var totalUpnlINR = 0, totalCapINR = 0, pricedINR = 0;
@@ -3542,43 +3558,17 @@ function _refreshPositionPrices(positions) {
     if (sumEl) {
       var market = (document.getElementById('pos-market-filter') || {}).value || '';
 
-      function metricBox(label, valueHtml, borderRight) {
-        return '<div style="flex:1;min-width:130px;padding:6px 16px;' + (borderRight ? 'border-right:1px solid var(--border);' : '') + '">' +
-          '<div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">' + label + '</div>' +
-          '<div style="font-size:17px;font-weight:700;line-height:1.2">' + valueHtml + '</div>' +
-          '</div>';
-      }
-
-      function makeSummaryCard(sym, dp, profit, loss, upnl, capital, priced, count) {
-        var upnlCls  = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-        var upnlSign = upnl >= 0 ? '+' : '';
-        var upnlPct  = capital > 0 ? (upnl / capital * 100) : 0;
-        var netPnl   = upnl;
-        var netCls   = netPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-        var netSign  = netPnl >= 0 ? '+' : '';
-        return '<div class="card" style="padding:10px 0;display:flex;flex-wrap:wrap;align-items:stretch;width:100%;overflow:hidden;">' +
-          metricBox('Total Profit', '<span class="pnl-pos">+' + sym + profit.toFixed(dp) + '</span>', true) +
-          metricBox('Total Loss', '<span class="pnl-neg">' + sym + loss.toFixed(dp) + '</span>', true) +
-          metricBox('Unrealised P&amp;L',
-            '<span class="' + upnlCls + '">' + upnlSign + sym + Math.abs(upnl).toFixed(dp) +
-            ' <span style="font-size:12px;opacity:.75">(' + upnlSign + upnlPct.toFixed(1) + '%)</span></span>', true) +
-          metricBox('Net P&amp;L', '<span class="' + netCls + '">' + netSign + sym + Math.abs(netPnl).toFixed(dp) + '</span>', false) +
-          '<div style="padding:6px 14px;display:flex;align-items:flex-end;flex-shrink:0;">' +
-          '<span style="color:var(--muted);font-size:10px">' + count + ' open &middot; ' + priced + ' priced</span></div>' +
-          '</div>';
-      }
-
       var inrCount = positions.filter(function(p){ return p.source !== 'us_paper' && p.source !== 'crypto_paper'; }).length;
       var usdCount = positions.filter(function(p){ return p.source === 'us_paper' || p.source === 'crypto_paper'; }).length;
       var html = '';
       if ((market === '' || market === 'india') && inrCount > 0) {
         if (market === '') html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">India &#8377;</div>';
-        html += makeSummaryCard('&#8377;', 2, profitINR, lossINR, totalUpnlINR, totalCapINR, pricedINR, inrCount);
+        html += _pnlSummaryCard('&#8377;', 2, profitINR, lossINR, totalUpnlINR, totalCapINR, pricedINR, inrCount);
       }
       if ((market === '' || market === 'us' || market === 'crypto') && usdCount > 0) {
         if (html) html += '<div style="height:6px;"></div>';
         if (market === '') html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">US / Crypto $</div>';
-        html += makeSummaryCard('$', market === 'crypto' ? 4 : 2, profitUSD, lossUSD, totalUpnlUSD, totalCapUSD, pricedUSD, usdCount);
+        html += _pnlSummaryCard('$', market === 'crypto' ? 4 : 2, profitUSD, lossUSD, totalUpnlUSD, totalCapUSD, pricedUSD, usdCount);
       }
       sumEl.innerHTML = html;
     }
