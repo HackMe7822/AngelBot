@@ -3477,12 +3477,11 @@ function _buildPositionsTable(positions) {
   updateSortIcons('pos');
 }
 
-var _lastDashData = null;
-
-function _refreshPositionPrices(positions, dashData) {
+function _refreshPositionPrices(positions) {
   fetchLivePrices(positions, function(prices, normed) {
     var totalUpnlINR = 0, totalCapINR = 0, pricedINR = 0;
     var totalUpnlUSD = 0, totalCapUSD = 0, pricedUSD = 0;
+    var profitINR = 0, lossINR = 0, profitUSD = 0, lossUSD = 0;
     (normed || d.positions).forEach(function(p) {
       const key    = p.symbol + '|' + (p.source || 'paper');
       const lp     = prices[key];
@@ -3525,7 +3524,13 @@ function _refreshPositionPrices(positions, dashData) {
       const upnl    = gainPS * (p.quantity||0);
       const invested = entry * (p.quantity||0);
       const upnlPct = invested > 0 ? (upnl / invested * 100) : 0;
-      if (_isUSD) { totalUpnlUSD += upnl; } else { totalUpnlINR += upnl; }
+      if (_isUSD) {
+        totalUpnlUSD += upnl;
+        if (upnl >= 0) { profitUSD += upnl; } else { lossUSD += upnl; }
+      } else {
+        totalUpnlINR += upnl;
+        if (upnl >= 0) { profitINR += upnl; } else { lossINR += upnl; }
+      }
       const uCls = upnl > 0 ? 'pos' : upnl < 0 ? 'neg' : 'flat';
       upnlEl.className = '';
       upnlEl.innerHTML = '<span class="pnl-badge ' + uCls + '" style="font-size:13px;padding:4px 10px;">' +
@@ -3536,13 +3541,6 @@ function _refreshPositionPrices(positions, dashData) {
     var sumEl = document.getElementById('pos-summary');
     if (sumEl) {
       var market = (document.getElementById('pos-market-filter') || {}).value || '';
-      var dd = dashData || _lastDashData;
-      var profitINR = 0, lossINR = 0, profitUSD = 0, lossUSD = 0;
-      if (dd) {
-        if (market === '' || market === 'india')  { profitINR += dd.india  ? (dd.india.total_profit  || 0) : 0; lossINR += dd.india  ? (dd.india.total_loss   || 0) : 0; }
-        if (market === '' || market === 'us')     { profitUSD += dd.us     ? (dd.us.total_profit     || 0) : 0; lossUSD += dd.us     ? (dd.us.total_loss      || 0) : 0; }
-        if (market === '' || market === 'crypto') { profitUSD += dd.crypto ? (dd.crypto.total_profit || 0) : 0; lossUSD += dd.crypto ? (dd.crypto.total_loss  || 0) : 0; }
-      }
 
       function metricBox(label, valueHtml, borderRight) {
         return '<div style="flex:1;min-width:130px;padding:6px 16px;' + (borderRight ? 'border-right:1px solid var(--border);' : '') + '">' +
@@ -3555,7 +3553,7 @@ function _refreshPositionPrices(positions, dashData) {
         var upnlCls  = upnl >= 0 ? 'pnl-pos' : 'pnl-neg';
         var upnlSign = upnl >= 0 ? '+' : '';
         var upnlPct  = capital > 0 ? (upnl / capital * 100) : 0;
-        var netPnl   = profit + loss + upnl;
+        var netPnl   = upnl;
         var netCls   = netPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
         var netSign  = netPnl >= 0 ? '+' : '';
         return '<div class="card" style="padding:10px 0;display:flex;flex-wrap:wrap;align-items:stretch;width:100%;overflow:hidden;">' +
@@ -3623,11 +3621,7 @@ async function loadPositions() {
     // Positions unchanged — update our cached copy in case prices changed (no table rebuild)
     _posCache.positions = d.positions;
   }
-  // Fetch dashboard once for realized P&L — fire in background, don't block table render
-  apiFetch('/api/dashboard').then(function(r) {
-    if (r) r.json().then(function(d) { _lastDashData = d; });
-  });
-  _refreshPositionPrices(_posCache.positions, _lastDashData);
+  _refreshPositionPrices(_posCache.positions);
 }
 
 async function forceSell(id, symbol) {
