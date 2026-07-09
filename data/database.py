@@ -284,6 +284,22 @@ def init_db():
         ALTER TABLE trades ADD user_id INT NOT NULL DEFAULT 1
     """)
 
+    # ── Migrate trades: add trigger_price / expires_at columns (limit-buy feature) ──
+    _exec(c, """
+        IF NOT EXISTS (
+            SELECT * FROM sys.columns
+            WHERE object_id=OBJECT_ID('trades') AND name='trigger_price'
+        )
+        ALTER TABLE trades ADD trigger_price FLOAT NULL
+    """)
+    _exec(c, """
+        IF NOT EXISTS (
+            SELECT * FROM sys.columns
+            WHERE object_id=OBJECT_ID('trades') AND name='expires_at'
+        )
+        ALTER TABLE trades ADD expires_at NVARCHAR(50) NULL
+    """)
+
     # ── One-time: normalize US trade timestamps ET → IST ─────────────────────
     # Before June 2026 fix, alpaca_trader stored entry/exit_time in ET (UTC-4).
     # US market hours in ET are 09:30–16:00, so any us_paper trade with time

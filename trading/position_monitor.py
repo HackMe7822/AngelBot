@@ -299,6 +299,14 @@ class PositionMonitor:
                             source = "WebSocket live" if ws_up else "LTP polling ⚠"
                             print(f"{_CY}[Monitor] ♥  {n} position(s)  {self._currency}{self.trader.balance:.2f}  [{source}]{_R}")
 
+                    # Pending limit-buy orders — check for fills/expiry every cycle.
+                    # Independent of open_positions (a pending-only state has none yet) and of
+                    # the WebSocket/LTP branch above. getattr guard keeps this a no-op for
+                    # traders without the feature (e.g. CryptoTrader, out of scope here).
+                    if (getattr(self.trader, 'pending_positions', None) and
+                            self._market_open_fn() and not is_paused()):
+                        self._poll_pending()
+
             except Exception as e:
                 print(f"[Monitor] Error in loop: {e}")
             time.sleep(POLL_SECONDS)
@@ -552,6 +560,29 @@ class PositionMonitor:
 
             except Exception as e:
                 print(f"[Monitor] Price fetch error for {pos.get('symbol','?')}: {e}")
+
+    # ── Pending limit-buy orders — fills/expiry check (India/US only) ────────
+    def _poll_pending(self):
+        """Fetch live prices for pending symbols using the same price-fetch helper as
+        _poll_positions(), then hand them to trader.check_pending() for the fill/expiry logic."""
+        from data.fetcher import get_live_price
+        _get_price = self._price_fn or get_live_price
+
+        price_lookup = {}
+        for pos in list(self.trader.pending_positions):
+            sym = pos['symbol']
+            try:
+                price = _get_price(sym)
+                if price is not None and price > 0 and not math.isnan(price):
+                    price_lookup[sym] = price
+            except Exception as e:
+                print(f"[Monitor] Price fetch error for pending {sym}: {e}")
+
+        try:
+            with self.trader._lock:
+                self.trader.check_pending(price_lookup)
+        except Exception as e:
+            print(f"[Monitor] check_pending error: {e}")
 
     # ── EOD force-close — exits every open position at market price ──────────
     def _force_close_all(self, now_ist):

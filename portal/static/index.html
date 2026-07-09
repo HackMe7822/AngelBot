@@ -3906,6 +3906,8 @@ const _CONFIG_LABELS = {
   PEAK_DRAWDOWN_PCT:'India Peak Drawdown Limit', SCALP_TARGET_PCT:'India Profit Target %', SCALP_SL_PCT:'India Stop Loss %',
   SL_CONFIRM_POLLS:'SL Confirmation Polls', MAX_DAILY_LOSS_PCT:'India Daily Loss Limit', MIN_STOCK_PRICE:'India Min Stock Price (₹)',
   ENTRY_START_MIN:'Entry Window Start (min)', ENTRY_END_MIN:'Entry Window End (min)',
+  USE_LIMIT_BUY_INDIA:'Limit-Buy Entries (India)', INDIA_LIMIT_BELOW_PCT:'India Limit-Buy Discount %',
+  INDIA_LIMIT_EXPIRY_MIN:'India Limit-Buy Expiry (minutes)',
   US_CAPITAL:'US Capital ($)', US_MAX_DAILY_TRADES:'US Daily Trade Limit', US_MAX_DAILY_LOSS_PCT:'US Daily Loss Limit',
   US_MAX_CONCURRENT_POSITIONS:'US Max Open Positions',
   US_MAX_DEPLOYED_PCT:'US Max Capital Deployed %', US_PEAK_DRAWDOWN_PCT:'US Peak Drawdown Limit',
@@ -3913,6 +3915,8 @@ const _CONFIG_LABELS = {
   US_MAX_BUYS_PER_SCAN:'US Max Buys Per Scan', US_LOSS_BURST_COUNT:'US Loss Burst Count',
   US_LOSS_BURST_WINDOW:'US Loss Burst Window (sec)', US_LOSS_BURST_COOLDOWN:'US Burst Cooldown (sec)',
   US_CANDLE_CONFIRM_REENTRY:'US Candle Re-entry Gate',
+  USE_LIMIT_BUY_US:'Limit-Buy Entries (US)', US_LIMIT_BELOW_PCT:'US Limit-Buy Discount %',
+  US_LIMIT_EXPIRY_MIN:'US Limit-Buy Expiry (minutes)',
   CRYPTO_CAPITAL:'Crypto Balance (USDT)', CRYPTO_MAX_DAILY_TRADES:'Crypto Daily Trade Limit',
   CRYPTO_MAX_CONCURRENT:'Crypto Max Open Positions', CRYPTO_MAX_DEPLOYED_PCT:'Crypto Max Capital Deployed %',
   CRYPTO_PEAK_DRAWDOWN_PCT:'Crypto Peak Drawdown Limit', CRYPTO_MAX_DAILY_LOSS_PCT:'Crypto Daily Loss Limit',
@@ -3951,7 +3955,8 @@ const _CONFIG_SECTIONS = {
   india: {
     keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
            'SCALP_TARGET_PCT','SCALP_SL_PCT','SL_CONFIRM_POLLS',
-           'MAX_DAILY_LOSS_PCT','MIN_STOCK_PRICE','ENTRY_START_MIN','ENTRY_END_MIN']
+           'MAX_DAILY_LOSS_PCT','MIN_STOCK_PRICE','ENTRY_START_MIN','ENTRY_END_MIN',
+           'USE_LIMIT_BUY_INDIA','INDIA_LIMIT_BELOW_PCT','INDIA_LIMIT_EXPIRY_MIN']
   },
   us: {
     keys: ['US_CAPITAL','US_MAX_DAILY_TRADES','US_MAX_DAILY_LOSS_PCT',
@@ -3959,7 +3964,8 @@ const _CONFIG_SECTIONS = {
            'US_MAX_DEPLOYED_PCT','US_PEAK_DRAWDOWN_PCT',
            'US_SCALP_TARGET_PCT','US_SCALP_SL_PCT','US_MIN_STOCK_PRICE',
            'US_MAX_BUYS_PER_SCAN','US_LOSS_BURST_COUNT','US_LOSS_BURST_WINDOW',
-           'US_LOSS_BURST_COOLDOWN','US_CANDLE_CONFIRM_REENTRY']
+           'US_LOSS_BURST_COOLDOWN','US_CANDLE_CONFIRM_REENTRY',
+           'USE_LIMIT_BUY_US','US_LIMIT_BELOW_PCT','US_LIMIT_EXPIRY_MIN']
   },
   crypto: {
     keys: ['CRYPTO_CAPITAL','CRYPTO_MAX_DAILY_TRADES','CRYPTO_MAX_CONCURRENT','CRYPTO_MAX_DEPLOYED_PCT','CRYPTO_PEAK_DRAWDOWN_PCT','CRYPTO_MAX_DAILY_LOSS_PCT','CRYPTO_TARGET_PCT','CRYPTO_SL_PCT','CRYPTO_BTC_MIN_CHANGE']
@@ -3996,6 +4002,7 @@ const _CONFIG_SECTIONS = {
 };
 
 const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP','USE_PROFIT_TIMER','USE_LOSS_TIMER','ALLOW_OVERNIGHT',
+  'USE_LIMIT_BUY_INDIA','USE_LIMIT_BUY_US',
   'TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL','TELEGRAM_ALERT_DAILY',
   'TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START','TELEGRAM_ALERT_BURST','TELEGRAM_ALERT_TUNNEL_URL',
   'TELEGRAM_ALERT_INDIA','TELEGRAM_ALERT_US','TELEGRAM_ALERT_CRYPTO',
@@ -4043,6 +4050,9 @@ const _CONFIG_HINTS = {
   MIN_STOCK_PRICE:          'Skip India stocks below this ₹ price. Cheap stocks have tiny SL gaps vs spread — hard to scalp profitably. Default ₹150.',
   ENTRY_START_MIN:          'Minutes after 9:15 AM IST to start placing entries. <strong>0</strong> = trade from open. <strong>15</strong> = skip the chaotic first 15 minutes.',
   ENTRY_END_MIN:            'Minutes after 9:15 AM IST to stop new entries. <strong>360</strong> = 3:15 PM IST (15 min before close). Bot only exits existing positions after this.',
+  USE_LIMIT_BUY_INDIA:      '<strong>ON:</strong> Instead of buying immediately at signal price, place a PENDING limit order below it and only fill if price pulls back to the trigger. <strong>OFF:</strong> Buy immediately at signal price (default, matches original behavior). Unfilled pending orders auto-cancel after the expiry window.',
+  INDIA_LIMIT_BELOW_PCT:    'How far below the signal price to set the trigger. <strong>0.5</strong> = 0.5% discount. Only active when Limit-Buy Entries (India) is ON.',
+  INDIA_LIMIT_EXPIRY_MIN:   'Minutes to wait for a pending India limit order to fill before auto-cancelling and releasing the reserved capital. Default 20.',
   US_CAPITAL:               'US Alpaca paper trading balance in $. Bot positions scale as % of this.',
   US_MAX_DAILY_TRADES:      'Stop new US buys after N completed trades today.',
   US_MAX_DAILY_LOSS_PCT:    'Stop all US buys for the day if total realized losses exceed this %.',
@@ -4057,6 +4067,9 @@ const _CONFIG_HINTS = {
   US_LOSS_BURST_WINDOW:     'Seconds to look back when counting burst SL hits. Default 300 = 5 minutes.',
   US_LOSS_BURST_COOLDOWN:   'Seconds to pause all new US buys after a loss burst triggers. Default 1800 = 30 minutes.',
   US_CANDLE_CONFIRM_REENTRY:'ON: require the last 1-min candle to be green before re-buying a stock that already hit SL today. Blocks choppy re-entries.',
+  USE_LIMIT_BUY_US:         '<strong>ON:</strong> Instead of buying immediately at signal price, place a PENDING limit order below it and only fill if price pulls back to the trigger. <strong>OFF:</strong> Buy immediately at signal price (default, matches original behavior). Unfilled pending orders auto-cancel after the expiry window.',
+  US_LIMIT_BELOW_PCT:       'How far below the signal price to set the trigger. <strong>0.5</strong> = 0.5% discount. Only active when Limit-Buy Entries (US) is ON.',
+  US_LIMIT_EXPIRY_MIN:      'Minutes to wait for a pending US limit order to fill before auto-cancelling and releasing the reserved capital. Default 20.',
   CRYPTO_CAPITAL:           'Binance paper trading balance in USDT. No real money ever spent.',
   CRYPTO_MAX_DAILY_TRADES:  'Stop new crypto buys after N completed trades today.',
   CRYPTO_TARGET_PCT:        'Close crypto position for profit when it gains this %.',

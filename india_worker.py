@@ -133,7 +133,8 @@ def _acquire_lock():
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (PAPER_MODE, MAX_DAILY_LOSS_PCT, MAX_DAILY_TRADES, MAX_DEPLOYED_PCT,
                     PEAK_DRAWDOWN_PCT, ENTRY_START_MIN, ENTRY_END_MIN, MIN_STOCK_PRICE,
-                    USE_MOOD_FILTER, USE_SECTOR_CAP)
+                    USE_MOOD_FILTER, USE_SECTOR_CAP,
+                    USE_LIMIT_BUY_INDIA, INDIA_LIMIT_BELOW_PCT, INDIA_LIMIT_EXPIRY_MIN)
 from data.nifty_stocks import get_all_stocks
 from data.live_feed import LiveFeed
 from trading.scanner import scan_stocks
@@ -275,11 +276,19 @@ def run_scan():
         if monitor and monitor.is_in_cooldown(c['symbol'], c['price']):
             cprint(f"  [COOLDOWN]  {c['symbol']} — SL hit recently, price not recovered enough", YL)
             continue
-        pos, _ = trader.buy(
-            c['symbol'], c['price'], c['stop_loss'], c['target'],
-            c['signals'], c['reason'], c['confidence'],
-            lot_size=c.get('_lot')
-        )
+        if USE_LIMIT_BUY_INDIA:
+            pos, _ = trader.create_pending(
+                c['symbol'], c['price'], c['stop_loss'], c['target'],
+                c['signals'], c['reason'], c['confidence'],
+                below_pct=INDIA_LIMIT_BELOW_PCT, expiry_minutes=INDIA_LIMIT_EXPIRY_MIN,
+                lot_size=c.get('_lot')
+            )
+        else:
+            pos, _ = trader.buy(
+                c['symbol'], c['price'], c['stop_loss'], c['target'],
+                c['signals'], c['reason'], c['confidence'],
+                lot_size=c.get('_lot')
+            )
         if pos:
             cprint(f"  ▲ BUY  {c['symbol']} @ ₹{c['price']:.2f}"
                    f"  SL ₹{c['stop_loss']:.2f}  TGT ₹{c['target']:.2f}", G)

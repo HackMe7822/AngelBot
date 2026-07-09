@@ -36,6 +36,7 @@ class PaperTrader:
         self._lock            = threading.Lock()   # prevents monitor + scan double-exit
         self.balance          = self._get_balance()
         self.open_positions   = self._load_open_positions()
+        self.pending_positions = self._load_pending_positions()
         self._session_high    = self.balance       # track peak balance for drawdown check
 
     def _get_total_reloaded(self):
@@ -51,7 +52,9 @@ class PaperTrader:
         c = conn.cursor()
         c.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE status='closed' AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
         realized = c.fetchone()[0] or 0.0
-        c.execute("SELECT COALESCE(SUM(capital_used), 0) FROM trades WHERE status='open' AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
+        # Pending limit-buy orders reserve capital too — must be excluded from
+        # available balance or a pending fill could overcommit beyond what's free.
+        c.execute("SELECT COALESCE(SUM(capital_used), 0) FROM trades WHERE status IN ('open','pending') AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
         open_capital = c.fetchone()[0] or 0.0
         conn.close()
         total_reloaded = self._get_total_reloaded()
@@ -65,17 +68,37 @@ class PaperTrader:
         conn.close()
         cols = ['id','symbol','entry_time','exit_time','entry_price','exit_price',
                 'quantity','capital_used','pnl','pnl_pct','stop_loss','target',
-                'exit_reason','signals','status','source','user_id']
+                'exit_reason','signals','status','source','user_id',
+                'trigger_price','expires_at']
+        return [dict(zip(cols, r)) for r in rows]
+
+    def _load_pending_positions(self):
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute("SELECT * FROM trades WHERE status='pending' AND (source='paper' OR source IS NULL) AND user_id=?", (self.user_id,))
+        rows = c.fetchall()
+        conn.close()
+        cols = ['id','symbol','entry_time','exit_time','entry_price','exit_price',
+                'quantity','capital_used','pnl','pnl_pct','stop_loss','target',
+                'exit_reason','signals','status','source','user_id',
+                'trigger_price','expires_at']
         return [dict(zip(cols, r)) for r in rows]
 
     def can_buy(self):
-        return len(self.open_positions) < MAX_POSITIONS
+        return len(self.open_positions) + len(self.pending_positions) < MAX_POSITIONS
 
     def get_position(self, symbol):
         for p in self.open_positions:
             if p['symbol'] == symbol:
                 return p
         return None
+
+    def has_position(self, symbol):
+        """True if symbol has an open position OR a pending limit-buy order.
+        Used as the duplicate-symbol guard for both buy() and create_pending()."""
+        if self.get_position(symbol):
+            return True
+        return any(p['symbol'] == symbol for p in self.pending_positions)
 
     def buy(self, symbol, price, stop_loss, target, signals, reason, confidence, lot_size=None):
         # Hard safety block — never trade mutual funds
@@ -84,7 +107,7 @@ class PaperTrader:
             return None, "Mutual fund — blocked"
         if not self.can_buy():
             return None, "Max positions reached"
-        if self.get_position(symbol):
+        if self.has_position(symbol):
             return None, "Already in position"
 
         # lot_size pre-fetched in parallel by caller; fallback to API call
@@ -145,6 +168,134 @@ class PaperTrader:
             self._session_high = pv
         print(f"{_CY}[BUY]  {symbol} @ ₹{price:.2f} × {quantity} share(s)  SL:₹{stop_loss:.2f}  TGT:₹{target:.2f}  Capital:₹{capital_used:.0f}  Balance:₹{self.balance:.2f}{_R}")
         return position, None
+
+    def create_pending(self, symbol, signal_price, stop_loss, target, signals, reason, confidence,
+                        below_pct, expiry_minutes, lot_size=None):
+        """Create a PENDING limit-buy order instead of filling immediately.
+        trigger_price is computed once (locked) from signal_price and never recalculated.
+        Same sizing/guards as buy() — see check_pending() for the fill logic."""
+        # Hard safety block — never trade mutual funds
+        if is_mutual_fund(symbol):
+            print(f"SAFETY BLOCK: {symbol} identified as mutual fund — skipping")
+            return None, "Mutual fund — blocked"
+        if not self.can_buy():
+            return None, "Max positions reached"
+        if self.has_position(symbol):
+            return None, "Already in position"
+
+        # lot_size pre-fetched in parallel by caller; fallback to API call
+        from data.fetcher import get_min_lot_size
+        min_lot = lot_size if lot_size and lot_size > 0 else get_min_lot_size(symbol)
+
+        # ── Sizing — identical to buy(), but based on signal_price (fill price is unknown yet) ──
+        normal_alloc = self.balance * MAX_POSITION_PCT
+        quantity = (int(normal_alloc / signal_price) // min_lot) * min_lot
+
+        if quantity < min_lot:
+            one_lot_cost = signal_price * min_lot
+            max_fallback = self.balance * 0.10
+            if one_lot_cost <= max_fallback:
+                quantity = min_lot
+            elif one_lot_cost <= self.balance:
+                return None, f"Skip: {symbol} 1 lot = ₹{one_lot_cost:.0f} > 10% of balance ₹{self.balance:.0f}"
+            else:
+                return None, f"Out of range: {min_lot} share(s) of {symbol} @ ₹{signal_price:.0f} = ₹{one_lot_cost:.0f} > balance ₹{self.balance:.0f}"
+
+        capital_used = round(quantity * signal_price, 2)
+        if capital_used > self.balance or capital_used < 1:
+            return None, "Insufficient capital"
+
+        trigger_price = round(signal_price * (1 - below_pct / 100), 4)
+        now        = _now_ist_str()
+        expires_dt = datetime.now(_IST) + timedelta(minutes=expiry_minutes)
+        expires_at = expires_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO trades (symbol, entry_time, entry_price, quantity, capital_used,
+                stop_loss, target, signals, status, user_id, trigger_price, expires_at)
+            OUTPUT INSERTED.id
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        ''', (symbol, now, signal_price, quantity, capital_used,
+              stop_loss, target, json.dumps({'reasons': reason, 'confidence': confidence, 'signals': signals}),
+              'pending', self.user_id, trigger_price, expires_at))
+        trade_id = c.fetchone()[0]
+        conn.commit()
+        conn.close()
+
+        position = {
+            'id': trade_id, 'symbol': symbol, 'entry_time': now,
+            'entry_price': signal_price, 'quantity': quantity, 'capital_used': capital_used,
+            'stop_loss': stop_loss, 'target': target, 'status': 'pending',
+            'trigger_price': trigger_price, 'expires_at': expires_at
+        }
+        self.pending_positions.append(position)
+        self.balance = self._get_balance()
+        print(f"{_CY}[LIMIT-BUY PENDING] {symbol} signal ₹{signal_price:.2f} → trigger ₹{trigger_price:.2f} (expires {expires_at}){_R}")
+        return position, None
+
+    def check_pending(self, price_lookup: dict):
+        """Called every poll cycle. For each pending order: expire it if past expires_at,
+        otherwise fill it if price_lookup[symbol] has dropped to/below trigger_price.
+        Side-effecting only — no return value, matches other periodic methods in this file."""
+        for pos in list(self.pending_positions):
+            symbol = pos['symbol']
+            try:
+                expires_at = pos.get('expires_at')
+                expired = False
+                if expires_at:
+                    try:
+                        expires_dt = datetime.strptime(expires_at[:19], '%Y-%m-%d %H:%M:%S').replace(tzinfo=_IST)
+                        expired = datetime.now(_IST) > expires_dt
+                    except Exception:
+                        expired = False
+
+                if expired:
+                    conn = get_conn()
+                    c = conn.cursor()
+                    c.execute("UPDATE trades SET status='expired' WHERE id=?", (pos['id'],))
+                    conn.commit()
+                    conn.close()
+                    self.pending_positions = [p for p in self.pending_positions if p['id'] != pos['id']]
+                    self.balance = self._get_balance()
+                    print(f"{_RD}[LIMIT-BUY EXPIRED] {symbol} — trigger ₹{pos['trigger_price']:.2f} never hit{_R}")
+                    continue
+
+                price = price_lookup.get(symbol)
+                if price is None:
+                    continue
+                if price <= pos['trigger_price']:
+                    fill_price = price
+                    if PAPER_MODE:
+                        fill_price = round(price * (1 + SLIPPAGE_PCT), 4)
+                    quantity = pos['quantity']
+                    capital_used = round(quantity * fill_price, 2)
+                    now = _now_ist_str()
+
+                    conn = get_conn()
+                    c = conn.cursor()
+                    c.execute(
+                        "UPDATE trades SET status='open', entry_price=?, entry_time=?, capital_used=? WHERE id=?",
+                        (fill_price, now, capital_used, pos['id'])
+                    )
+                    conn.commit()
+                    conn.close()
+
+                    self.pending_positions = [p for p in self.pending_positions if p['id'] != pos['id']]
+                    filled = dict(pos)
+                    filled['entry_price']  = fill_price
+                    filled['entry_time']   = now
+                    filled['capital_used'] = capital_used
+                    filled['status']       = 'open'
+                    self.open_positions.append(filled)
+                    self.balance = self._get_balance()
+                    pv = self.balance + sum(p['capital_used'] for p in self.open_positions)
+                    if pv > self._session_high:
+                        self._session_high = pv
+                    print(f"{_CY}[LIMIT-BUY FILLED] {symbol} @ ₹{fill_price:.2f} × {quantity}{_R}")
+            except Exception as e:
+                print(f"[PaperTrader] check_pending error for {symbol}: {e}")
 
     def sell(self, position, current_price, reason):
         # Guard: position may already be closed by the real-time monitor

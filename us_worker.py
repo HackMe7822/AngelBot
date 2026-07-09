@@ -153,7 +153,8 @@ from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAIL
                     US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP,
                     US_MAX_BUYS_PER_SCAN, US_LOSS_BURST_COUNT, US_LOSS_BURST_WINDOW,
                     US_LOSS_BURST_COOLDOWN, US_CANDLE_CONFIRM_REENTRY,
-                    US_MAX_CONCURRENT_POSITIONS)
+                    US_MAX_CONCURRENT_POSITIONS,
+                    USE_LIMIT_BUY_US, US_LIMIT_BELOW_PCT, US_LIMIT_EXPIRY_MIN)
 from trading.alpaca_trader import AlpacaTrader
 from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
@@ -414,10 +415,17 @@ def run_us_scan():
             if not c.get('last_candle_bullish', True):
                 cprint(f"  [US CANDLE]    {c['symbol']} — last candle bearish, blocking re-entry after today's SL", YL)
                 continue
-        pos, _ = us_trader.buy(
-            c['symbol'], c['price'], c['stop_loss'], c['target'],
-            c['signals'], c['reason'], c['confidence']
-        )
+        if USE_LIMIT_BUY_US:
+            pos, _ = us_trader.create_pending(
+                c['symbol'], c['price'], c['stop_loss'], c['target'],
+                c['signals'], c['reason'], c['confidence'],
+                below_pct=US_LIMIT_BELOW_PCT, expiry_minutes=US_LIMIT_EXPIRY_MIN
+            )
+        else:
+            pos, _ = us_trader.buy(
+                c['symbol'], c['price'], c['stop_loss'], c['target'],
+                c['signals'], c['reason'], c['confidence']
+            )
         if pos:
             buys_this_scan += 1
             cprint(f"  ▲ US BUY  {c['symbol']} @ ${c['price']:.2f}"

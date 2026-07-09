@@ -69,6 +69,12 @@ MOOD_FILTER_THRESHOLD = float(os.getenv("MOOD_FILTER_THRESHOLD", "-1.5"))  # blo
 USE_SECTOR_CAP       = os.getenv("USE_SECTOR_CAP",       "true").lower() == "true"
 MAX_SECTOR_POSITIONS = int(os.getenv("MAX_SECTOR_POSITIONS", "2"))  # max open positions per sector
 
+# Limit-buy / pullback entry — if ON, signals create a PENDING order at a discount below
+# signal price instead of buying immediately; fills only if price drops to the trigger.
+USE_LIMIT_BUY_INDIA    = os.getenv("USE_LIMIT_BUY_INDIA",    "false").lower() == "true"
+INDIA_LIMIT_BELOW_PCT  = float(os.getenv("INDIA_LIMIT_BELOW_PCT",  "0.5"))   # trigger = signal price × (1 - this%)
+INDIA_LIMIT_EXPIRY_MIN = int(os.getenv("INDIA_LIMIT_EXPIRY_MIN",   "20"))    # cancel if not filled within N minutes
+
 # ── Alpaca / US market config ─────────────────────────────────────────────────
 ALPACA_KEY    = os.getenv("ALPACA_KEY",    "")
 ALPACA_SECRET = os.getenv("ALPACA_SECRET", "")
@@ -97,6 +103,11 @@ US_CANDLE_CONFIRM_REENTRY = os.getenv("US_CANDLE_CONFIRM_REENTRY", "true").lower
 US_ENTRY_START_IST = (19, 30)   # 7:30 PM IST = 30 min after US open (skip opening volatility)
 US_ENTRY_END_IST   = (1,  0)    # 1:00 AM IST = 30 min before US close
 US_FORCE_CLOSE_IST = (1,  25)   # force-exit all at 1:25 AM IST = 3:55 PM ET
+
+# Limit-buy / pullback entry — US mirror of the India setting above
+USE_LIMIT_BUY_US    = os.getenv("USE_LIMIT_BUY_US",    "false").lower() == "true"
+US_LIMIT_BELOW_PCT  = float(os.getenv("US_LIMIT_BELOW_PCT",  "0.5"))
+US_LIMIT_EXPIRY_MIN = int(os.getenv("US_LIMIT_EXPIRY_MIN",   "20"))
 
 # ── Binance / Crypto config (24/7, paper-simulated — no real orders ever) ─────
 BINANCE_KEY    = os.getenv("BINANCE_KEY",    "")
