@@ -128,7 +128,17 @@ def _pick_eq_token(results):
     return results[0]['symboltoken']
 
 
+_token_cache = {}  # symbol -> symboltoken, cached for the process lifetime.
+                   # Only successful lookups are cached -- a transient failure
+                   # still retries next call rather than permanently returning
+                   # None for that symbol. Tokens don't change intraday, and
+                   # position_monitor.py's 15s poll loop was re-fetching this
+                   # via a fresh searchScrip call every single cycle.
+
+
 def _get_token(symbol):
+    if symbol in _token_cache:
+        return _token_cache[symbol]
     for attempt in range(2):
         try:
             api  = get_api()
@@ -136,7 +146,9 @@ def _get_token(symbol):
             if _is_token_error(data):
                 raise _TokenError()
             if _api_ok(data) and data.get('data'):
-                return _pick_eq_token(data['data'])
+                token = _pick_eq_token(data['data'])
+                _token_cache[symbol] = token
+                return token
             return None
         except _TokenError:
             if attempt == 0:

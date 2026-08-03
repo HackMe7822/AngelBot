@@ -330,7 +330,7 @@ def run_us_scan():
                                      calc_stop_loss, calc_target)
     from analysis.sentiment import get_news_sentiment
     from learning.self_learner import get_weighted_score
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
     from trading.scanner import MIN_SCORE
 
     us_syms    = get_us_stocks()
@@ -375,13 +375,16 @@ def run_us_scan():
     candidates = []
     with ThreadPoolExecutor(max_workers=20) as ex:
         futures = {ex.submit(_scan_one, s): s for s in watch_list}
-        for fut in as_completed(futures):
-            try:
-                r = fut.result()
-                if r:
-                    candidates.append(r)
-            except Exception:
-                pass
+        try:
+            for fut in as_completed(futures, timeout=90):
+                try:
+                    r = fut.result()
+                    if r:
+                        candidates.append(r)
+                except Exception:
+                    pass
+        except FuturesTimeoutError:
+            cprint(f"  [US SCAN] Timed out waiting on some symbols -- proceeding with {len(candidates)} candidates", YL)
 
     candidates.sort(key=lambda x: (x['ml_prob'], x['weighted_score']), reverse=True)
 

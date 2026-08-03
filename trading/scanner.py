@@ -1,5 +1,5 @@
 import sys, os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from data.fetcher import get_intraday, _fallback_price
 from data.nifty_stocks import get_all_stocks, is_mutual_fund
@@ -100,10 +100,18 @@ def scan_stocks(symbols=None, extra_symbols=None, max_price=None):
 
     with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as ex:
         futures = {ex.submit(_scan_one, sym): sym for sym in watch_list}
-        for fut in as_completed(futures):
-            result = fut.result()
-            if result:
-                candidates.append(result)
+        try:
+            # Defense-in-depth bound on the whole batch, on top of the
+            # per-request timeouts inside _scan_one's own network calls --
+            # see analysis/sentiment.py's _parse_feed_safe for the incident
+            # this guards against (an un-timeout'd feedparser.parse() call
+            # once froze the entire India worker for ~12 hours).
+            for fut in as_completed(futures, timeout=90):
+                result = fut.result()
+                if result:
+                    candidates.append(result)
+        except FuturesTimeoutError:
+            print(f"[SCAN] Timed out waiting on some symbols -- proceeding with {len(candidates)} candidates found so far")
 
     candidates.sort(key=lambda x: (x['ml_prob'], x['weighted_score']), reverse=True)
     return candidates

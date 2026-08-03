@@ -1,10 +1,31 @@
 import feedparser
 import requests
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+_FEED_USER_AGENT = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                                  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
+# A generic identifying UA (e.g. naming this bot) gets a 403 from some of
+# these news sites' bot-detection (moneycontrol confirmed) -- a standard
+# browser UA string is what feedparser's own default fetcher effectively
+# looked like to these servers, so match that instead of standing out.
+
+
+def _parse_feed_safe(url, timeout=8):
+    """feedparser.parse(url) has NO timeout of its own — if a remote server
+    accepts the connection but never responds, it blocks forever (this is
+    what froze the India worker for ~12 hours on 2026-08-02/03: one stuck
+    RSS feed hung the whole main thread with no exception, no crash).
+    Fetch with an explicit requests timeout first, then hand feedparser the
+    already-downloaded bytes -- it never touches the network itself this way."""
+    try:
+        resp = requests.get(url, timeout=timeout, headers=_FEED_USER_AGENT)
+        return feedparser.parse(resp.content)
+    except Exception:
+        return feedparser.parse(b'')  # empty feed -- feedparser never raises on this
 
 _analyzer = SentimentIntensityAnalyzer()
 
@@ -45,15 +66,20 @@ def prefetch_rss():
 
     def fetch_one(url):
         try:
-            feed = feedparser.parse(url)
+            feed = _parse_feed_safe(url, timeout=8)
             return [e.get('title', '').strip() for e in feed.entries[:60] if e.get('title')]
         except Exception:
             return []
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(fetch_one, url): url for url in RSS_FEEDS}
-        for future in as_completed(futures):
-            all_headlines.extend(future.result())
+        try:
+            # Belt-and-suspenders on top of the per-request timeout above --
+            # bounds the whole batch even if something unexpected stalls.
+            for future in as_completed(futures, timeout=25):
+                all_headlines.extend(future.result())
+        except FuturesTimeoutError:
+            print("[NEWS] RSS prefetch timed out waiting on some feeds -- continuing with what completed")
 
     _rss_pool     = _dedupe(all_headlines)
     _pool_fetched = datetime.now()
@@ -127,7 +153,7 @@ def _fetch_google_news(symbol, company_name=None):
     for query in queries:
         try:
             url  = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=en-IN&gl=IN&ceid=IN:en"
-            feed = feedparser.parse(url)
+            feed = _parse_feed_safe(url, timeout=6)
             for entry in feed.entries[:25]:
                 title = entry.get('title', '').strip()
                 if title:
