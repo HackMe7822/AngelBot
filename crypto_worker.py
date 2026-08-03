@@ -124,6 +124,7 @@ from data.binance_client import test_connection, get_crypto_live_price
 from trading.position_monitor import start_monitor
 from reporting.telegram_alerts import send_crypto_daily_summary
 from reporting.telegram_listener import is_symbol_paused
+from heartbeat import touch as _touch_hb
 
 # ── Global state ──────────────────────────────────────────────────────────────
 crypto_trader      = None
@@ -362,6 +363,7 @@ def main():
     run_crypto_scan()   # fire immediately
 
     while True:
+        _touch_hb('crypto')
         try:
             schedule.run_pending()
         except KeyboardInterrupt:

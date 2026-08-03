@@ -160,6 +160,7 @@ from data.alpaca_client import get_us_live_price
 from trading.position_monitor import start_monitor
 from reporting.telegram_alerts import send_us_daily_summary, send_combined_summary
 from reporting.telegram_listener import is_symbol_paused
+from heartbeat import touch as _touch_hb
 from analysis.market_filters import us_market_mood_ok, symbol_event_clear, sector_cap_ok
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -486,6 +487,7 @@ def main():
     run_us_scan()   # fire immediately
 
     while True:
+        _touch_hb('us')
         try:
             schedule.run_pending()
         except KeyboardInterrupt:

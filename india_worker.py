@@ -141,6 +141,7 @@ from trading.scanner import scan_stocks
 from trading.paper_trader import PaperTrader
 from trading.position_monitor import start_monitor
 from reporting.excel_report import generate_daily_report
+from heartbeat import touch as _touch_hb
 from reporting.telegram_alerts import send, send_daily_summary, send_reload_alert
 from reporting.telegram_listener import is_symbol_paused
 from analysis.market_filters import india_market_mood_ok, symbol_event_clear, sector_cap_ok
@@ -472,6 +473,7 @@ def main():
     run_scan()   # fire immediately on startup
 
     while True:
+        _touch_hb('india')
         try:
             schedule.run_pending()
         except KeyboardInterrupt:
