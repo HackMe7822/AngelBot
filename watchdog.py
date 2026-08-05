@@ -31,6 +31,8 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import log_cleanup
+
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 _HB_DIR = os.path.join(_ROOT, 'heartbeats')
 _STATE_FILE = os.path.join(_ROOT, 'watchdog_state.json')
@@ -137,7 +139,24 @@ def _restart_service(service):
         return False
 
 
+_LAST_CLEANUP_DAY = [None]
+
+
+def _maybe_cleanup_logs():
+    """Run log_cleanup once per calendar day -- cheap to check every cycle,
+    actual zipping work happens once/day."""
+    today = datetime.now().strftime('%Y%m%d')
+    if _LAST_CLEANUP_DAY[0] == today:
+        return
+    _LAST_CLEANUP_DAY[0] = today
+    try:
+        log_cleanup.cleanup(log=_log)
+    except Exception:
+        _log("[ERROR] log_cleanup.cleanup() raised:\n" + traceback.format_exc())
+
+
 def run_checks():
+    _maybe_cleanup_logs()
     state = _load_state()
     changed = False
 
