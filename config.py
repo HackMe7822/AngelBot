@@ -63,7 +63,31 @@ ALLOW_OVERNIGHT = os.getenv("ALLOW_OVERNIGHT", "false").lower() == "true"
 
 # Market mood filter — if OFF, trades regardless of NIFTY/S&P direction (matches original profitable session)
 USE_MOOD_FILTER       = os.getenv("USE_MOOD_FILTER",       "true").lower() == "true"
-MOOD_FILTER_THRESHOLD = float(os.getenv("MOOD_FILTER_THRESHOLD", "-1.5"))  # block if index down this %
+MOOD_FILTER_THRESHOLD = float(os.getenv("MOOD_FILTER_THRESHOLD", "-1.5"))  # block if index down this % vs YESTERDAY's close
+
+# Intraday trend filter — catches the market actively trending down RIGHT NOW
+# (last N minutes), which the mood filter above misses if the index hasn't
+# fallen far enough vs yesterday's close yet. Added after the 2026-08-05
+# incident where NIFTY drifted down for ~4 hours intraday without ever
+# tripping the day-over-day mood threshold, and every position bought during
+# that drift got stopped out.
+USE_TREND_FILTER          = os.getenv("USE_TREND_FILTER",          "true").lower() == "true"
+TREND_FILTER_LOOKBACK_MIN = int(os.getenv("TREND_FILTER_LOOKBACK_MIN", "60"))    # how far back to look
+TREND_FILTER_THRESHOLD_PCT = float(os.getenv("TREND_FILTER_THRESHOLD_PCT", "-0.2"))  # block if index down this % over that window
+# Defaults tuned against the actual 2026-08-05 NIFTY 5-min bars, not guessed --
+# -0.3%/45min never triggered at all that day (the decline was too gradual for
+# any single 45-min window to cross it); -0.2%/60min would have started
+# blocking new buys from ~11:55 AM onward as the drift became apparent.
+
+# Loss-burst circuit breaker (India) — mirrors the existing US-side mechanism
+# below, added after 2026-08-05 where 4 stop-losses hit within 38 seconds
+# (10:31:18-10:31:56) and the bot kept opening new positions for the next
+# ~30 minutes regardless, all of which also lost. This reacts to REALIZED
+# losses happening right now, rather than trying to predict a decline from
+# index data (see the trend filter above) -- the two are complementary.
+INDIA_LOSS_BURST_COUNT    = int(os.getenv("INDIA_LOSS_BURST_COUNT",    "4"))    # SL hits in window to trigger pause
+INDIA_LOSS_BURST_WINDOW   = int(os.getenv("INDIA_LOSS_BURST_WINDOW",   "300"))  # seconds to measure burst in
+INDIA_LOSS_BURST_COOLDOWN = int(os.getenv("INDIA_LOSS_BURST_COOLDOWN", "1800")) # seconds to pause buying after burst
 
 # Sector concentration cap — if OFF, buys best setups regardless of sector (matches original profitable session)
 USE_SECTOR_CAP       = os.getenv("USE_SECTOR_CAP",       "true").lower() == "true"
@@ -79,6 +103,15 @@ INDIA_LIMIT_EXPIRY_MIN = int(os.getenv("INDIA_LIMIT_EXPIRY_MIN",   "20"))    # c
 ALPACA_KEY    = os.getenv("ALPACA_KEY",    "")
 ALPACA_SECRET = os.getenv("ALPACA_SECRET", "")
 ALPACA_PAPER  = os.getenv("ALPACA_PAPER",  "true").lower() == "true"
+
+# ── LIVE (real-money) trading config — separate from the paper credentials above ──
+# LIVE_INDIA_ENABLED / LIVE_US_ENABLED are intentionally NOT here — they are
+# live-polled from bot_settings (see data/database.is_live_enabled()) so the
+# kill-switch takes effect without a worker restart.
+LIVE_INDIA_CAPITAL = float(os.getenv("LIVE_INDIA_CAPITAL", "0"))   # 0 = must be explicitly set before going live
+LIVE_US_CAPITAL    = float(os.getenv("LIVE_US_CAPITAL", "0"))
+ALPACA_LIVE_KEY    = os.getenv("ALPACA_LIVE_KEY", "")
+ALPACA_LIVE_SECRET = os.getenv("ALPACA_LIVE_SECRET", "")
 
 US_CAPITAL          = float(os.getenv("US_CAPITAL", "10000"))   # set in .env when going live
 US_MAX_POSITIONS    = 500       # effectively unlimited — capital is the natural cap

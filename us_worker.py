@@ -150,7 +150,7 @@ def _next_us_open():
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (ALPACA_KEY, ALPACA_PAPER, US_MAX_DAILY_LOSS_PCT, US_MAX_DAILY_TRADES,
                     US_MAX_DEPLOYED_PCT, US_PEAK_DRAWDOWN_PCT, BINANCE_KEY, US_MIN_STOCK_PRICE,
-                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP,
+                    US_SCALP_TARGET_PCT, US_SCALP_SL_PCT, USE_MOOD_FILTER, USE_SECTOR_CAP, USE_TREND_FILTER,
                     US_MAX_BUYS_PER_SCAN, US_LOSS_BURST_COUNT, US_LOSS_BURST_WINDOW,
                     US_LOSS_BURST_COOLDOWN, US_CANDLE_CONFIRM_REENTRY,
                     US_MAX_CONCURRENT_POSITIONS,
@@ -161,7 +161,7 @@ from trading.position_monitor import start_monitor
 from reporting.telegram_alerts import send_us_daily_summary, send_combined_summary
 from reporting.telegram_listener import is_symbol_paused
 from heartbeat import touch as _touch_hb
-from analysis.market_filters import us_market_mood_ok, symbol_event_clear, sector_cap_ok
+from analysis.market_filters import us_market_mood_ok, us_market_trend_ok, symbol_event_clear, sector_cap_ok
 
 # ── Global state ──────────────────────────────────────────────────────────────
 us_trader      = None
@@ -318,6 +318,10 @@ def run_us_scan():
 
     if USE_MOOD_FILTER and not us_market_mood_ok():
         cprint("[US] S&P 500 mood bearish — skipping US buy scan (mood filter ON)", YL)
+        return
+
+    if USE_TREND_FILTER and not us_market_trend_ok():
+        cprint("[US] S&P 500 trending down intraday — skipping US buy scan (trend filter ON)", YL)
         return
 
     if not us_trader.can_buy():

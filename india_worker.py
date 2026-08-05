@@ -133,7 +133,8 @@ def _acquire_lock():
 # ── Imports ───────────────────────────────────────────────────────────────────
 from config import (PAPER_MODE, MAX_DAILY_LOSS_PCT, MAX_DAILY_TRADES, MAX_DEPLOYED_PCT,
                     PEAK_DRAWDOWN_PCT, ENTRY_START_MIN, ENTRY_END_MIN, MIN_STOCK_PRICE,
-                    USE_MOOD_FILTER, USE_SECTOR_CAP,
+                    USE_MOOD_FILTER, USE_SECTOR_CAP, USE_TREND_FILTER,
+                    INDIA_LOSS_BURST_COUNT, INDIA_LOSS_BURST_WINDOW, INDIA_LOSS_BURST_COOLDOWN,
                     USE_LIMIT_BUY_INDIA, INDIA_LIMIT_BELOW_PCT, INDIA_LIMIT_EXPIRY_MIN)
 from data.nifty_stocks import get_all_stocks
 from data.live_feed import LiveFeed
@@ -144,7 +145,7 @@ from reporting.excel_report import generate_daily_report
 from heartbeat import touch as _touch_hb
 from reporting.telegram_alerts import send, send_daily_summary, send_reload_alert
 from reporting.telegram_listener import is_symbol_paused
-from analysis.market_filters import india_market_mood_ok, symbol_event_clear, sector_cap_ok
+from analysis.market_filters import india_market_mood_ok, india_market_trend_ok, symbol_event_clear, sector_cap_ok
 from learning.self_learner import should_retrain, train
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -154,11 +155,35 @@ monitor         = None
 _eod_done_date  = None
 _last_heartbeat = None
 
+# ── Loss cascade circuit breaker state ───────────────────────────────────────
+_sl_hit_times           = []   # timestamps of recent SL exits
+_loss_burst_pause_until = None  # datetime; new buys blocked until this time
+
 # ── Exit callback ─────────────────────────────────────────────────────────────
 def _on_exit(pos, price, pnl, pnl_pct, reason, *_):
+    global _sl_hit_times, _loss_burst_pause_until
     sign = '+' if pnl >= 0 else ''
     cprint(f"[EXIT] {pos['symbol']} @ ₹{price:.2f}  P&L: {sign}₹{pnl:.2f} ({sign}{pnl_pct:.2f}%)  {reason}",
            G if pnl >= 0 else RD)
+    if pnl < 0:
+        _sl_hit_times.append(datetime.now(IST))
+        cutoff = datetime.now(IST) - timedelta(seconds=INDIA_LOSS_BURST_WINDOW)
+        recent = [t for t in _sl_hit_times if t >= cutoff]
+        if len(recent) >= INDIA_LOSS_BURST_COUNT and _loss_burst_pause_until is None:
+            _loss_burst_pause_until = datetime.now(IST) + timedelta(seconds=INDIA_LOSS_BURST_COOLDOWN)
+            mins = INDIA_LOSS_BURST_COOLDOWN // 60
+            cprint(f"[INDIA BURST] {len(recent)} SL hits in {INDIA_LOSS_BURST_WINDOW//60}min — buying paused for {mins}min", RD)
+            try:
+                from data.database import get_conn as _gc
+                conn = _gc(); c2 = conn.cursor()
+                c2.execute("IF EXISTS (SELECT 1 FROM bot_settings WHERE setting_key='INDIA_BURST_PAUSE_UNTIL') "
+                           "  UPDATE bot_settings SET setting_value=?, updated_at=GETDATE(), updated_by='burst' WHERE setting_key='INDIA_BURST_PAUSE_UNTIL' "
+                           "ELSE INSERT INTO bot_settings (setting_key, setting_value, updated_by) VALUES ('INDIA_BURST_PAUSE_UNTIL',?,'burst')",
+                           (_loss_burst_pause_until.strftime('%Y-%m-%d %H:%M:%S'),
+                            _loss_burst_pause_until.strftime('%Y-%m-%d %H:%M:%S')))
+                conn.commit(); conn.close()
+            except Exception:
+                pass
 
 # ── India buy scan ────────────────────────────────────────────────────────────
 def run_scan():
@@ -203,6 +228,18 @@ def run_scan():
         sep()
         return
 
+    global _loss_burst_pause_until, _sl_hit_times
+    now_ist_ts = datetime.now(IST)
+    if _loss_burst_pause_until and now_ist_ts < _loss_burst_pause_until:
+        remaining = int((_loss_burst_pause_until - now_ist_ts).total_seconds() / 60)
+        cprint(f"  [{ist_str}]  [INDIA BURST] Buying paused after loss cascade — resumes in ~{remaining}min", RD)
+        sep()
+        return
+    elif _loss_burst_pause_until and now_ist_ts >= _loss_burst_pause_until:
+        _loss_burst_pause_until = None
+        _sl_hit_times.clear()
+        cprint(f"  [{ist_str}]  [INDIA BURST] Loss cascade cooldown expired — resuming buys", YL)
+
     dd = trader.get_drawdown_pct()
     if dd >= PEAK_DRAWDOWN_PCT:
         cprint(f"  [{ist_str}]  Peak drawdown {dd*100:.1f}% — pausing new buys until recovery", RD)
@@ -223,6 +260,11 @@ def run_scan():
 
     if USE_MOOD_FILTER and not india_market_mood_ok():
         cprint(f"  [{ist_str}]  NIFTY mood bearish — skipping India buy scan (mood filter ON)", YL)
+        sep()
+        return
+
+    if USE_TREND_FILTER and not india_market_trend_ok():
+        cprint(f"  [{ist_str}]  NIFTY trending down intraday — skipping India buy scan (trend filter ON)", YL)
         sep()
         return
 
@@ -453,6 +495,22 @@ def main():
     live_feed = LiveFeed()
     live_feed.start()
     monitor   = start_monitor(trader, _on_exit, live_feed, market='india')
+
+    # Restore burst pause state from DB (survives restarts) — separate key from US's
+    global _loss_burst_pause_until
+    try:
+        from data.database import get_conn as _gc
+        conn = _gc(); c2 = conn.cursor()
+        c2.execute("SELECT setting_value FROM bot_settings WHERE setting_key='INDIA_BURST_PAUSE_UNTIL'")
+        row = c2.fetchone(); conn.close()
+        if row and row[0]:
+            saved = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=IST)
+            if saved > datetime.now(IST):
+                _loss_burst_pause_until = saved
+                mins = int((saved - datetime.now(IST)).total_seconds() / 60)
+                cprint(f"  [INDIA BURST] Burst cooldown restored — buying paused for ~{mins}min more", RD)
+    except Exception:
+        pass
 
     from data.nifty_stocks import get_all_stocks
     stock_list = get_all_stocks()

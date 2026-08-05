@@ -96,6 +96,81 @@ def us_market_mood_ok():
     return _cached('us_mood', _check)
 
 
+# ── 1b. Intraday Trend Filter ─────────────────────────────────────────────────
+# The mood filter above only catches a market that's down a lot vs YESTERDAY's
+# close. It misses a market that's been quietly grinding lower for the last
+# few hours of TODAY's session while still being up (or only slightly down)
+# vs yesterday -- exactly the pattern behind the 2026-08-05 India incident:
+# NIFTY drifted from its open down to -0.54% over ~4 hours, never breaching
+# the day-over-day mood threshold, while every position bought during that
+# drift got stopped out. This filter looks at the index's own recent
+# short-term direction instead of a fixed reference point.
+
+def _fetch_recent_trend(ticker, lookback_min):
+    """% change of the index over the last `lookback_min` minutes of TODAY's
+    session (using 5-min intraday bars), independent of yesterday's close.
+    None on failure or if there isn't enough of today's session yet to look
+    back that far (e.g. right at the open) -- callers should fail-open on None."""
+    try:
+        import yfinance as yf
+        hist = yf.Ticker(ticker).history(period='1d', interval='5m')
+        if hist is None or len(hist) < 2:
+            return None
+        now_price = float(hist['Close'].iloc[-1])
+        cutoff = hist.index[-1] - timedelta(minutes=lookback_min)
+        past_bars = hist[hist.index <= cutoff]
+        if past_bars.empty:
+            return None
+        past_price = float(past_bars['Close'].iloc[-1])
+        if past_price <= 0:
+            return None
+        return (now_price - past_price) / past_price * 100
+    except Exception:
+        return None
+
+
+def india_market_trend_ok():
+    """Returns True unless NIFTY has dropped more than TREND_FILTER_THRESHOLD_PCT
+    over the last TREND_FILTER_LOOKBACK_MIN minutes -- i.e. the index itself is
+    actively trending down right now, regardless of where it stands vs
+    yesterday. Fail-open if data unavailable or not enough of today's session
+    has elapsed yet."""
+    def _check():
+        try:
+            from config import TREND_FILTER_LOOKBACK_MIN as lookback, TREND_FILTER_THRESHOLD_PCT as thr
+        except ImportError:
+            lookback, thr = 45, -0.3
+        chg = _fetch_recent_trend('^NSEI', lookback)
+        if chg is None:
+            return True
+        if chg <= thr:
+            print(f"  [TREND FILTER]  NIFTY {chg:+.2f}% over last {lookback}min "
+                  f"(threshold {thr}%) — market actively trending down, skipping new India buys")
+            return False
+        return True
+
+    return _cached('india_trend', _check)
+
+
+def us_market_trend_ok():
+    """Same idea as india_market_trend_ok(), for the S&P 500."""
+    def _check():
+        try:
+            from config import TREND_FILTER_LOOKBACK_MIN as lookback, TREND_FILTER_THRESHOLD_PCT as thr
+        except ImportError:
+            lookback, thr = 45, -0.3
+        chg = _fetch_recent_trend('^GSPC', lookback)
+        if chg is None:
+            return True
+        if chg <= thr:
+            print(f"  [TREND FILTER]  S&P500 {chg:+.2f}% over last {lookback}min "
+                  f"(threshold {thr}%) — market actively trending down, skipping new US buys")
+            return False
+        return True
+
+    return _cached('us_trend', _check)
+
+
 # ── 2. News/Event Filter ──────────────────────────────────────────────────────
 
 # Macro event dates (IST) — expand as needed; these block ALL buys for the day

@@ -615,6 +615,7 @@ def dashboard(date_filter: Optional[str] = None, user: str = Depends(require_aut
 @app.get("/api/trades")
 def get_trades(
     market: Optional[str] = None,
+    mode: Optional[str] = None,
     status_filter: Optional[str] = None,
     pnl_filter: Optional[str] = None,
     date_filter: Optional[str] = None,
@@ -637,6 +638,17 @@ def get_trades(
         where.append("source='us_paper'")
     elif market == 'crypto':
         where.append("source='crypto_paper'")
+    elif market == 'india_live':
+        where.append("source='india_live'")
+    elif market == 'us_live':
+        where.append("source='us_live'")
+
+    # mode: 'paper'|'live' — cross-market grouping, independent of `market`.
+    # Used by the Dashboard's Paper/Live pill toggle (display filter over all markets).
+    if mode == 'live':
+        where.append("source IN ('india_live','us_live')")
+    elif mode == 'paper':
+        where.append("(source='paper' OR source IS NULL OR source IN ('us_paper','crypto_paper'))")
 
     if status_filter in ('open', 'closed'):
         where.append("status=?")
@@ -724,7 +736,7 @@ def get_trades(
 
 # ── Open positions ────────────────────────────────────────────────────────────
 @app.get("/api/positions")
-def get_positions(market: Optional[str] = None, user: str = Depends(require_auth)):
+def get_positions(market: Optional[str] = None, mode: Optional[str] = None, user: str = Depends(require_auth)):
     conn = get_conn()
     c    = conn.cursor()
     uid  = _get_user_id(user)
@@ -734,8 +746,20 @@ def get_positions(market: Optional[str] = None, user: str = Depends(require_auth
         src_where = "source='us_paper'"
     elif market == 'crypto':
         src_where = "source='crypto_paper'"
+    elif market == 'india_live':
+        src_where = "source='india_live'"
+    elif market == 'us_live':
+        src_where = "source='us_live'"
     else:
         src_where = "1=1"
+
+    # mode: 'paper'|'live' — cross-market grouping, independent of `market`.
+    # Used by the Dashboard's Paper/Live pill toggle (display filter over all markets).
+    if mode == 'live':
+        src_where += " AND source IN ('india_live','us_live')"
+    elif mode == 'paper':
+        src_where += " AND (source='paper' OR source IS NULL OR source IN ('us_paper','crypto_paper'))"
+
     c.execute(f"SELECT id,symbol,entry_time,entry_price,quantity,capital_used,stop_loss,target,source "
               f"FROM trades WHERE status='open' AND {src_where} AND user_id=? ORDER BY entry_time DESC",
               (uid,))
@@ -921,6 +945,7 @@ def get_config(user: str = Depends(require_auth)):
         'SCALP_TARGET_PCT', 'SCALP_SL_PCT', 'SL_CONFIRM_POLLS',
         'MAX_DAILY_LOSS_PCT', 'MIN_STOCK_PRICE', 'ENTRY_START_MIN', 'ENTRY_END_MIN',
         'USE_LIMIT_BUY_INDIA', 'INDIA_LIMIT_BELOW_PCT', 'INDIA_LIMIT_EXPIRY_MIN',
+        'INDIA_LOSS_BURST_COUNT', 'INDIA_LOSS_BURST_WINDOW', 'INDIA_LOSS_BURST_COOLDOWN',
         'US_CAPITAL', 'US_MAX_DAILY_TRADES', 'US_MIN_STOCK_PRICE',
         'US_MAX_CONCURRENT_POSITIONS',
         'US_SCALP_TARGET_PCT', 'US_SCALP_SL_PCT', 'US_MAX_DAILY_LOSS_PCT',
@@ -931,12 +956,14 @@ def get_config(user: str = Depends(require_auth)):
         'CRYPTO_CAPITAL', 'CRYPTO_MAX_DAILY_TRADES', 'CRYPTO_MAX_CONCURRENT',
         'CRYPTO_MAX_DEPLOYED_PCT', 'CRYPTO_PEAK_DRAWDOWN_PCT', 'CRYPTO_MAX_DAILY_LOSS_PCT',
         'CRYPTO_TARGET_PCT', 'CRYPTO_SL_PCT', 'CRYPTO_BTC_MIN_CHANGE', 'SLIPPAGE_PCT',
+        'LIVE_INDIA_CAPITAL', 'LIVE_US_CAPITAL',
         'PAPER_MODE', 'ALPACA_PAPER', 'BINANCE_PAPER',
         'MIN_SIGNAL_SCORE', 'MAX_CONCURRENT_POSITIONS', 'USE_TIME_EXIT', 'MAX_HOLD_MINUTES',
         'USE_PROFIT_TIMER', 'PROFIT_TIMER_MINUTES',
         'USE_LOSS_TIMER', 'LOSS_TIMER_MINUTES',
         'ALLOW_OVERNIGHT',
         'USE_MOOD_FILTER', 'MOOD_FILTER_THRESHOLD', 'USE_SECTOR_CAP', 'MAX_SECTOR_POSITIONS',
+        'USE_TREND_FILTER', 'TREND_FILTER_LOOKBACK_MIN', 'TREND_FILTER_THRESHOLD_PCT',
         'TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL',
         'TELEGRAM_ALERT_DAILY','TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START',
         'TELEGRAM_ALERT_BURST',
@@ -2743,6 +2770,7 @@ def apply_update(user: str = Depends(require_auth)):
 _CREDENTIAL_KEYS = [
     'ANGEL_API_KEY', 'ANGEL_SECRET', 'ANGEL_CLIENT_ID', 'ANGEL_PIN', 'ANGEL_TOTP_SECRET',
     'ALPACA_KEY', 'ALPACA_SECRET',
+    'ALPACA_LIVE_KEY', 'ALPACA_LIVE_SECRET',
     'BINANCE_KEY', 'BINANCE_SECRET',
     'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID',
     'WHATSAPP_PHONE', 'ULTRAMSG_INSTANCE', 'ULTRAMSG_TOKEN',
@@ -2785,6 +2813,92 @@ def update_credential(update: ConfigUpdate, user: str = Depends(require_auth)):
         new_lines.append(f"{key}={value}")
     env_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
     return {"ok": True, "message": f"{key} saved. Restart workers to apply."}
+
+
+# ── Live trading (REAL MONEY) — enable/disable kill-switch + status ──────────
+_LIVE_CONFIRM_PHRASE = "ENABLE LIVE TRADING"
+
+class LiveEnableRequest(BaseModel):
+    market: str
+    confirm_phrase: str
+
+class LiveDisableRequest(BaseModel):
+    market: str
+
+def _live_upsert_setting(key: str, value: str, user: str):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "IF EXISTS (SELECT 1 FROM bot_settings WHERE setting_key=?) "
+        "  UPDATE bot_settings SET setting_value=?, updated_at=GETDATE(), updated_by=? WHERE setting_key=? "
+        "ELSE "
+        "  INSERT INTO bot_settings (setting_key, setting_value, updated_by) VALUES (?,?,?)",
+        (key, value, user, key,  key, value, user)
+    )
+    conn.commit()
+    conn.close()
+
+def _live_log_audit(event: str, detail: dict, market: str):
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO live_audit_log (event, detail, market, time) VALUES (?,?,?,?)",
+            (event, json.dumps(detail, default=str), market, datetime.now(_IST).strftime("%Y-%m-%d %H:%M:%S"))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Portal] live_audit_log insert failed: {e}")
+
+@app.post("/api/live/enable")
+def enable_live_trading(req: LiveEnableRequest, user: str = Depends(require_auth)):
+    _require_admin(user)
+    market = req.market.strip().lower()
+    if market not in ('india', 'us'):
+        raise HTTPException(400, "market must be 'india' or 'us'")
+    if req.confirm_phrase != _LIVE_CONFIRM_PHRASE:
+        raise HTTPException(400, f"Confirmation phrase must be exactly: {_LIVE_CONFIRM_PHRASE}")
+    _live_upsert_setting(f"LIVE_{market.upper()}_ENABLED", "true", user)
+    _live_log_audit('live_enabled', {'market': market, 'by': user}, market)
+    return {"ok": True}
+
+@app.post("/api/live/disable")
+def disable_live_trading(req: LiveDisableRequest, user: str = Depends(require_auth)):
+    _require_admin(user)
+    market = req.market.strip().lower()
+    if market not in ('india', 'us'):
+        raise HTTPException(400, "market must be 'india' or 'us'")
+    _live_upsert_setting(f"LIVE_{market.upper()}_ENABLED", "false", user)
+    _live_log_audit('live_disabled', {'market': market, 'by': user}, market)
+    return {"ok": True}
+
+@app.get("/api/live/status")
+def live_trading_status(user: str = Depends(require_auth)):
+    from data.database import is_live_enabled
+    india_enabled = is_live_enabled('india')
+    us_enabled    = is_live_enabled('us')
+
+    india_balance = None
+    try:
+        from trading.angel_live_trader import AngelLiveTrader
+        import config as _cfg
+        india_balance = AngelLiveTrader(user_id=_get_user_id(user), capital_cap=_cfg.LIVE_INDIA_CAPITAL).balance
+    except Exception:
+        india_balance = None
+
+    us_balance = None
+    try:
+        from trading.alpaca_live_trader import AlpacaLiveTrader
+        import config as _cfg
+        us_balance = AlpacaLiveTrader(user_id=_get_user_id(user), capital_cap=_cfg.LIVE_US_CAPITAL).balance
+    except Exception:
+        us_balance = None
+
+    return {
+        "india": india_enabled, "us": us_enabled,
+        "india_balance": india_balance, "us_balance": us_balance,
+    }
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────

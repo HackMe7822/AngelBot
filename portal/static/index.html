@@ -550,6 +550,9 @@
 <aside class="sidebar" id="main-sidebar">
   <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">&#x2715;</button>
   <h1>🤖 AngelBot</h1>
+  <div id="live-trading-banner" style="display:none;margin:0 0 10px;padding:6px 10px;border-radius:6px;background:#4a0d0d;color:#ff8a8a;font-size:12px;font-weight:700;text-align:center;letter-spacing:.5px;">
+    &#128308; LIVE TRADING: ON
+  </div>
   <nav>
     <a href="javascript:void(0)" onclick="showPage('dashboard')" id="nav-dashboard" class="active">📊 Dashboard</a>
     <a href="javascript:void(0)" onclick="showPage('positions')" id="nav-positions">📋 Positions</a>
@@ -709,6 +712,10 @@
           <span class="pill" id="dash-view-closed" onclick="setDashView('closed')">Closed Trades</span>
           <span class="pill active" id="dash-view-buys" onclick="setDashView('buys')">Open Positions</span>
         </div>
+        <div class="pill-group" title="Display filter only — switches which trades/positions the table below shows">
+          <span class="pill active" id="dash-mode-paper" onclick="setDashMode('paper')">Paper</span>
+          <span class="pill" id="dash-mode-live" onclick="setDashMode('live')" style="color:#ff8a8a;">&#128308; Live</span>
+        </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="color:var(--muted);font-size:12px;" id="dash-recent-subtitle">Last 10 closed</span>
           <select id="dash-recent-limit-sel" style="font-size:12px;width:auto;" onchange="_dashRecentLimit=this.value==='all'?99999:+this.value;loadRecentTrades()">
@@ -743,6 +750,8 @@
           <option value="india">India</option>
           <option value="us">US</option>
           <option value="crypto">Crypto</option>
+          <option value="india_live">India (LIVE)</option>
+          <option value="us_live">US (LIVE)</option>
         </select>
         <span style="font-size:12px;color:var(--muted)"><span class="auto-refresh-dot"></span>Live 30s</span>
         <button class="btn" style="font-size:12px;" onclick="saveDefault('pos')" title="Save current filter as default">&#9733; Save Default</button>
@@ -973,6 +982,7 @@
       <button class="settings-tab" data-tab="whatsapp" onclick="showSettingsTab('whatsapp')">📱 WhatsApp</button>
       <button class="settings-tab" data-tab="ntfy" onclick="showSettingsTab('ntfy')">🔔 ntfy</button>
       <button class="settings-tab" data-tab="portal" onclick="showSettingsTab('portal')">🖥️ Portal</button>
+      <button class="settings-tab" data-tab="live" onclick="showSettingsTab('live')" style="color:#ff8a8a;">&#128308; Live Trading</button>
     </div>
 
     <!-- Tab: Strategy -->
@@ -1341,6 +1351,31 @@
           </div>
         </div>
         <div id="config-portal"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Live Trading (REAL MONEY) -->
+    <div id="tab-live" class="tab-panel">
+      <div class="card" style="border-left:4px solid #cf222e;">
+        <div class="cfg-section-hdr">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="cfg-section-icon" style="background:rgba(207,34,46,.12);color:#cf222e;">&#128308;</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">Live Trading — REAL MONEY</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Runs CONCURRENTLY alongside paper trading — enabling this places real broker orders on your live-funded accounts.</div>
+            </div>
+          </div>
+        </div>
+        <div class="cred-note" style="margin-bottom:14px;border-color:#cf222e;">
+          <span class="icon">&#9888;</span>
+          <div>Set the capital cap below and save it <strong>before</strong> enabling either market — a cap of <strong>0 means "not configured"</strong> and every live buy will be refused as a safety default. Disabling live trading is instant and does not touch any position already open; open live positions keep being monitored and exited normally.</div>
+        </div>
+        <div id="config-live"></div>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Status &amp; Kill Switch</div>
+          <div id="live-status-panel" style="display:flex;flex-direction:column;gap:10px;">Loading…</div>
+        </div>
       </div>
     </div>
 
@@ -2220,8 +2255,93 @@ function _startIntervals() {
   _liveIntervals.forEach(function(id){ clearInterval(id); });
   _liveIntervals = [
     setInterval(checkUpdate, 1800000),
-    setInterval(updateLiveIndicators, 30000)
+    setInterval(updateLiveIndicators, 30000),
+    setInterval(pollLiveTradingStatus, 30000)
   ];
+  pollLiveTradingStatus();
+}
+
+// ── Real-money live-trading status banner — visible on every page ───────────
+// Distinct from updateLiveIndicators() above, which shows "market currently open" dots.
+// This shows whether REAL MONEY live trading is switched on for either market.
+async function pollLiveTradingStatus() {
+  try {
+    const r = await apiFetch('/api/live/status');
+    if (!r) return;
+    const d = await r.json();
+    const banner = document.getElementById('live-trading-banner');
+    if (!banner) return;
+    const anyLive = !!(d && (d.india || d.us));
+    banner.style.display = anyLive ? 'block' : 'none';
+    if (anyLive) {
+      const parts = [];
+      if (d.india) parts.push('India');
+      if (d.us) parts.push('US');
+      banner.innerHTML = '&#128308; LIVE TRADING: ON (' + parts.join(' + ') + ')';
+    }
+  } catch (e) { /* silent — banner just stays in its last known state */ }
+}
+
+// ── Settings → Live Trading tab: status readout + enable/disable kill switch ─
+async function loadLiveTradingStatusPanel() {
+  const el = document.getElementById('live-status-panel');
+  if (!el) return;
+  el.innerHTML = 'Loading…';
+  const r = await apiFetch('/api/live/status');
+  if (!r) { el.innerHTML = '<span style="color:var(--red)">Failed to load live status.</span>'; return; }
+  const d = await r.json();
+  function row(market, label, enabled, balance, cur) {
+    const balTxt = (balance === null || balance === undefined)
+      ? '<span style="color:var(--muted)">balance unavailable — check credentials</span>'
+      : cur + Number(balance).toFixed(2) + ' available';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;">
+      <div>
+        <div style="font-weight:700;font-size:13px;">${label} — <span style="color:${enabled ? '#ff8a8a' : 'var(--muted)'}">${enabled ? '&#128308; LIVE ON' : 'OFF (paper only)'}</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${balTxt}</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" style="border-color:#cf222e;color:#cf222e;" ${enabled ? 'disabled' : ''} onclick="enableLiveTrading('${market}')">&#128308; Enable</button>
+        <button class="btn" ${enabled ? '' : 'disabled'} onclick="disableLiveTrading('${market}')">&#9210; Disable</button>
+      </div>
+    </div>`;
+  }
+  el.innerHTML =
+    row('india', 'India (Angel One)', !!d.india, d.india_balance, '&#8377;') +
+    row('us', 'US (Alpaca)', !!d.us, d.us_balance, '$');
+}
+
+async function enableLiveTrading(market) {
+  const label = market === 'india' ? 'India' : 'US';
+  const phrase = prompt(
+    `Type exactly "ENABLE LIVE TRADING" to switch on REAL-MONEY live trading for ${label}.\n\n` +
+    `This will place real broker orders using your live-funded ${label} account, starting on the ` +
+    `next scan cycle. Make sure the capital cap above is set correctly first.`
+  );
+  if (phrase === null) return;
+  const r = await apiFetch('/api/live/enable', { method: 'POST', body: JSON.stringify({ market, confirm_phrase: phrase }) });
+  if (!r) { toast('Request failed.', 5000); return; }
+  if (r.ok) {
+    toast(`&#128308; LIVE trading ENABLED for ${label}.`, 5000);
+    loadLiveTradingStatusPanel();
+    pollLiveTradingStatus();
+  } else {
+    const d = await r.json().catch(function(){ return {}; });
+    toast('&#10007; ' + (d.detail || 'Enable failed — check the confirmation phrase.'), 6000);
+  }
+}
+
+async function disableLiveTrading(market) {
+  const label = market === 'india' ? 'India' : 'US';
+  if (!confirm(`Disable LIVE trading for ${label}? New real-money buys stop immediately. Any already-open live position keeps being monitored and exited normally.`)) return;
+  const r = await apiFetch('/api/live/disable', { method: 'POST', body: JSON.stringify({ market }) });
+  if (!r) { toast('Request failed.', 5000); return; }
+  if (r.ok) {
+    toast(`&#9210; LIVE trading disabled for ${label}.`);
+    loadLiveTradingStatusPanel();
+    pollLiveTradingStatus();
+  } else {
+    toast('&#10007; Disable failed.', 5000);
+  }
 }
 
 // Credential helpers — check both localStorage (remember me) and sessionStorage (session only)
@@ -3179,6 +3299,13 @@ async function fetchLivePrices(positions, callback) {
 
 // ── Dashboard recent section ───────────────────────────────────────────────
 var _dashView = 'buys';
+var _dashMode = 'paper';   // 'paper'|'live' — display filter only, see setDashMode()
+function setDashMode(mode) {
+  _dashMode = mode;
+  document.getElementById('dash-mode-paper').classList.toggle('active', mode === 'paper');
+  document.getElementById('dash-mode-live').classList.toggle('active', mode === 'live');
+  loadDashRecent();
+}
 function setDashView(view) {
   _dashView = view;
   document.getElementById('dash-view-closed').classList.toggle('active', view === 'closed');
@@ -3200,7 +3327,7 @@ function loadDashRecent() {
 
 async function loadRecentTrades() {
   const lim = _dashRecentLimit >= 99999 ? 99999 : _dashRecentLimit;
-  const r = await apiFetch('/api/trades?status_filter=closed&limit=' + lim + '&offset=0');
+  const r = await apiFetch('/api/trades?status_filter=closed&mode=' + _dashMode + '&limit=' + lim + '&offset=0');
   if (!r) return;
   const d = await r.json();
   _dashTradesRaw = d.trades || [];
@@ -3232,7 +3359,7 @@ function _cachedUpnlHtml(p, cur) {
 }
 
 async function loadRecentBuys() {
-  const r = await apiFetch('/api/positions');
+  const r = await apiFetch('/api/positions?mode=' + _dashMode);
   if (!r) return;
   const d = await r.json();
   const el   = document.getElementById('recent-trades-table');
@@ -3244,7 +3371,7 @@ async function loadRecentBuys() {
     '<th>Qty</th><th>Capital</th><th>Live Price</th><th>P&amp;L/Share</th><th>P&amp;L Total</th>' +
     '</tr></thead><tbody>' +
     rows.map(function(p) {
-      var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      var cur = (p.source === 'us_paper' || p.source === 'us_live') ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       var _rbKey = p.symbol + '|' + (p.source || 'paper');
       var _rbClp = _priceCache[_rbKey];
       return '<tr>' +
@@ -3266,7 +3393,7 @@ async function loadRecentBuys() {
     (normed || rows).forEach(function(p) {
       var key    = p.symbol + '|' + (p.source || 'paper');
       var lp     = prices[key];
-      var _isUSD = p.source === 'us_paper' || p.source === 'crypto_paper';
+      var _isUSD = p.source === 'us_paper' || p.source === 'crypto_paper' || p.source === 'us_live';
       var cur    = _isUSD ? '$' : '&#8377;';
       var lpEl   = document.getElementById('rb-lp-'   + p.id);
       var gainEl = document.getElementById('rb-gain-' + p.id);
@@ -3323,8 +3450,8 @@ async function loadRecentBuys() {
     var totalPriced = pricedINR + pricedUSD;
     if (sumEl && totalPriced > 0) {
       sumEl.style.display = 'block';
-      var inrCount = rows.filter(function(p){ return p.source !== 'us_paper' && p.source !== 'crypto_paper'; }).length;
-      var usdCount = rows.filter(function(p){ return p.source === 'us_paper' || p.source === 'crypto_paper'; }).length;
+      var inrCount = rows.filter(function(p){ return p.source !== 'us_paper' && p.source !== 'crypto_paper' && p.source !== 'us_live'; }).length;
+      var usdCount = rows.filter(function(p){ return p.source === 'us_paper' || p.source === 'crypto_paper' || p.source === 'us_live'; }).length;
       var html = '';
       if (inrCount > 0) {
         html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">India &#8377;</div>';
@@ -3445,7 +3572,7 @@ function _buildPositionsTable(positions) {
     '<th>SL</th><th>Target</th><th>Action</th>' +
     '</tr></thead><tbody>' +
     positions.map(function(p) {
-      var cur = p.source === 'us_paper' ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
+      var cur = (p.source === 'us_paper' || p.source === 'us_live') ? '$' : (p.source === 'crypto_paper' ? '$' : '&#8377;');
       var _posKey = p.symbol + '|' + (p.source || 'paper');
       var _posClp = _priceCache[_posKey];
       return '<tr id="pos-row-' + p.id + '">' +
@@ -3501,7 +3628,7 @@ function _refreshPositionPrices(positions) {
     (normed || d.positions).forEach(function(p) {
       const key    = p.symbol + '|' + (p.source || 'paper');
       const lp     = prices[key];
-      const _isUSD = p.source === 'us_paper' || p.source === 'crypto_paper';
+      const _isUSD = p.source === 'us_paper' || p.source === 'crypto_paper' || p.source === 'us_live';
       const cur    = _isUSD ? '$' : '&#8377;';
       const lpEl   = document.getElementById('lp-'   + p.id);
       const gainEl = document.getElementById('gain-' + p.id);
@@ -3558,14 +3685,14 @@ function _refreshPositionPrices(positions) {
     if (sumEl) {
       var market = (document.getElementById('pos-market-filter') || {}).value || '';
 
-      var inrCount = positions.filter(function(p){ return p.source !== 'us_paper' && p.source !== 'crypto_paper'; }).length;
-      var usdCount = positions.filter(function(p){ return p.source === 'us_paper' || p.source === 'crypto_paper'; }).length;
+      var inrCount = positions.filter(function(p){ return p.source !== 'us_paper' && p.source !== 'crypto_paper' && p.source !== 'us_live'; }).length;
+      var usdCount = positions.filter(function(p){ return p.source === 'us_paper' || p.source === 'crypto_paper' || p.source === 'us_live'; }).length;
       var html = '';
-      if ((market === '' || market === 'india') && inrCount > 0) {
+      if ((market === '' || market === 'india' || market === 'india_live') && inrCount > 0) {
         if (market === '') html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">India &#8377;</div>';
         html += _pnlSummaryCard('&#8377;', 2, profitINR, lossINR, totalUpnlINR, totalCapINR, pricedINR, inrCount);
       }
-      if ((market === '' || market === 'us' || market === 'crypto') && usdCount > 0) {
+      if ((market === '' || market === 'us' || market === 'crypto' || market === 'us_live') && usdCount > 0) {
         if (html) html += '<div style="height:6px;"></div>';
         if (market === '') html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;">US / Crypto $</div>';
         html += _pnlSummaryCard('$', market === 'crypto' ? 4 : 2, profitUSD, lossUSD, totalUpnlUSD, totalCapUSD, pricedUSD, usdCount);
@@ -3677,7 +3804,7 @@ function fmtDt(s, source) {
   const d = new Date(s.replace(' ', 'T') + '+05:30');
   if (isNaN(d)) { const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : s.slice(0,16); }
   let tz, tzLabel;
-  if (source === 'us_paper') {
+  if (source === 'us_paper' || source === 'us_live') {
     tz = 'America/New_York';
     tzLabel = new Intl.DateTimeFormat('en-US', {timeZone: tz, timeZoneName: 'short'}).formatToParts(d).find(p => p.type === 'timeZoneName')?.value || 'ET';
   } else if (source === 'crypto_paper') {
@@ -3697,6 +3824,10 @@ function fmtSym(sym, source) {
 }
 
 function mktBadge(source) {
+  if (source === 'india_live')
+    return '<span style="background:#4a0d0d;color:#ff8a8a;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">IN &#128308; LIVE</span>';
+  if (source === 'us_live')
+    return '<span style="background:#4a0d0d;color:#ff8a8a;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">US &#128308; LIVE</span>';
   if (source === 'us_paper')
     return '<span style="background:#0d2a4a;color:#7eb8f0;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.5px">US</span>';
   if (source === 'crypto_paper')
@@ -3720,7 +3851,7 @@ function buildTradeTable(trades, sortable, ctx) {
     '<th>Reason</th><th>Status</th>' +
     '</tr></thead><tbody>' +
     trades.map(function(t) {
-      var cur  = t.source === 'us_paper' ? '$' : (t.source === 'crypto_paper' ? '$' : '&#8377;');
+      var cur  = (t.source === 'us_paper' || t.source === 'us_live') ? '$' : (t.source === 'crypto_paper' ? '$' : '&#8377;');
       var pnl  = t.pnl || 0;
       var cls  = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
       var sign = pnl >= 0 ? '+' : '';
@@ -3897,6 +4028,8 @@ function renderLeaderboard() {
 // ── Config ────────────────────────────────────────────────────────────────
 const _CONFIG_LABELS = {
   MIN_SIGNAL_SCORE:'Signal Quality Gate', USE_MOOD_FILTER:'Market Mood Filter', MOOD_FILTER_THRESHOLD:'Mood Filter Threshold',
+  USE_TREND_FILTER:'Intraday Trend Filter', TREND_FILTER_LOOKBACK_MIN:'Trend Filter Lookback (min)',
+  TREND_FILTER_THRESHOLD_PCT:'Trend Filter Threshold %',
   USE_SECTOR_CAP:'Sector Concentration Cap', MAX_SECTOR_POSITIONS:'Max Stocks Per Sector', MAX_CONCURRENT_POSITIONS:'India Max Open Positions',
   USE_TIME_EXIT:'Force Time Exit', MAX_HOLD_MINUTES:'Max Hold Time (minutes)',
   USE_PROFIT_TIMER:'Profit Timer Exit', PROFIT_TIMER_MINUTES:'Profit Timer (minutes)',
@@ -3908,6 +4041,8 @@ const _CONFIG_LABELS = {
   ENTRY_START_MIN:'Entry Window Start (min)', ENTRY_END_MIN:'Entry Window End (min)',
   USE_LIMIT_BUY_INDIA:'Limit-Buy Entries (India)', INDIA_LIMIT_BELOW_PCT:'India Limit-Buy Discount %',
   INDIA_LIMIT_EXPIRY_MIN:'India Limit-Buy Expiry (minutes)',
+  INDIA_LOSS_BURST_COUNT:'India Loss Burst Count', INDIA_LOSS_BURST_WINDOW:'India Loss Burst Window (sec)',
+  INDIA_LOSS_BURST_COOLDOWN:'India Burst Cooldown (sec)',
   US_CAPITAL:'US Capital ($)', US_MAX_DAILY_TRADES:'US Daily Trade Limit', US_MAX_DAILY_LOSS_PCT:'US Daily Loss Limit',
   US_MAX_CONCURRENT_POSITIONS:'US Max Open Positions',
   US_MAX_DEPLOYED_PCT:'US Max Capital Deployed %', US_PEAK_DRAWDOWN_PCT:'US Peak Drawdown Limit',
@@ -3941,11 +4076,13 @@ const _CONFIG_LABELS = {
   PORTAL_DASH_REFRESH:'Dashboard Refresh (sec)', PORTAL_POS_REFRESH:'Positions Refresh (sec)',
   PORTAL_LB_REFRESH:'Leaderboard Refresh (sec)', PORTAL_LOG_REFRESH:'Log Poll Interval (sec)',
   PORTAL_MONITOR_REFRESH:'Monitor Poll Interval (sec)',
+  LIVE_INDIA_CAPITAL:'India LIVE Capital Cap (₹)', LIVE_US_CAPITAL:'US LIVE Capital Cap ($)',
 };
 
 const _CONFIG_SECTIONS = {
   strategy: {
     keys: ['MIN_SIGNAL_SCORE','USE_MOOD_FILTER','MOOD_FILTER_THRESHOLD',
+           'USE_TREND_FILTER','TREND_FILTER_LOOKBACK_MIN','TREND_FILTER_THRESHOLD_PCT',
            'USE_SECTOR_CAP','MAX_SECTOR_POSITIONS',
            'MAX_CONCURRENT_POSITIONS','USE_TIME_EXIT','MAX_HOLD_MINUTES',
            'USE_PROFIT_TIMER','PROFIT_TIMER_MINUTES',
@@ -3956,7 +4093,8 @@ const _CONFIG_SECTIONS = {
     keys: ['CAPITAL','MAX_DAILY_TRADES','MAX_DEPLOYED_PCT','PEAK_DRAWDOWN_PCT',
            'SCALP_TARGET_PCT','SCALP_SL_PCT','SL_CONFIRM_POLLS',
            'MAX_DAILY_LOSS_PCT','MIN_STOCK_PRICE','ENTRY_START_MIN','ENTRY_END_MIN',
-           'USE_LIMIT_BUY_INDIA','INDIA_LIMIT_BELOW_PCT','INDIA_LIMIT_EXPIRY_MIN']
+           'USE_LIMIT_BUY_INDIA','INDIA_LIMIT_BELOW_PCT','INDIA_LIMIT_EXPIRY_MIN',
+           'INDIA_LOSS_BURST_COUNT','INDIA_LOSS_BURST_WINDOW','INDIA_LOSS_BURST_COOLDOWN']
   },
   us: {
     keys: ['US_CAPITAL','US_MAX_DAILY_TRADES','US_MAX_DAILY_LOSS_PCT',
@@ -3998,10 +4136,13 @@ const _CONFIG_SECTIONS = {
   portal: {
     keys: ['PORTAL_DASH_REFRESH','PORTAL_POS_REFRESH','PORTAL_LB_REFRESH',
            'PORTAL_LOG_REFRESH','PORTAL_MONITOR_REFRESH']
+  },
+  live: {
+    keys: ['LIVE_INDIA_CAPITAL','LIVE_US_CAPITAL']
   }
 };
 
-const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_SECTOR_CAP','USE_PROFIT_TIMER','USE_LOSS_TIMER','ALLOW_OVERNIGHT',
+const _CONFIG_TOGGLES = new Set(['PAPER_MODE','ALPACA_PAPER','BINANCE_PAPER','USE_TIME_EXIT','USE_MOOD_FILTER','USE_TREND_FILTER','USE_SECTOR_CAP','USE_PROFIT_TIMER','USE_LOSS_TIMER','ALLOW_OVERNIGHT',
   'USE_LIMIT_BUY_INDIA','USE_LIMIT_BUY_US',
   'TELEGRAM_ALERTS_ENABLED','TELEGRAM_ALERT_BUY','TELEGRAM_ALERT_SELL','TELEGRAM_ALERT_DAILY',
   'TELEGRAM_ALERT_ERRORS','TELEGRAM_ALERT_BOT_START','TELEGRAM_ALERT_BURST','TELEGRAM_ALERT_TUNNEL_URL',
@@ -4028,6 +4169,9 @@ const _CONFIG_SELECTS = {
 const _CONFIG_HINTS = {
   MIN_SIGNAL_SCORE:         'How many technical signals must agree before buying. More = fewer but higher-quality trades.',
   USE_MOOD_FILTER:          '<strong>ON:</strong> Stop new buys if NIFTY/S&amp;P drops more than the threshold. <strong>OFF:</strong> Trade regardless of index direction — <em>matches the original profitable session.</em>',
+  USE_TREND_FILTER:         '<strong>ON:</strong> Stop new buys if the index has been actively dropping over the last few minutes, even if it hasn&rsquo;t fallen far enough vs yesterday to trip the Mood Filter. Added after a day where NIFTY quietly drifted down for ~4 hours and every new buy got stopped out. <strong>OFF:</strong> Only the Mood Filter above (vs yesterday&rsquo;s close) applies.',
+  TREND_FILTER_LOOKBACK_MIN:'How far back to check the index&rsquo;s recent direction, in minutes. <strong>60</strong> = compare the current price to 60 minutes ago.',
+  TREND_FILTER_THRESHOLD_PCT:'How much the index must have dropped over that lookback window to pause new buys. <strong>-0.2</strong> = pause if it&rsquo;s down 0.2% or more in that time.',
   MOOD_FILTER_THRESHOLD:    'Index drop % that triggers the block (negative). <strong>-0.5</strong> = very strict. <strong>-1.5</strong> = standard. <strong>-3.0</strong> = loose. Only active when Mood Filter is ON.',
   USE_SECTOR_CAP:           '<strong>ON:</strong> Max N stocks per sector (IT, Banks, etc). <strong>OFF:</strong> No sector limit — buys best setups regardless of sector. <em>OFF matches the original profitable session.</em>',
   MAX_SECTOR_POSITIONS:     'Max open positions per sector at once. Only applies when Sector Cap is ON.',
@@ -4053,6 +4197,9 @@ const _CONFIG_HINTS = {
   USE_LIMIT_BUY_INDIA:      '<strong>ON:</strong> Instead of buying immediately at signal price, place a PENDING limit order below it and only fill if price pulls back to the trigger. <strong>OFF:</strong> Buy immediately at signal price (default, matches original behavior). Unfilled pending orders auto-cancel after the expiry window.',
   INDIA_LIMIT_BELOW_PCT:    'How far below the signal price to set the trigger. <strong>0.5</strong> = 0.5% discount. Only active when Limit-Buy Entries (India) is ON.',
   INDIA_LIMIT_EXPIRY_MIN:   'Minutes to wait for a pending India limit order to fill before auto-cancelling and releasing the reserved capital. Default 20.',
+  INDIA_LOSS_BURST_COUNT:   'If this many stop-losses hit within the Burst Window below, pause all new India buys — a cluster of losses in a row usually means something is off with the market right now. Default 4.',
+  INDIA_LOSS_BURST_WINDOW:  'Seconds to look back when counting burst SL hits. Default 300 = 5 minutes.',
+  INDIA_LOSS_BURST_COOLDOWN:'Seconds to pause all new India buys after a loss burst triggers. Default 1800 = 30 minutes.',
   US_CAPITAL:               'US Alpaca paper trading balance in $. Bot positions scale as % of this.',
   US_MAX_DAILY_TRADES:      'Stop new US buys after N completed trades today.',
   US_MAX_DAILY_LOSS_PCT:    'Stop all US buys for the day if total realized losses exceed this %.',
@@ -4113,6 +4260,8 @@ const _CONFIG_HINTS = {
   PORTAL_LB_REFRESH:        'How often the leaderboard auto-refreshes in seconds. Default 60.',
   PORTAL_LOG_REFRESH:       'How often the live log view polls for new lines in seconds. Default 5.',
   PORTAL_MONITOR_REFRESH:   'How often the live monitor polls for new data in seconds. Default 2.',
+  LIVE_INDIA_CAPITAL:       '<strong>REAL MONEY.</strong> Hard ceiling on how much of your real Angel One balance the India LIVE worker will ever use for position sizing, even if your broker account holds more. <strong>0 = not configured — all live buys are refused.</strong> Takes effect the next time the India LIVE worker (india_live_worker.py) restarts.',
+  LIVE_US_CAPITAL:          '<strong>REAL MONEY.</strong> Hard ceiling on how much of your real Alpaca live balance the US LIVE worker will ever use for position sizing, even if your broker account holds more. <strong>0 = not configured — all live buys are refused.</strong> Takes effect the next time the US LIVE worker (us_live_worker.py) restarts.',
 };
 
 // Dynamic hint functions — called with the live input value so the example updates as you type.
@@ -4344,8 +4493,13 @@ var _cfgOriginal = {};
 
 // Which workers need restart when a key changes
 const _KEY_WORKERS = {
+  // Live workers aren't NSSM-registered by this change (operational step, done separately) —
+  // no automatic restart-prompt target exists for them yet, so these are silent no-ops here.
+  LIVE_INDIA_CAPITAL:[], LIVE_US_CAPITAL:[],
   MIN_SIGNAL_SCORE:['India','US','Crypto'], USE_MOOD_FILTER:['India','US'],
   MOOD_FILTER_THRESHOLD:['India','US'], USE_SECTOR_CAP:['India','US'],
+  USE_TREND_FILTER:['India','US'], TREND_FILTER_LOOKBACK_MIN:['India','US'], TREND_FILTER_THRESHOLD_PCT:['India','US'],
+  INDIA_LOSS_BURST_COUNT:['India'], INDIA_LOSS_BURST_WINDOW:['India'], INDIA_LOSS_BURST_COOLDOWN:['India'],
   MAX_SECTOR_POSITIONS:['India','US'], MAX_CONCURRENT_POSITIONS:['India'],
   USE_TIME_EXIT:['India'], MAX_HOLD_MINUTES:['India'],
   USE_PROFIT_TIMER:['India','US','Crypto'], PROFIT_TIMER_MINUTES:['India','US','Crypto'],
@@ -4721,6 +4875,8 @@ async function loadConfig() {
   renderWhatsAppTab();
   renderNtfyTab();
   renderSection('portal',   _CONFIG_SECTIONS.portal.keys);
+  renderSection('live',     _CONFIG_SECTIONS.live.keys);
+  loadLiveTradingStatusPanel();
 
   // Update refresh intervals from loaded config values (applied on next navigation)
   function _getNum(key, def) { var v = parseInt(_cfgOriginal[key]); return isNaN(v) ? def : v*1000; }
@@ -4958,8 +5114,10 @@ const _CRED_SECTIONS = [
       {k:'ANGEL_TOTP_SECRET',label:'TOTP Secret'},
   ]},
   { id: 'alpaca', keys: [
-      {k:'ALPACA_KEY',    label:'API Key'},
-      {k:'ALPACA_SECRET', label:'Secret Key'},
+      {k:'ALPACA_KEY',    label:'API Key (Paper)'},
+      {k:'ALPACA_SECRET', label:'Secret Key (Paper)'},
+      {k:'ALPACA_LIVE_KEY',    label:'API Key (LIVE — REAL MONEY)'},
+      {k:'ALPACA_LIVE_SECRET', label:'Secret Key (LIVE — REAL MONEY)'},
   ]},
   { id: 'binance', keys: [
       {k:'BINANCE_KEY',    label:'API Key'},
