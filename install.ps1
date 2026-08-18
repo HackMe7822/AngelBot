@@ -607,7 +607,7 @@ if ($existingCfSvc) {
         OK "Config found: $cfConfigPath"
         $cfContent = Get-Content $cfConfigPath -Raw
 
-        if ($cfContent -match [regex]::Escape($CF_HOSTNAME)) {
+        if ($cfContent -match "(?m)^\s+-\s+hostname:\s+$([regex]::Escape($CF_HOSTNAME))\s*$") {
             OK "$CF_HOSTNAME already in config -- no changes needed"
             $script:cfPublicUrl = "https://$CF_HOSTNAME"
         } else {

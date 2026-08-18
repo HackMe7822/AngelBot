@@ -16,6 +16,8 @@ Runs as four Windows services with a web portal at `https://trading.creationsit.
 
 **Stack:** Python 3.11 · SQL Server Express (instance `ANGELBOT`) · NSSM · IIS (80→8080) · Cloudflare tunnel
 
+> **Port note:** AngelBot-Portal binds **port 8080**. If Caddy (Nextcloud/`files.creationsit.com`) is also running on this server it **must** use port **8081** — edit `Caddyfile` and change `:8080` to `:8081` before starting Caddy, then add a separate `files.creationsit.com → http://localhost:8081` ingress rule to `cloudflared`'s `config.yml`.
+
 ---
 
 ## Fresh Install
@@ -64,19 +66,20 @@ Restart-Service AngelBot-India, AngelBot-US, AngelBot-Crypto, AngelBot-Portal
 # Stop all services
 Stop-Service AngelBot-India, AngelBot-US, AngelBot-Crypto, AngelBot-Portal -Force
 
-# Backup SQL database
-sqlcmd -S .\ANGELBOT -Q "BACKUP DATABASE angelbot TO DISK='C:\angelbot_migration.bak' WITH FORMAT, INIT"
+# Backup SQL database (SQL Server SA can't write to C:\ root — use the MSSQL backup dir)
+$bakDir = "C:\Program Files\Microsoft SQL Server\MSSQL15.ANGELBOT\MSSQL\Backup"
+sqlcmd -S .\ANGELBOT -Q "BACKUP DATABASE angelbot TO DISK='$bakDir\angelbot_migration.bak' WITH FORMAT, INIT"
 
 # Zip learning data
-Compress-Archive -Path "C:\AngelBot\learning\" -DestinationPath "C:\angelbot_learning.zip" -Force
+Compress-Archive -Path "C:\AngelBot\learning\" -DestinationPath "$bakDir\angelbot_learning.zip" -Force
 ```
 
 **Copy these three files to the new server:**
 | File | Contains |
 |---|---|
 | `C:\AngelBot\.env` | All API keys, SA password, trading config |
-| `C:\angelbot_migration.bak` | Full SQL database (trades, signals, config, users) |
-| `C:\angelbot_learning.zip` | ML learning data |
+| `...\MSSQL\Backup\angelbot_migration.bak` | Full SQL database (trades, signals, config, users) |
+| `...\MSSQL\Backup\angelbot_learning.zip` | ML learning data |
 
 Transfer via USB, shared folder, or SCP. The `.env` is the most critical — without it you lose all API keys.
 
@@ -111,12 +114,13 @@ The installer will:
 # Stop services so nothing is writing to DB during restore
 Stop-Service AngelBot-India, AngelBot-US, AngelBot-Crypto, AngelBot-Portal -Force
 
-# Restore backup (replace the fresh empty DB with your real data)
-# Copy angelbot_migration.bak here first, then:
-sqlcmd -S .\ANGELBOT -Q "RESTORE DATABASE angelbot FROM DISK='C:\angelbot_migration.bak' WITH REPLACE"
+# Restore backup (place angelbot_migration.bak in the MSSQL backup dir first)
+$bakDir = "C:\Program Files\Microsoft SQL Server\MSSQL15.ANGELBOT\MSSQL\Backup"
+# Copy-Item "\\oldserver\..." "$bakDir\angelbot_migration.bak"
+sqlcmd -S .\ANGELBOT -Q "RESTORE DATABASE angelbot FROM DISK='$bakDir\angelbot_migration.bak' WITH REPLACE"
 
 # Restore learning data
-Expand-Archive -Path "C:\angelbot_learning.zip" -DestinationPath "C:\AngelBot\learning\" -Force
+Expand-Archive -Path "$bakDir\angelbot_learning.zip" -DestinationPath "C:\AngelBot\learning\" -Force
 
 # Restart all services
 Start-Service AngelBot-India, AngelBot-US, AngelBot-Crypto, AngelBot-Portal
